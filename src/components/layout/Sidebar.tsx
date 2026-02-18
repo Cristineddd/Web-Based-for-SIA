@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   FileSpreadsheet,
+  History,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebarContext } from "@/contexts/SidebarContext";
@@ -27,6 +28,7 @@ const navItems = [
   { path: "/classes", label: "Class", icon: Users },
   { path: "/results", label: "Results", icon: BarChart3 },
   { path: "/templates", label: "Templates", icon: FileSpreadsheet },
+  { path: "/logs", label: "Logs", icon: History },
   { path: "/archive", label: "Archive", icon: Archive },
   { path: "/settings", label: "Settings", icon: Settings },
 ];

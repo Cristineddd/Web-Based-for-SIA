@@ -30,6 +30,9 @@ export interface Exam {
   examCode?: string;
   logoUrl?: string;
   student_id_length?: number;
+  status: "draft" | "final";
+  approvedBy?: string;
+  approvedAt?: string;
 }
 
 export interface GeneratedSheet {
@@ -55,6 +58,9 @@ export interface ExamFormData {
   examCode?: string;
   logoUrl?: string;
   studentIdLength?: number;
+  status?: "draft" | "final";
+  approvedBy?: string;
+  approvedAt?: string;
 }
 
 /**
@@ -83,6 +89,9 @@ export async function createExam(
       examCode: formData.examCode || null,
       logoUrl: formData.logoUrl || null,
       student_id_length: formData.studentIdLength || 6,
+      status: formData.status || "draft",
+      approvedBy: formData.approvedBy || null,
+      approvedAt: formData.approvedAt || null,
     };
     const docRef = await addDoc(collection(db, "exams"), examData);
 
@@ -104,6 +113,9 @@ export async function createExam(
       examCode: examData.examCode || undefined,
       logoUrl: examData.logoUrl || undefined,
       student_id_length: examData.student_id_length || 6,
+      status: examData.status as "draft" | "final",
+      approvedBy: examData.approvedBy || undefined,
+      approvedAt: examData.approvedAt || undefined,
     };
 
     return newExam;
@@ -150,6 +162,9 @@ export async function getExams(userId?: string): Promise<Exam[]> {
         examCode: data.examCode || undefined,
         logoUrl: data.logoUrl || undefined,
         student_id_length: data.student_id_length || 6,
+        status: data.status || "draft",
+        approvedBy: data.approvedBy || undefined,
+        approvedAt: data.approvedAt || undefined,
       });
     });
 
@@ -201,6 +216,9 @@ export async function getExamById(examId: string): Promise<Exam | null> {
       examCode: data.examCode || undefined,
       logoUrl: data.logoUrl || undefined,
       student_id_length: data.student_id_length || 6,
+      status: data.status || "draft",
+      approvedBy: data.approvedBy || undefined,
+      approvedAt: data.approvedAt || undefined,
     };
   } catch (error) {
     console.error("Error fetching exam:", error);

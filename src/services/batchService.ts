@@ -14,6 +14,7 @@ export interface BatchRecord {
   timestamp: any;
   timezone?: string;
   isDuplicate?: boolean;
+  type?: "print" | "review";
 }
 
 export const BatchService = {
@@ -80,6 +81,78 @@ export const BatchService = {
       return { success: true, id: sheet.id };
     } catch (error) {
       console.error("Error recording batch:", error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * Record a review/approval action
+   */
+  async recordReviewAction(
+    examId: string,
+    examCode: string,
+    userId: string,
+    action: "approved" | "rejected",
+  ) {
+    try {
+      const timestamp = new Date().toISOString();
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      const sheet: GeneratedSheet = {
+        id: `review_${Date.now()}`,
+        sheet_count: 0,
+        created_at: timestamp,
+        examCode: examCode || "N/A",
+        timezone,
+        batchType: "review",
+        isDuplicate: false,
+      };
+
+      await addGeneratedSheetToExam(examId, sheet);
+      return { success: true, id: sheet.id };
+    } catch (error) {
+      console.error("Error recording review action:", error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * Get all logs (batches + reviews) for a specific user
+   */
+  async getLogsByUserId(userId: string) {
+    try {
+      const exams = await getExams(userId);
+      const logs: BatchRecord[] = [];
+
+      exams.forEach((exam) => {
+        if (exam.generated_sheets && Array.isArray(exam.generated_sheets)) {
+          exam.generated_sheets.forEach((sheet) => {
+            logs.push({
+              id: sheet.id,
+              examId: exam.id,
+              examCode: sheet.examCode || exam.examCode || "N/A",
+              sheetCount: sheet.sheet_count,
+              createdBy: userId,
+              timestamp: sheet.created_at,
+              timezone: sheet.timezone,
+              isDuplicate: sheet.isDuplicate,
+              type: (sheet.batchType === "review" ? "review" : "print") as
+                | "print"
+                | "review",
+            });
+          });
+        }
+      });
+
+      // Sort in memory
+      logs.sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      );
+
+      return { success: true, data: logs };
+    } catch (error) {
+      console.error("Error fetching user logs:", error);
       return { success: false, error: (error as Error).message };
     }
   },

@@ -14,12 +14,14 @@ import {
 } from "lucide-react";
 import { getExamById, Exam } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
+import { BatchService } from "@/services/batchService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnswerChoice } from "@/types/scanning";
+import { useSearchParams } from "next/navigation";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -29,7 +31,11 @@ type TabType = "Overview" | "Answer Key" | "Scan Sheets" | "Results";
 
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>("Overview");
+  const searchParams = useSearchParams();
+  const isEditMode = searchParams.get("edit") === "true";
+  const [activeTab, setActiveTab] = useState<TabType>(
+    isEditMode ? "Answer Key" : "Overview",
+  );
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -70,6 +76,10 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
   const handleSaveAnswerKey = async () => {
     if (!user || !exam) return;
+    if (exam.status === "final") {
+      toast.error("Cannot edit a finalized exam");
+      return;
+    }
 
     try {
       setIsSaving(true);
@@ -113,6 +123,55 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     }
   };
 
+  const handleFinalize = async () => {
+    if (!user || !exam) return;
+
+    // Task 4.1: Verify all questions have answers
+    const filledAnswersCount = answers.filter((a) => a !== "").length;
+    if (filledAnswersCount < exam.num_items) {
+      toast.error(
+        `Verification Failed: Only ${filledAnswersCount}/${exam.num_items} questions have answers.`,
+      );
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const { updateExam } = await import("@/services/examService");
+      const approvedAt = new Date().toISOString();
+      await updateExam(exam.id, {
+        status: "final",
+        approvedBy: user.id,
+        approvedAt: approvedAt,
+      });
+
+      // Log the review action (Task 4.5)
+      await BatchService.recordReviewAction(
+        exam.id,
+        exam.examCode || "N/A",
+        user.id,
+        "approved",
+      );
+
+      setExam((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "final",
+              approvedBy: user.id,
+              approvedAt: approvedAt,
+            }
+          : null,
+      );
+      toast.success("Exam approved and finalized");
+    } catch (error) {
+      console.error("Error finalizing exam:", error);
+      toast.error("Failed to finalize exam");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -141,17 +200,44 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           <X className="w-6 h-6 text-gray-400" />
         </button>
 
-        <div className="space-y-1 mb-8">
-          <h1 className="text-3xl font-black text-[#004D2C]">{exam.title}</h1>
-          <p className="text-gray-400 font-bold">
-            {exam.num_items} items • {exam.generated_sheets.length} students
-            scanned •{" "}
-            {new Date(exam.created_at).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </p>
+        <div className="flex justify-between items-start mb-8">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-black text-[#004D2C]">{exam.title}</h1>
+            <p className="text-gray-400 font-bold">
+              {exam.num_items} items • {exam.generated_sheets.length} students
+              scanned •{" "}
+              {new Date(exam.created_at).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <div
+              className={cn(
+                "mt-10 px-4 py-2 rounded-xl border text-sm font-black uppercase tracking-wider",
+                exam.status === "final"
+                  ? "mt-10 bg-emerald-50 text-emerald-600 border-emerald-100"
+                  : "mt-10 bg-amber-50 text-amber-600 border-amber-100",
+              )}
+            >
+              {exam.status}
+            </div>
+            {exam.status === "draft" && (
+              <Button
+                onClick={handleFinalize}
+                disabled={isSaving}
+                className="bg-[#BA8E23] hover:bg-[#a67d1f] text-white px-6 rounded-xl font-black shadow-md border-b-4 border-[#8c6a1a]"
+              >
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Finalize Exam"
+                )}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Tabs */}
@@ -236,6 +322,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             setAnswers={setAnswers}
             onSave={handleSaveAnswerKey}
             isSaving={isSaving}
+            isLocked={exam.status === "final"}
           />
         )}
         {activeTab === "Scan Sheets" && <ScanSheetsTab />}
@@ -308,8 +395,15 @@ function OverviewTab({
               <p className="text-xs font-bold text-gray-400 uppercase">
                 Status
               </p>
-              <div className="bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg py-2 px-4 w-fit text-sm font-black">
-                Completed
+              <div
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-black border w-fit uppercase",
+                  exam.status === "final"
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                    : "bg-amber-50 text-amber-600 border-amber-100",
+                )}
+              >
+                {exam.status}
               </div>
             </div>
           </CardContent>
@@ -394,16 +488,19 @@ function AnswerKeyTab({
   setAnswers,
   onSave,
   isSaving,
+  isLocked,
 }: {
   exam: Exam;
   answers: AnswerChoice[];
   setAnswers: (answers: AnswerChoice[]) => void;
   onSave: () => void;
   isSaving: boolean;
+  isLocked?: boolean;
 }) {
   const questions = Array.from({ length: exam.num_items }, (_, i) => i + 1);
 
   const handleChoiceSelect = (qIdx: number, choice: AnswerChoice) => {
+    if (isLocked) return;
     const newAnswers = [...answers];
     newAnswers[qIdx] = choice;
     setAnswers(newAnswers);
@@ -415,8 +512,11 @@ function AnswerKeyTab({
         <h3 className="text-xl font-black text-[#004D2C]">Set Answer Key</h3>
         <Button
           onClick={onSave}
-          disabled={isSaving}
-          className="bg-[#004D2C] hover:bg-[#003d22] text-white px-6 rounded-xl flex items-center gap-2 font-black transition-all active:scale-95"
+          disabled={isSaving || isLocked}
+          className={cn(
+            "bg-[#004D2C] hover:bg-[#003d22] text-white px-6 rounded-xl flex items-center gap-2 font-black transition-all active:scale-95",
+            isLocked && "opacity-50 cursor-not-allowed hover:bg-[#004D2C]",
+          )}
         >
           {isSaving ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -432,7 +532,7 @@ function AnswerKeyTab({
               <path d="M17 21v-8H7v8M7 3v5h8" />
             </svg>
           )}
-          {isSaving ? "Saving..." : "Save Answer Key"}
+          {isSaving ? "Saving..." : isLocked ? "Finalized" : "Save Answer Key"}
         </Button>
       </div>
       <div className="p-8">
@@ -446,25 +546,30 @@ function AnswerKeyTab({
                 Question {q}
               </p>
               <div className="flex justify-between items-center px-1">
-                {["A", "B", "C", "D", "E"].map((choice) => {
-                  const isSelected = answers[idx] === choice;
-                  return (
-                    <button
-                      key={choice}
-                      onClick={() =>
-                        handleChoiceSelect(idx, choice as AnswerChoice)
-                      }
-                      className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-black border-2 transition-all active:scale-90",
-                        isSelected
-                          ? "bg-[#004D2C] border-[#004D2C] text-white shadow-md"
-                          : "bg-white border-gray-100 text-gray-400 hover:border-[#BA8E23]/30",
-                      )}
-                    >
-                      {choice}
-                    </button>
-                  );
-                })}
+                {["A", "B", "C", "D", "E"]
+                  .slice(0, exam.choices_per_item || 4)
+                  .map((choice) => {
+                    const isSelected = answers[idx] === choice;
+                    return (
+                      <button
+                        key={choice}
+                        onClick={() =>
+                          handleChoiceSelect(idx, choice as AnswerChoice)
+                        }
+                        className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-black border-2 transition-all",
+                          !isLocked && "active:scale-90",
+                          isSelected
+                            ? "bg-[#004D2C] border-[#004D2C] text-white shadow-md"
+                            : "bg-white border-gray-100 text-gray-400 hover:border-[#BA8E23]/30",
+                          isLocked && "cursor-default",
+                          isLocked && !isSelected && "opacity-40",
+                        )}
+                      >
+                        {choice}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           ))}

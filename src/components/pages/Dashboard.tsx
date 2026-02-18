@@ -1,19 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  FileText,
-  Users,
-  Scan,
-  TrendingUp,
-  Clock,
-  ChevronRight,
-} from "lucide-react";
+import { FileText, Users, Scan } from "lucide-react";
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
 import { toast } from "sonner";
 import {
@@ -21,6 +12,7 @@ import {
   getExams,
   type ExamFormData,
 } from "@/services/examService";
+import { getClasses } from "@/services/classService";
 import { cn } from "@/lib/utils";
 
 interface DashboardStats {
@@ -42,9 +34,9 @@ export default function Dashboard() {
   const { user } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats>({
-    totalExams: 24, // Using some mock data for the "trend" feel if real data is low
-    totalStudents: 156,
-    totalSheets: 1248,
+    totalExams: 0,
+    totalStudents: 0,
+    totalSheets: 0,
     recentExams: [],
   });
   const [loading, setLoading] = useState(true);
@@ -58,33 +50,40 @@ export default function Dashboard() {
           return;
         }
 
-        const exams = await getExams(user.id);
+        const [exams, classes] = await Promise.all([
+          getExams(user.id),
+          getClasses(user.id),
+        ]);
 
-        setStats((prev) => ({
-          ...prev,
-          totalExams: Math.max(exams.length, prev.totalExams),
-          totalSheets: Math.max(
-            exams.reduce(
-              (sum, exam) =>
-                sum +
-                (exam.generated_sheets?.reduce(
-                  (s, sheet) => s + (sheet.sheet_count || 0),
-                  0,
-                ) || 0),
+        const totalStudentsCount = classes.reduce(
+          (sum, c) => sum + (c.students?.length || 0),
+          0,
+        );
+
+        const totalSheetsCount = exams.reduce(
+          (sum, exam) =>
+            sum +
+            (exam.generated_sheets?.reduce(
+              (s, sheet) => s + (sheet.sheet_count || 0),
               0,
-            ),
-            prev.totalSheets,
-          ),
+            ) || 0),
+          0,
+        );
+
+        setStats({
+          totalExams: exams.length,
+          totalStudents: totalStudentsCount,
+          totalSheets: totalSheetsCount,
           recentExams: exams.slice(0, 4).map((exam) => ({
             id: exam.id,
             title: exam.title,
             subject: exam.subject || "N/A",
             num_items: exam.num_items,
             created_at: exam.created_at,
-            status: Math.random() > 0.3 ? "Completed" : "Grading",
-            students_count: Math.floor(Math.random() * 20) + 30, // Mock for visual
+            status: exam.status === "final" ? "Completed" : "Grading",
+            students_count: exam.generated_sheets?.length || 0,
           })),
-        }));
+        });
       } catch (error) {
         console.error("Error fetching stats:", error);
       } finally {
@@ -131,7 +130,7 @@ export default function Dashboard() {
     },
     {
       title: "Answer Sheets",
-      value: "1,248", // Using the screenshot exact value for realism
+      value: stats.totalSheets.toLocaleString(),
       trend: "+89 this week",
       icon: Scan,
       color: "text-white",
@@ -165,7 +164,7 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {statCards.map((stat, idx) => {
+          {statCards.map((stat) => {
             const Icon = stat.icon;
             return (
               <Card
@@ -182,7 +181,7 @@ export default function Dashboard() {
                         {loading ? "-" : stat.value}
                       </p>
                       <div className="flex items-center gap-1 text-xs font-bold text-emerald-600">
-                        {stat.trend}
+                        {/* {stat.trend} */}
                       </div>
                     </div>
                     <div

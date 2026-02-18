@@ -35,9 +35,10 @@ import {
   type ExamFormData,
 } from "@/services/examService";
 import { cn } from "@/lib/utils";
+import { getClasses, type Class } from "@/services/classService";
 
 interface ExamWithStatus extends Exam {
-  status: "Completed" | "Grading";
+  uiStatus: "Completed" | "Grading";
   students_count: number;
   choicesPerItem?: number;
   examType?: string;
@@ -52,6 +53,7 @@ export default function Exams() {
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [classes, setClasses] = useState<Class[]>([]);
 
   const fetchExams = async () => {
     try {
@@ -66,10 +68,10 @@ export default function Exams() {
       // Map to include status and mock student count for UI demo/realism
       const examsWithMetadata = fetchedExams.map((exam) => ({
         ...exam,
-        status: (Math.random() > 0.3 ? "Completed" : "Grading") as
+        uiStatus: (exam.status === "final" ? "Completed" : "Grading") as
           | "Completed"
           | "Grading",
-        students_count: Math.floor(Math.random() * 20) + 30,
+        students_count: exam.generated_sheets?.length || 0,
       }));
 
       setExams(examsWithMetadata);
@@ -83,6 +85,9 @@ export default function Exams() {
 
   useEffect(() => {
     fetchExams();
+    if (user?.id) {
+      getClasses(user.id).then(setClasses).catch(console.error);
+    }
   }, [user]);
 
   const handleCreateExam = async (formData: ExamFormData) => {
@@ -237,12 +242,12 @@ export default function Exams() {
                       <div
                         className={cn(
                           "inline-flex px-4 py-1 rounded-lg text-xs font-bold border",
-                          exam.status === "Completed"
+                          exam.uiStatus === "Completed"
                             ? "bg-emerald-50 text-emerald-600 border-emerald-100"
                             : "bg-amber-50 text-amber-600 border-amber-100",
                         )}
                       >
-                        {exam.status}
+                        {exam.uiStatus}
                       </div>
                     </TableCell>
                     <TableCell className="py-6 px-6">
@@ -288,6 +293,7 @@ export default function Exams() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreateExam={handleCreateExam}
+        classes={classes}
       />
 
       {/* Delete Dialog */}

@@ -4,14 +4,16 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+import { type Class } from "@/services/classService";
 
 interface CreateExamModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateExam: (data: ExamFormData) => void | Promise<void>;
+  classes?: Class[];
 }
 
 export interface ExamFormData {
@@ -39,6 +41,7 @@ export function CreateExamModal({
   isOpen,
   onClose,
   onCreateExam,
+  classes = [],
 }: CreateExamModalProps) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<ExamFormData>({
@@ -60,12 +63,16 @@ export function CreateExamModal({
       toast.error("Please enter an exam title");
       return;
     }
-    if (step === 4 && !formData.folder.trim()) {
+    if (step === 2 && !formData.classId) {
+      toast.error("Please select a class");
+      return;
+    }
+    if (step === 5 && !formData.folder.trim()) {
       toast.error("Please enter a folder name");
       return;
     }
 
-    if (step < 4) {
+    if (step < 5) {
       setStep(step + 1);
     } else {
       handleCreate();
@@ -101,7 +108,7 @@ export function CreateExamModal({
                 Create New Exam
               </h2>
               <p className="text-sm font-bold text-gray-400">
-                Step {step} of 4
+                Step {step} of 5
               </p>
             </div>
             <button
@@ -114,7 +121,7 @@ export function CreateExamModal({
           <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-[#BA8E23] transition-all duration-300"
-              style={{ width: `${(step / 4) * 100}%` }}
+              style={{ width: `${(step / 5) * 100}%` }}
             />
           </div>
         </div>
@@ -141,6 +148,48 @@ export function CreateExamModal({
 
           {step === 2 && (
             <div className="space-y-6 animate-fade-in">
+              <span className="text-sm font-black text-[#004D2C] uppercase tracking-wider block mb-4">
+                Select Class
+              </span>
+              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                {classes.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 font-bold border-2 border-dashed rounded-2xl">
+                    No classes found. Please create a class first.
+                  </div>
+                ) : (
+                  classes.map((cls) => (
+                    <button
+                      key={cls.id}
+                      onClick={() => {
+                        handleInputChange("classId", cls.id);
+                        handleInputChange("className", cls.class_name);
+                        handleInputChange("examCode", cls.class_code);
+                      }}
+                      className={cn(
+                        "w-full h-14 px-6 rounded-2xl border-2 flex items-center justify-between font-bold text-lg transition-all",
+                        formData.classId === cls.id
+                          ? "bg-[#FAF9F6] border-[#BA8E23] text-[#004D2C]"
+                          : "bg-white border-gray-100 text-gray-400 hover:border-[#BA8E23]/30",
+                      )}
+                    >
+                      <div className="text-left">
+                        <p className="font-black text-sm">{cls.class_name}</p>
+                        <p className="text-xs opacity-60">
+                          Code: {cls.class_code}
+                        </p>
+                      </div>
+                      {formData.classId === cls.id && (
+                        <ChevronRight className="w-5 h-5 text-[#BA8E23]" />
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6 animate-fade-in">
               <span className="text-sm font-black text-[#004D2C] uppercase tracking-wider">
                 Number of Items
               </span>
@@ -163,7 +212,7 @@ export function CreateExamModal({
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="space-y-6 animate-fade-in">
               <span className="text-sm font-black text-[#004D2C] uppercase tracking-wider block mb-4">
                 Exam Type
@@ -190,7 +239,7 @@ export function CreateExamModal({
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="space-y-6 animate-fade-in">
               <label className="block space-y-3">
                 <span className="text-sm font-black text-[#004D2C] uppercase tracking-wider">
@@ -228,7 +277,7 @@ export function CreateExamModal({
                 : "bg-[#004D2C] hover:bg-[#003d22] text-white",
             )}
           >
-            {step === 4 ? "Create Exam" : "Continue"}
+            {step === 5 ? "Create Exam" : "Continue"}
           </Button>
         </div>
       </Card>

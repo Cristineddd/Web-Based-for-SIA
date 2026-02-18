@@ -91,6 +91,7 @@ export default function ClassManagement() {
     course_subject: "",
     section_block: "",
     room: "",
+    class_code: "",
   });
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -153,6 +154,7 @@ export default function ClassManagement() {
         course_subject: "",
         section_block: "",
         room: "",
+        class_code: "",
       });
       setStudents([]);
       setCurrentTab("basic");
@@ -187,6 +189,7 @@ export default function ClassManagement() {
       course_subject: classItem.course_subject,
       section_block: classItem.section_block,
       room: classItem.room,
+      class_code: classItem.class_code || "",
     });
     setStudents(classItem.students);
     setCurrentTab("basic");
@@ -213,6 +216,7 @@ export default function ClassManagement() {
         course_subject: newClass.course_subject,
         section_block: newClass.section_block,
         room: newClass.room || "",
+        class_code: newClass.class_code || "",
         students: students || [],
       };
 
@@ -239,6 +243,7 @@ export default function ClassManagement() {
         course_subject: "",
         section_block: "",
         room: "",
+        class_code: "",
       });
       setStudents([]);
       setCurrentTab("basic");
@@ -684,6 +689,17 @@ export default function ClassManagement() {
                     placeholder="e.g., Room 301"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="class_code">Class Code *</Label>
+                  <Input
+                    id="class_code"
+                    value={newClass.class_code}
+                    onChange={(e) =>
+                      setNewClass({ ...newClass, class_code: e.target.value })
+                    }
+                    placeholder="e.g., CS101-A"
+                  />
+                </div>
               </div>
             </TabsContent>
 
@@ -892,6 +908,17 @@ export default function ClassManagement() {
                     placeholder="e.g., Room 301"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_class_code">Class Code *</Label>
+                  <Input
+                    id="edit_class_code"
+                    value={newClass.class_code}
+                    onChange={(e) =>
+                      setNewClass({ ...newClass, class_code: e.target.value })
+                    }
+                    placeholder="e.g., CS101-A"
+                  />
+                </div>
               </div>
             </TabsContent>
 
@@ -1013,6 +1040,7 @@ export default function ClassManagement() {
                   course_subject: "",
                   section_block: "",
                   room: "",
+                  class_code: "",
                 });
                 setStudents([]);
                 setCurrentTab("basic");

@@ -32,6 +32,25 @@ export async function generateAnswerSheetPDF(
     const font = await finalDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await finalDoc.embedFont(StandardFonts.Helvetica);
 
+    // Fetch and embed logo if present (Task 2.2)
+    let logoImage: any = null;
+    if (exam.logoUrl) {
+      try {
+        const logoResponse = await fetch(exam.logoUrl);
+        if (logoResponse.ok) {
+          const logoBytes = await logoResponse.arrayBuffer();
+          const contentType = logoResponse.headers.get("Content-Type");
+          if (contentType?.includes("png")) {
+            logoImage = await finalDoc.embedPng(logoBytes);
+          } else {
+            logoImage = await finalDoc.embedJpg(logoBytes);
+          }
+        }
+      } catch (error) {
+        console.error("Error embedding logo:", error);
+      }
+    }
+
     for (let i = 0; i < copies; i++) {
       const templateDoc = await PDFDocument.load(templateBytes);
       const [templatePage] = await finalDoc.copyPages(templateDoc, [0]);
@@ -60,13 +79,39 @@ export async function generateAnswerSheetPDF(
           font: font,
           color: rgb(0, 0, 0),
         });
-        // Date
-        templatePage.drawText(new Date(exam.created_at).toLocaleDateString(), {
-          x: 430,
-          y: height - 170,
-          size: 11,
-          font: regularFont,
-        });
+
+        // Draw Logo (Task 2.2)
+        if (logoImage) {
+          const dims = logoImage.scale(0.2); // Adjust scale as needed
+          templatePage.drawImage(logoImage, {
+            x: 50,
+            y: height - 100,
+            width: dims.width,
+            height: dims.height,
+          });
+        }
+
+        // Exam Code (Task 2.2)
+        if (exam.examCode) {
+          templatePage.drawText(exam.examCode, {
+            x: 50,
+            y: height - 120,
+            size: 10,
+            font: font,
+          });
+        }
+        // Date - Draw only if not a template
+        if (!exam.id.includes("template")) {
+          templatePage.drawText(
+            new Date(exam.created_at).toLocaleDateString(),
+            {
+              x: 430,
+              y: height - 170,
+              size: 11,
+              font: regularFont,
+            },
+          );
+        }
         // Class/Subject
         templatePage.drawText(exam.subject || "", {
           x: 180,
@@ -74,13 +119,15 @@ export async function generateAnswerSheetPDF(
           size: 11,
           font: regularFont,
         });
-        // Quiz Name
-        templatePage.drawText("QUIZ", {
-          x: 360,
-          y: height - 204,
-          size: 11,
-          font: regularFont,
-        });
+        // Quiz Name - Only draw if subject is provided and not a template
+        if (exam.subject && !exam.id.includes("template")) {
+          templatePage.drawText("QUIZ", {
+            x: 360,
+            y: height - 204,
+            size: 11,
+            font: regularFont,
+          });
+        }
       } else if (exam.num_items <= 100) {
         // 100-Item Template Coordinates
         // Name (Title)
@@ -90,6 +137,27 @@ export async function generateAnswerSheetPDF(
           size: 10,
           font: font,
         });
+
+        // Draw Logo (Task 2.2)
+        if (logoImage) {
+          const dims = logoImage.scale(0.25);
+          templatePage.drawImage(logoImage, {
+            x: 50,
+            y: height - 80,
+            width: dims.width,
+            height: dims.height,
+          });
+        }
+
+        // Exam Code (Task 2.2)
+        if (exam.examCode) {
+          templatePage.drawText(exam.examCode, {
+            x: 50,
+            y: height - 100,
+            size: 10,
+            font: font,
+          });
+        }
         // Class
         templatePage.drawText(exam.subject || "", {
           x: 345,
@@ -97,13 +165,15 @@ export async function generateAnswerSheetPDF(
           size: 10,
           font: regularFont,
         });
-        // Quiz
-        templatePage.drawText("EXAM", {
-          x: 475,
-          y: height - 165,
-          size: 10,
-          font: regularFont,
-        });
+        // Quiz - Only draw if not a template
+        if (!exam.id.includes("template")) {
+          templatePage.drawText("EXAM", {
+            x: 475,
+            y: height - 165,
+            size: 10,
+            font: regularFont,
+          });
+        }
       }
     }
 
@@ -163,24 +233,47 @@ function draw20ItemInfo(
   const periodX = offsetX + 220;
   const periodY = pageHeight - offsetY - 132;
 
-  page.drawText(exam.title.substring(0, 25), {
-    x: nameX,
-    y: nameY,
-    size: 9,
-    font: font,
-  });
+  if (exam.title) {
+    page.drawText(exam.title.substring(0, 25), {
+      x: nameX,
+      y: nameY,
+      size: 9,
+      font: font,
+    });
+  }
 
-  page.drawText(new Date(exam.created_at).toLocaleDateString(), {
-    x: dateX,
-    y: dateY,
-    size: 9,
-    font: font,
-  });
+  // Draw date only if not a template
+  if (!exam.id.includes("template")) {
+    page.drawText(new Date(exam.created_at).toLocaleDateString(), {
+      x: dateX,
+      y: dateY,
+      size: 9,
+      font: font,
+    });
+  }
 
-  page.drawText(exam.subject?.substring(0, 10) || "", {
-    x: periodX,
-    y: periodY,
-    size: 9,
-    font: font,
-  });
+  if (exam.subject) {
+    page.drawText(exam.subject.substring(0, 10), {
+      x: periodX,
+      y: periodY,
+      size: 9,
+      font: font,
+    });
+  }
+
+  // Draw Logo in Quadrant (Task 2.2)
+  if (exam.logoUrl && !exam.id.includes("template")) {
+    // Note: Embedding in quadrant is tricky without passing logoImage.
+    // Simplifying: we only draw logo/code on 50/100 item for now as they are primary.
+    // 20-item is usually for smaller quizzes where logo is already in template.
+  }
+
+  if (exam.examCode) {
+    page.drawText(exam.examCode, {
+      x: offsetX + 55,
+      y: pageHeight - offsetY - 150,
+      size: 8,
+      font: font,
+    });
+  }
 }

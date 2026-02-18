@@ -82,7 +82,9 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
         setAnswers(loadedAnswers);
         setQuestionSettings(loadedSettings);
         setAnswerKeyId(result.data.id);
-        setIsLocked(result.data.locked || false);
+
+        // Lock if either the answer key itself is locked or the parent exam is finalized
+        setIsLocked(result.data.locked || exam?.status === "final" || false);
       }
     } catch (err) {
       console.error("Error loading answer key:", err);

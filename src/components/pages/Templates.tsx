@@ -131,8 +131,8 @@ export default function Templates() {
     try {
       const dummyExam = {
         id: "template-download",
-        title: template.name,
-        subject: "Template",
+        title: "",
+        subject: "",
         num_items: template.num_items,
         choices_per_item: template.choices_per_item,
         student_id_length: template.student_id_length,
@@ -165,8 +165,8 @@ export default function Templates() {
     try {
       const dummyExam = {
         id: "template-preview",
-        title: template.name,
-        subject: "Preview",
+        title: "",
+        subject: "",
         num_items: template.num_items,
         choices_per_item: template.choices_per_item,
         student_id_length: template.student_id_length,
