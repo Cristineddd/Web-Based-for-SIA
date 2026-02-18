@@ -30,7 +30,7 @@ export class AnswerKeyService {
         id: answerKeyId,
         examId,
         answers,
-        questionSettings,
+        questionSettings: questionSettings || null,
         createdBy: userId,
         createdAt: now,
         updatedAt: now,

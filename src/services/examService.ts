@@ -10,7 +10,6 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -26,14 +25,21 @@ export interface Exam {
   createdBy?: string;
   updatedAt?: string;
   className?: string;
-  examType?: 'board' | 'diagnostic';
+  examType?: string;
   choicePoints?: { [choice: string]: number };
+  examCode?: string;
+  logoUrl?: string;
+  student_id_length?: number;
 }
 
 export interface GeneratedSheet {
   id: string;
   sheet_count: number;
   created_at: string;
+  examCode?: string;
+  batchType?: string;
+  timezone?: string;
+  isDuplicate?: boolean;
 }
 
 export interface ExamFormData {
@@ -44,8 +50,11 @@ export interface ExamFormData {
   className?: string;
   classId?: string;
   choicesPerItem?: number;
-  examType?: 'board' | 'diagnostic';
+  examType?: string;
   choicePoints?: { [choice: string]: number };
+  examCode?: string;
+  logoUrl?: string;
+  studentIdLength?: number;
 }
 
 /**
@@ -69,8 +78,11 @@ export async function createExam(
       updatedAt: serverTimestamp(),
       className: formData.className || null,
       classId: formData.classId || null,
-      examType: formData.examType || 'board',
+      examType: formData.examType || "board",
       choicePoints: formData.choicePoints || {},
+      examCode: formData.examCode || null,
+      logoUrl: formData.logoUrl || null,
+      student_id_length: formData.studentIdLength || 6,
     };
     const docRef = await addDoc(collection(db, "exams"), examData);
 
@@ -87,8 +99,11 @@ export async function createExam(
       createdBy: userId,
       updatedAt: new Date().toISOString(),
       className: examData.className || undefined,
-      examType: examData.examType || 'board',
+      examType: examData.examType || "board",
       choicePoints: examData.choicePoints,
+      examCode: examData.examCode || undefined,
+      logoUrl: examData.logoUrl || undefined,
+      student_id_length: examData.student_id_length || 6,
     };
 
     return newExam;
@@ -115,7 +130,7 @@ export async function getExams(userId?: string): Promise<Exam[]> {
     const exams: Exam[] = [];
 
     querySnapshot.forEach((doc) => {
-      const data = doc.data();
+      const data = doc.data() as any;
       exams.push({
         id: doc.id,
         title: data.title,
@@ -132,6 +147,9 @@ export async function getExams(userId?: string): Promise<Exam[]> {
         updatedAt:
           data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
         className: data.className || undefined,
+        examCode: data.examCode || undefined,
+        logoUrl: data.logoUrl || undefined,
+        student_id_length: data.student_id_length || 6,
       });
     });
 
@@ -163,7 +181,7 @@ export async function getExamById(examId: string): Promise<Exam | null> {
       return null;
     }
 
-    const data = docSnap.data();
+    const data = docSnap.data() as any;
     return {
       id: docSnap.id,
       title: data.title,
@@ -180,6 +198,9 @@ export async function getExamById(examId: string): Promise<Exam | null> {
       updatedAt:
         data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
       className: data.className || undefined,
+      examCode: data.examCode || undefined,
+      logoUrl: data.logoUrl || undefined,
+      student_id_length: data.student_id_length || 6,
     };
   } catch (error) {
     console.error("Error fetching exam:", error);

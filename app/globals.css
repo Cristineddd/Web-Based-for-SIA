@@ -6,86 +6,103 @@
 
 @layer base {
   html {
-    font-family: var(--font-poppins, 'Poppins', system-ui, sans-serif) !important;
+    font-family: var(
+      --font-poppins,
+      "Poppins",
+      system-ui,
+      sans-serif
+    ) !important;
     font-weight: 500;
   }
 
   body {
-    font-family: var(--font-poppins, 'Poppins', system-ui, sans-serif) !important;
+    font-family: var(
+      --font-poppins,
+      "Poppins",
+      system-ui,
+      sans-serif
+    ) !important;
     font-weight: 500;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-weight: 700;
   }
 
-  button, a, [role="button"] {
+  button,
+  a,
+  [role="button"] {
     font-weight: 600;
   }
 
   :root {
-    /* Core backgrounds - Cream (#FAF9F6) */
-    --background: 45 29% 97%;
-    --foreground: 148 100% 15%;
+    /* Core backgrounds - Clean White/Off-white */
+    --background: 0 0% 98%;
+    --foreground: 154 100% 10%;
 
-    /* Card surfaces - Cream */
-    --card: 45 29% 97%;
-    --card-foreground: 148 100% 15%;
+    /* Card surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 154 100% 10%;
 
-    --popover: 45 29% 97%;
-    --popover-foreground: 148 100% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 154 100% 10%;
 
-    /* Primary - Deep green (#004B23) */
-    --primary: 148 100% 15%;
-    --primary-foreground: 45 29% 97%;
+    /* Primary Branding - Deep Green (#004D2C) */
+    --primary: 154 100% 15%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Secondary - Gold (#B38B00) */
-    --secondary: 47 100% 35%;
-    --secondary-foreground: 45 29% 97%;
+    /* Secondary/Action - Forest Green (#003D22) */
+    --secondary: 154 100% 12%;
+    --secondary-foreground: 0 0% 100%;
 
-    /* Muted - Light neutral */
-    --muted: 0 0% 95%;
-    --muted-foreground: 0 0% 40%;
-
-    /* Accent - Gold (#B38B00) */
+    /* Accent - Dark Gold (#B38B00) */
     --accent: 47 100% 35%;
-    --accent-foreground: 45 29% 97%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Muted states */
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+
+    /* Sidebar - Solid Dark Green */
+    --sidebar-background: 154 100% 9%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 47 100% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 47 100% 40%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 154 100% 12%;
+    --sidebar-ring: 47 100% 35%;
+
+    --radius: 0.75rem;
 
     /* Success - Green */
-    --success: 148 100% 15%;
-    --success-foreground: 45 29% 97%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
 
     /* Warning - Gold */
-    --warning: 47 100% 35%;
-    --warning-foreground: 45 29% 97%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
 
-    /* Destructive - reuse green (can be customized if needed) */
-    --destructive: 148 100% 15%;
-    --destructive-foreground: 45 29% 97%;
+    /* Destructive - reuse red */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
     /* Border and inputs */
-    --border: 0 0% 90%;
-    --input: 0 0% 95%;
-    --ring: 148 100% 15%;
-
-    --radius: 0.625rem;
-
-    /* Sidebar - Cream, green, and gold */
-    --sidebar-background: 45 29% 97%;
-    --sidebar-foreground: 148 100% 15%;
-    --sidebar-primary: 148 100% 15%;
-    --sidebar-primary-foreground: 45 29% 97%;
-    --sidebar-accent: 47 100% 35%;
-    --sidebar-accent-foreground: 45 29% 97%;
-    --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 216 98% 52%;
+    --border: 0 0% 92%;
+    --input: 0 0% 96%;
+    --ring: 154 100% 15%;
 
     /* Custom tokens for exam system */
-    --exam-bubble: 45 29% 98%;
-    --exam-bubble-filled: 148 100% 15%;
-    --exam-grid: 45 10% 85%;
-    --table-header: 45 29% 96%;
-    --table-row-hover: 45 29% 98%;
+    --exam-bubble: 0 0% 98%;
+    --exam-bubble-filled: 154 100% 15%;
+    --exam-grid: 0 0% 90%;
+    --table-header: 154 100% 98%;
+    --table-row-hover: 154 100% 99%;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -98,32 +115,40 @@
 @layer base {
   * {
     @apply border-border;
-    font-family: 'Poppins', system-ui, sans-serif !important;
+    font-family: "Poppins", system-ui, sans-serif !important;
     font-weight: 600 !important;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Poppins', system-ui, sans-serif !important;
+    font-family: "Poppins", system-ui, sans-serif !important;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply tracking-tight;
-    font-family: 'Poppins', system-ui, sans-serif !important;
+    font-family: "Poppins", system-ui, sans-serif !important;
     font-weight: 700 !important;
   }
-  
+
   /* Override lighter font weights */
   .font-normal {
     font-weight: 600 !important;
   }
-  
+
   .font-medium {
     font-weight: 700 !important;
   }
-  
-  button, input, select, textarea {
-    font-family: 'Poppins', system-ui, sans-serif !important;
+
+  button,
+  input,
+  select,
+  textarea {
+    font-family: "Poppins", system-ui, sans-serif !important;
   }
 }
 
@@ -159,7 +184,8 @@
            hover:bg-primary/10 hover:text-primary hover:translate-x-1 cursor-pointer;
   }
 
-  .sidebar-item-active, .sidebar-item-active:hover {
+  .sidebar-item-active,
+  .sidebar-item-active:hover {
     @apply bg-primary/20 text-primary font-semibold shadow-sm border-l-2 border-primary pl-2.5;
   }
 
@@ -190,16 +216,20 @@
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes slideUp {
-    from { 
+    from {
       opacity: 0;
       transform: translateY(10px);
     }
-    to { 
+    to {
       opacity: 1;
       transform: translateY(0);
     }
@@ -220,16 +250,20 @@
     background-color: hsl(var(--primary));
     transition: background-color 0.2s;
   }
-  
+
   .gradient-primary:hover {
     background-color: hsl(var(--primary) / 0.95);
   }
-  
+
   .gradient-primary:active {
     background-color: hsl(var(--primary) / 0.9);
   }
 
   .gradient-accent {
-    background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--primary)) 100%);
+    background: linear-gradient(
+      135deg,
+      hsl(var(--accent)) 0%,
+      hsl(var(--primary)) 100%
+    );
   }
 }
