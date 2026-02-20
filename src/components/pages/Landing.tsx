@@ -1,24 +1,20 @@
-'use client';
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
-import { 
+import { Card } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
+import {
   BookOpen,
-  Users, 
+  Users,
   Smartphone,
   BarChart3,
   CheckCircle,
-  Upload,
-  QrCode,
-  Download,
   Shield,
   Zap,
-  ArrowRight 
-} from 'lucide-react';
+  ArrowRight,
+} from "lucide-react";
 
 export default function Landing() {
   const router = useRouter();
@@ -27,7 +23,7 @@ export default function Landing() {
   // Redirect authenticated users to dashboard
   useEffect(() => {
     if (user && !loading) {
-      router.push('/dashboard');
+      router.push("/dashboard");
     }
   }, [user, loading, router]);
 
@@ -42,46 +38,71 @@ export default function Landing() {
   const subsystems = [
     {
       icon: BookOpen,
-      title: 'Exam & Template Management',
-      description: 'Easily create exams, define answer keys, and generate standardized, printable answer sheets with Student ID bubbles. Track the number of generated exam papers for better exam control and accountability.',
-      features: ['Create exams quickly', 'Define answer keys', 'Generate printable sheets', 'Track exam papers']
+      title: "Exam & Template Management",
+      description:
+        "Easily create exams, define answer keys, and generate standardized, printable answer sheets with Student ID bubbles. Track the number of generated exam papers for better exam control and accountability.",
+      features: [
+        "Create exams quickly",
+        "Define answer keys",
+        "Generate printable sheets",
+        "Track exam papers",
+      ],
     },
     {
       icon: Users,
-      title: 'Student & Identification Management',
-      description: 'Maintain accurate student records by importing data through Excel or CSV files. Each student is identified using a unique Student ID, ensuring reliable identity matching during the scanning process.',
-      features: ['Import Excel/CSV', 'Manage student records', 'Unique Student IDs', 'ID validation']
+      title: "Student & Identification Management",
+      description:
+        "Maintain accurate student records by importing data through Excel or CSV files. Each student is identified using a unique Student ID, ensuring reliable identity matching during the scanning process.",
+      features: [
+        "Import Excel/CSV",
+        "Manage student records",
+        "Unique Student IDs",
+        "ID validation",
+      ],
     },
     {
       icon: Smartphone,
-      title: 'Scanning & Auto-Grading',
-      description: 'Using a mobile application, instructors can scan completed answer sheets. The system reads both Student ID bubbles and answers, compares responses with the official answer key, and instantly computes scores.',
-      features: ['Mobile scanning', 'ID bubble reading', 'Answer comparison', 'Instant scoring']
+      title: "Scanning & Auto-Grading",
+      description:
+        "Using a mobile application, instructors can scan completed answer sheets. The system reads both Student ID bubbles and answers, compares responses with the official answer key, and instantly computes scores.",
+      features: [
+        "Mobile scanning",
+        "ID bubble reading",
+        "Answer comparison",
+        "Instant scoring",
+      ],
     },
     {
       icon: BarChart3,
-      title: 'Results, Reporting & Export',
-      description: 'All grades are securely stored in the database and displayed through a faculty dashboard. Export official grade reports in Excel, CSV, or PDF formats, complete with institutional branding.',
-      features: ['Secure storage', 'Faculty dashboard', 'Multi-format export', 'Custom branding']
-    }
+      title: "Results, Reporting & Export",
+      description:
+        "All grades are securely stored in the database and displayed through a faculty dashboard. Export official grade reports in Excel, CSV, or PDF formats, complete with institutional branding.",
+      features: [
+        "Secure storage",
+        "Faculty dashboard",
+        "Multi-format export",
+        "Custom branding",
+      ],
+    },
   ];
 
   const benefits = [
     {
       icon: Zap,
-      title: 'Speed',
-      description: 'Accelerate the grading process from hours to minutes'
+      title: "Speed",
+      description: "Accelerate the grading process from hours to minutes",
     },
     {
       icon: Shield,
-      title: 'Accuracy',
-      description: 'Minimize manual checking and reduce human error'
+      title: "Accuracy",
+      description: "Minimize manual checking and reduce human error",
     },
     {
       icon: CheckCircle,
-      title: 'Reliability',
-      description: 'Unrecognized IDs are automatically flagged to prevent invalid grading'
-    }
+      title: "Reliability",
+      description:
+        "Unrecognized IDs are automatically flagged to prevent invalid grading",
+    },
   ];
 
   return (
@@ -92,10 +113,12 @@ export default function Landing() {
           <div className="flex justify-between items-center h-12 sm:h-14">
             <div className="min-w-0">
               <h1 className="text-base sm:text-lg font-bold truncate">SIA</h1>
-              <p className="text-xs text-muted-foreground -mt-0.5">Smart Exam Checking</p>
+              <p className="text-xs text-muted-foreground -mt-0.5">
+                Smart Exam Checking
+              </p>
             </div>
-            <button 
-              onClick={() => router.push('/auth')}
+            <button
+              onClick={() => router.push("/auth")}
               className="gap-1 h-8 sm:h-9 text-xs sm:text-sm flex-shrink-0 ml-2 px-3 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-semibold transition-colors"
             >
               <span className="hidden sm:inline">Get Started</span>
@@ -109,19 +132,23 @@ export default function Landing() {
       <section className="py-10 sm:py-16 px-3 sm:px-4 bg-gradient-to-br from-primary/10 via-accent/5 to-primary/10">
         <div className="max-w-5xl mx-auto text-center">
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-4 sm:mb-6 bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent leading-tight tracking-tight">
-            Smart Exam Checking<br />& Auto-Grading System
+            Smart Exam Checking
+            <br />& Auto-Grading System
           </h1>
-          
+
           <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-3xl mx-auto mb-2 leading-relaxed">
-            A streamlined, paper-based exam checking solution designed to help instructors efficiently prepare exams, validate student identities, and automatically compute accurate results using mobile scanning and web-based management tools.
+            A streamlined, paper-based exam checking solution designed to help
+            instructors efficiently prepare exams, validate student identities,
+            and automatically compute accurate results using mobile scanning and
+            web-based management tools.
           </p>
 
           <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-3xl mx-auto mb-6 sm:mb-8 font-medium">
             Built for Accuracy, Speed, and Academic Reliability
           </p>
 
-          <button 
-            onClick={() => router.push('/auth')}
+          <button
+            onClick={() => router.push("/auth")}
             className="px-4 sm:px-6 py-2 sm:py-3 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-semibold transition-colors inline-flex items-center gap-2"
           >
             <span className="hidden sm:inline">Start Now</span>
@@ -147,7 +174,7 @@ export default function Landing() {
             {subsystems.map((subsystem, index) => {
               const Icon = subsystem.icon;
               return (
-                <Card 
+                <Card
                   key={index}
                   className="p-4 sm:p-6 hover:shadow-lg transition-all bg-card border border-primary/10 hover:border-primary/30"
                 >
@@ -155,9 +182,11 @@ export default function Landing() {
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
                     </div>
-                    <h3 className="font-bold text-sm sm:text-base pt-1">{subsystem.title}</h3>
+                    <h3 className="font-bold text-sm sm:text-base pt-1">
+                      {subsystem.title}
+                    </h3>
                   </div>
-                  
+
                   <p className="text-xs sm:text-sm text-muted-foreground mb-4 leading-relaxed">
                     {subsystem.description}
                   </p>
@@ -166,7 +195,9 @@ export default function Landing() {
                     {subsystem.features.map((feature, idx) => (
                       <li key={idx} className="flex items-start gap-2">
                         <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-xs sm:text-sm text-muted-foreground">{feature}</span>
+                        <span className="text-xs sm:text-sm text-muted-foreground">
+                          {feature}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -193,14 +224,16 @@ export default function Landing() {
             {benefits.map((benefit, index) => {
               const Icon = benefit.icon;
               return (
-                <Card 
+                <Card
                   key={index}
                   className="p-4 sm:p-6 text-center bg-card hover:bg-accent/5 transition-all"
                 >
                   <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-3 sm:mb-4">
                     <Icon className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                   </div>
-                  <h3 className="font-bold text-sm sm:text-base mb-1.5 sm:mb-2">{benefit.title}</h3>
+                  <h3 className="font-bold text-sm sm:text-base mb-1.5 sm:mb-2">
+                    {benefit.title}
+                  </h3>
                   <p className="text-xs sm:text-sm text-muted-foreground">
                     {benefit.description}
                   </p>
@@ -215,21 +248,23 @@ export default function Landing() {
               <Shield className="w-5 h-5 text-primary" />
               Key Capabilities
             </h3>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
               {[
-                'Mobile scanning with instant feedback',
-                'Automatic Student ID validation',
-                'Multi-format export (Excel, CSV, PDF)',
-                'Faculty dashboard with detailed analytics',
-                'Paper-based exam workflow support',
-                'Secure data storage and encryption',
-                'Unrecognized ID flagging',
-                'Institutional branding support'
+                "Mobile scanning with instant feedback",
+                "Automatic Student ID validation",
+                "Multi-format export (Excel, CSV, PDF)",
+                "Faculty dashboard with detailed analytics",
+                "Paper-based exam workflow support",
+                "Secure data storage and encryption",
+                "Unrecognized ID flagging",
+                "Institutional branding support",
               ].map((feature, idx) => (
                 <div key={idx} className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                  <span className="text-xs sm:text-sm text-muted-foreground">{feature}</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground">
+                    {feature}
+                  </span>
                 </div>
               ))}
             </div>
@@ -249,8 +284,8 @@ export default function Landing() {
                 Focus on teaching. Let SIA handle the grading.
               </p>
             </div>
-            <button 
-              onClick={() => router.push('/auth')}
+            <button
+              onClick={() => router.push("/auth")}
               className="px-4 sm:px-6 py-2 sm:py-3 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md font-semibold transition-colors flex-shrink-0 w-full sm:w-auto inline-flex items-center justify-center gap-2"
             >
               <span className="hidden sm:inline">Get Started Free</span>

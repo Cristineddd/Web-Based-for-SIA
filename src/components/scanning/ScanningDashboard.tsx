@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card } from '@/components/ui/card';
-import { FileKey, Users, Activity, AlertCircle } from 'lucide-react';
-import AnswerKeyEditor from '@/components/pages/AnswerKeyEditor';
-import StudentRosterManager from '@/components/scanning/StudentRosterManager';
-import LiveScoreDisplay from '@/components/scanning/LiveScoreDisplay';
-import NullIdAlertManager from '@/components/scanning/NullIdAlertManager';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import { FileKey, Users, Activity, AlertCircle } from "lucide-react";
+import AnswerKeyEditor from "@/components/pages/AnswerKeyEditor";
+import StudentRosterManager from "@/components/scanning/StudentRosterManager";
+import LiveScoreDisplay from "@/components/scanning/LiveScoreDisplay";
+import NullIdAlertManager from "@/components/scanning/NullIdAlertManager";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ScanningDashboardProps {
   examId: string;
@@ -22,12 +22,14 @@ export default function ScanningDashboard({
   questionCount,
 }: ScanningDashboardProps) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('answer-key');
+  const [activeTab, setActiveTab] = useState("answer-key");
 
   if (!user) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground">Please sign in to access this page.</p>
+        <p className="text-muted-foreground">
+          Please sign in to access this page.
+        </p>
       </div>
     );
   }
@@ -65,11 +67,7 @@ export default function ScanningDashboard({
 
         {/* Answer Key Tab */}
         <TabsContent value="answer-key" className="space-y-4">
-          <AnswerKeyEditor
-            examId={examId}
-            questionCount={questionCount}
-            userId={user.id}
-          />
+          <AnswerKeyEditor params={{ id: examId }} />
         </TabsContent>
 
         {/* Student Roster Tab */}

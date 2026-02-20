@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -63,7 +57,7 @@ interface Student {
 }
 
 export default function Students() {
-  const { user } = useAuth();
+  useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [students, setStudents] = useState<Student[]>([]);

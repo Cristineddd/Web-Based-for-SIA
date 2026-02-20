@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, CheckCircle } from "lucide-react";
 
 interface SignUpFormProps {
   onToggleMode: () => void;
@@ -15,9 +15,9 @@ interface SignUpFormProps {
 export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const router = useRouter();
   const { signUp, user } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -27,7 +27,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     if (user && success) {
       // Small delay to show success message
       const timer = setTimeout(() => {
-        router.push('/dashboard');
+        router.push("/dashboard");
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -39,27 +39,27 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     setError(null);
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError("Password must be at least 6 characters");
       setLoading(false);
       return;
     }
 
     const { error } = await signUp(email, password, fullName);
-    
+
     if (error) {
       // Convert Firebase errors to user-friendly messages
       let errorMessage = error.message;
-      
-      if (error.message.includes('auth/email-already-in-use')) {
-        errorMessage = 'An account with this email already exists.';
-      } else if (error.message.includes('auth/invalid-email')) {
-        errorMessage = 'Invalid email address.';
-      } else if (error.message.includes('auth/weak-password')) {
-        errorMessage = 'Password is too weak. Use at least 6 characters.';
-      } else if (error.message.includes('auth/network-request-failed')) {
-        errorMessage = 'Network error. Please check your connection.';
+
+      if (error.message.includes("auth/email-already-in-use")) {
+        errorMessage = "An account with this email already exists.";
+      } else if (error.message.includes("auth/invalid-email")) {
+        errorMessage = "Invalid email address.";
+      } else if (error.message.includes("auth/weak-password")) {
+        errorMessage = "Password is too weak. Use at least 6 characters.";
+      } else if (error.message.includes("auth/network-request-failed")) {
+        errorMessage = "Network error. Please check your connection.";
       }
-      
+
       setError(errorMessage);
       setLoading(false);
     } else {
@@ -147,14 +147,18 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               />
             </div>
 
-            <button type="submit" disabled={loading} className="w-full h-11 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-semibold transition-colors inline-flex items-center justify-center">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-11 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-semibold transition-colors inline-flex items-center justify-center"
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating account...
                 </>
               ) : (
-                'Create account'
+                "Create account"
               )}
             </button>
 
@@ -171,9 +175,13 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
         </div>
 
         <div className="mt-6 text-center text-xs text-muted-foreground">
-          <a href="#" className="hover:underline">Terms of use</a>
-          {' · '}
-          <a href="#" className="hover:underline">Privacy policy</a>
+          <a href="#" className="hover:underline">
+            Terms of use
+          </a>
+          {" · "}
+          <a href="#" className="hover:underline">
+            Privacy policy
+          </a>
         </div>
       </div>
     </div>

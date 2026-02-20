@@ -26,7 +26,7 @@ export const BatchService = {
     examId: string,
     examCode: string,
     sheetCount: number,
-    userId: string,
+    _userId: string,
   ) {
     try {
       // Gracefully handle presets and previews
@@ -91,8 +91,8 @@ export const BatchService = {
   async recordReviewAction(
     examId: string,
     examCode: string,
-    userId: string,
-    action: "approved" | "rejected",
+    _userId: string,
+    _action: "approved" | "rejected",
   ) {
     try {
       const timestamp = new Date().toISOString();

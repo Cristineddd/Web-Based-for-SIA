@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, ArrowLeft } from "lucide-react";
 
 interface LoginFormProps {
   onToggleMode: () => void;
@@ -15,8 +15,8 @@ interface LoginFormProps {
 export function LoginForm({ onToggleMode }: LoginFormProps) {
   const router = useRouter();
   const { signIn, user } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +24,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   // Redirect to dashboard when user is authenticated
   useEffect(() => {
     if (user && !loading) {
-      router.push('/dashboard');
+      router.push("/dashboard");
     }
   }, [user, loading, router]);
 
@@ -34,27 +34,27 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     setError(null);
 
     const { error } = await signIn(email, password);
-    
+
     if (error) {
       // Convert Firebase errors to user-friendly messages
       let errorMessage = error.message;
-      
-      if (error.message.includes('auth/user-not-found')) {
-        errorMessage = 'No account found with this email address.';
-      } else if (error.message.includes('auth/wrong-password')) {
-        errorMessage = 'Incorrect password. Please try again.';
-      } else if (error.message.includes('auth/invalid-email')) {
-        errorMessage = 'Invalid email address.';
-      } else if (error.message.includes('auth/user-disabled')) {
-        errorMessage = 'This account has been disabled.';
-      } else if (error.message.includes('auth/too-many-requests')) {
-        errorMessage = 'Too many failed attempts. Please try again later.';
-      } else if (error.message.includes('auth/network-request-failed')) {
-        errorMessage = 'Network error. Please check your connection.';
-      } else if (error.message.includes('auth/invalid-credential')) {
-        errorMessage = 'Invalid email or password.';
+
+      if (error.message.includes("auth/user-not-found")) {
+        errorMessage = "No account found with this email address.";
+      } else if (error.message.includes("auth/wrong-password")) {
+        errorMessage = "Incorrect password. Please try again.";
+      } else if (error.message.includes("auth/invalid-email")) {
+        errorMessage = "Invalid email address.";
+      } else if (error.message.includes("auth/user-disabled")) {
+        errorMessage = "This account has been disabled.";
+      } else if (error.message.includes("auth/too-many-requests")) {
+        errorMessage = "Too many failed attempts. Please try again later.";
+      } else if (error.message.includes("auth/network-request-failed")) {
+        errorMessage = "Network error. Please check your connection.";
+      } else if (error.message.includes("auth/invalid-credential")) {
+        errorMessage = "Invalid email or password.";
       }
-      
+
       setError(errorMessage);
       setLoading(false);
     }
@@ -84,10 +84,13 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                 </Alert>
               )}
 
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                if (email) setShowPassword(true);
-              }} className="space-y-6">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (email) setShowPassword(true);
+                }}
+                className="space-y-6"
+              >
                 <div>
                   <Input
                     type="email"
@@ -100,7 +103,11 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                   />
                 </div>
 
-                <button type="submit" disabled={!email} className="w-full h-11 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-semibold transition-colors inline-flex items-center justify-center">
+                <button
+                  type="submit"
+                  disabled={!email}
+                  className="w-full h-11 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-semibold transition-colors inline-flex items-center justify-center"
+                >
                   Next
                 </button>
 
@@ -149,14 +156,18 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                   />
                 </div>
 
-                <button type="submit" disabled={loading} className="w-full h-11 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-semibold transition-colors inline-flex items-center justify-center">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-11 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-semibold transition-colors inline-flex items-center justify-center"
+                >
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Signing in...
                     </>
                   ) : (
-                    'Sign in'
+                    "Sign in"
                   )}
                 </button>
               </form>
@@ -165,9 +176,13 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
         </div>
 
         <div className="mt-6 text-center text-xs text-muted-foreground">
-          <a href="#" className="hover:underline">Terms of use</a>
-          {' · '}
-          <a href="#" className="hover:underline">Privacy policy</a>
+          <a href="#" className="hover:underline">
+            Terms of use
+          </a>
+          {" · "}
+          <a href="#" className="hover:underline">
+            Privacy policy
+          </a>
         </div>
       </div>
     </div>

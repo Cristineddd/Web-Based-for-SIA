@@ -1,10 +1,16 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -12,10 +18,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -23,34 +29,40 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, CheckCircle2, Bell, UserPlus, UserCheck, X } from 'lucide-react';
-import { ScanningService } from '@/services/scanningService';
-import { NullIdAlert } from '@/types/scanning';
-import { formatDistanceToNow } from 'date-fns';
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertCircle, CheckCircle2, Bell, UserCheck, X } from "lucide-react";
+import { ScanningService } from "@/services/scanningService";
+import { NullIdAlert } from "@/types/scanning";
+import { formatDistanceToNow } from "date-fns";
 
 interface NullIdAlertManagerProps {
   examId: string;
   userId: string;
 }
 
-export default function NullIdAlertManager({ examId, userId }: NullIdAlertManagerProps) {
+export default function NullIdAlertManager({
+  examId,
+  userId,
+}: NullIdAlertManagerProps) {
   const [alerts, setAlerts] = useState<NullIdAlert[]>([]);
   const [allAlerts, setAllAlerts] = useState<NullIdAlert[]>([]);
   const [selectedAlert, setSelectedAlert] = useState<NullIdAlert | null>(null);
   const [showResolveDialog, setShowResolveDialog] = useState(false);
-  const [resolutionReason, setResolutionReason] = useState('');
-  const [assignedStudentId, setAssignedStudentId] = useState('');
+  const [resolutionReason, setResolutionReason] = useState("");
+  const [assignedStudentId, setAssignedStudentId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'new' | 'resolved' | 'all'>('new');
+  const [activeTab, setActiveTab] = useState<"new" | "resolved" | "all">("new");
 
   useEffect(() => {
     // Subscribe to new alerts
-    const unsubscribe = ScanningService.subscribeToNullIdAlerts(examId, (newAlerts) => {
-      setAlerts(newAlerts);
-      setLoading(false);
-    });
+    const unsubscribe = ScanningService.subscribeToNullIdAlerts(
+      examId,
+      (newAlerts) => {
+        setAlerts(newAlerts);
+        setLoading(false);
+      },
+    );
 
     // Load all alerts
     loadAllAlerts();
@@ -70,8 +82,8 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
   const handleResolveClick = (alert: NullIdAlert) => {
     setSelectedAlert(alert);
     setShowResolveDialog(true);
-    setResolutionReason('');
-    setAssignedStudentId('');
+    setResolutionReason("");
+    setAssignedStudentId("");
   };
 
   const handleResolve = async () => {
@@ -83,7 +95,7 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
       selectedAlert.id,
       userId,
       resolutionReason,
-      assignedStudentId || undefined
+      assignedStudentId || undefined,
     );
 
     if (result.success) {
@@ -95,16 +107,16 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
 
   const handleBulkResolve = async () => {
     const alertIds = alerts.map((a) => a.id);
-    await ScanningService.bulkResolveAlerts(alertIds, userId, 'Bulk resolved');
+    await ScanningService.bulkResolveAlerts(alertIds, userId, "Bulk resolved");
     loadAllAlerts();
   };
 
   const getFilteredAlerts = () => {
     switch (activeTab) {
-      case 'new':
-        return allAlerts.filter((a) => a.status === 'new');
-      case 'resolved':
-        return allAlerts.filter((a) => a.status === 'resolved');
+      case "new":
+        return allAlerts.filter((a) => a.status === "new");
+      case "resolved":
+        return allAlerts.filter((a) => a.status === "resolved");
       default:
         return allAlerts;
     }
@@ -130,10 +142,12 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
           <AlertCircle className="h-4 w-4" />
           <AlertTitle className="flex items-center gap-2">
             <Bell className="h-4 w-4 animate-pulse" />
-            {alerts.length} Unrecognized Student ID{alerts.length > 1 ? 's' : ''} Detected
+            {alerts.length} Unrecognized Student ID
+            {alerts.length > 1 ? "s" : ""} Detected
           </AlertTitle>
           <AlertDescription>
-            Review and resolve these alerts to assign scans to the correct students.
+            Review and resolve these alerts to assign scans to the correct
+            students.
           </AlertDescription>
         </Alert>
       )}
@@ -175,9 +189,9 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
                 <div className="text-center py-12">
                   <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" />
                   <p className="text-muted-foreground">
-                    {activeTab === 'new'
-                      ? 'No new alerts. All scans have valid student IDs!'
-                      : 'No alerts found.'}
+                    {activeTab === "new"
+                      ? "No new alerts. All scans have valid student IDs!"
+                      : "No alerts found."}
                   </p>
                 </div>
               ) : (
@@ -195,16 +209,16 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
                       {filteredAlerts.map((alert) => (
                         <TableRow key={alert.id}>
                           <TableCell className="font-medium">
-                            {alert.detectedId || 'N/A'}
+                            {alert.detectedId || "N/A"}
                           </TableCell>
                           <TableCell>
-                            {alert.status === 'new' && (
+                            {alert.status === "new" && (
                               <Badge variant="destructive">New</Badge>
                             )}
-                            {alert.status === 'resolved' && (
+                            {alert.status === "resolved" && (
                               <Badge variant="default">Resolved</Badge>
                             )}
-                            {alert.status === 'ignored' && (
+                            {alert.status === "ignored" && (
                               <Badge variant="secondary">Ignored</Badge>
                             )}
                           </TableCell>
@@ -214,7 +228,7 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
                             })}
                           </TableCell>
                           <TableCell>
-                            {alert.status === 'new' ? (
+                            {alert.status === "new" ? (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -225,10 +239,14 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
                             ) : (
                               <div className="text-sm text-muted-foreground">
                                 {alert.assignedStudentId && (
-                                  <span>Assigned to: {alert.assignedStudentId}</span>
+                                  <span>
+                                    Assigned to: {alert.assignedStudentId}
+                                  </span>
                                 )}
                                 {alert.resolutionReason && (
-                                  <div className="text-xs">{alert.resolutionReason}</div>
+                                  <div className="text-xs">
+                                    {alert.resolutionReason}
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -250,13 +268,16 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
           <DialogHeader>
             <DialogTitle>Resolve Alert</DialogTitle>
             <DialogDescription>
-              Choose how to handle the scan with unrecognized ID: {selectedAlert?.detectedId}
+              Choose how to handle the scan with unrecognized ID:{" "}
+              {selectedAlert?.detectedId}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="student-id">Assign to Student ID (Optional)</Label>
+              <Label htmlFor="student-id">
+                Assign to Student ID (Optional)
+              </Label>
               <Input
                 id="student-id"
                 placeholder="Enter correct student ID"
@@ -281,13 +302,13 @@ export default function NullIdAlertManager({ examId, userId }: NullIdAlertManage
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowResolveDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowResolveDialog(false)}
+            >
               Cancel
             </Button>
-            <Button
-              onClick={handleResolve}
-              disabled={!resolutionReason.trim()}
-            >
+            <Button onClick={handleResolve} disabled={!resolutionReason.trim()}>
               {assignedStudentId ? (
                 <>
                   <UserCheck className="h-4 w-4 mr-2" />

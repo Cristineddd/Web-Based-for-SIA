@@ -8,23 +8,17 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Checks if an exam is still in the editable window.
- * An exam is editable if it's in 'draft' status AND the current date
- * is before the scheduled exam date (created_at).
+ * An exam is editable if it's in 'draft' status AND no sheets
+ * have been generated/scanned yet.
  */
 export function isExamEditable(exam: Exam | null): boolean {
   if (!exam) return false;
   if (exam.status !== "draft") return false;
 
-  const examDate = new Date(exam.created_at);
-  const now = new Date();
+  // Lock if any sheets have been generated/scanned, indicating the exam has started
+  if (exam.generated_sheets && exam.generated_sheets.length > 0) {
+    return false;
+  }
 
-  // Set times to midnight for date-only comparison
-  const examDateOnly = new Date(
-    examDate.getFullYear(),
-    examDate.getMonth(),
-    examDate.getDate(),
-  );
-  const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  return nowOnly <= examDateOnly;
+  return true;
 }

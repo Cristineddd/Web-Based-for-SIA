@@ -36,7 +36,7 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { signOut, user } = useAuth();
+  const { signOut } = useAuth();
   const { collapsed, setCollapsed, mobileOpen, setMobileOpen } =
     useSidebarContext();
 

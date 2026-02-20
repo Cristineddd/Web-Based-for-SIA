@@ -6,8 +6,6 @@ import {
   Search,
   FileDown,
   Clock,
-  User,
-  Hash,
   Calendar,
   AlertCircle,
 } from "lucide-react";
@@ -17,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { BatchService, BatchRecord } from "@/services/batchService";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { BadgeCheck, Printer } from "lucide-react";
 
 export default function Logs() {

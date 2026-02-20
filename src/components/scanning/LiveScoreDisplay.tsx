@@ -1,10 +1,16 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+import { Badge } from "@/components/ui/badge";
+
 import {
   Table,
   TableBody,
@@ -12,33 +18,47 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { AlertCircle, TrendingUp, TrendingDown, Users, Activity } from 'lucide-react';
-import { ScanningService } from '@/services/scanningService';
-import { ScannedResult, ExamStatistics } from '@/types/scanning';
-import { formatDistanceToNow } from 'date-fns';
+} from "@/components/ui/table";
+import {
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Activity,
+} from "lucide-react";
+import { ScanningService } from "@/services/scanningService";
+import { ScannedResult, ExamStatistics } from "@/types/scanning";
+import { formatDistanceToNow } from "date-fns";
 
 interface LiveScoreDisplayProps {
   examId: string;
   totalQuestions: number;
 }
 
-export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDisplayProps) {
+export default function LiveScoreDisplay({
+  examId,
+  totalQuestions,
+}: LiveScoreDisplayProps) {
   const [scores, setScores] = useState<ScannedResult[]>([]);
   const [statistics, setStatistics] = useState<ExamStatistics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('connected');
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connected" | "disconnected"
+  >("connected");
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   useEffect(() => {
-    setConnectionStatus('connected');
-    
+    setConnectionStatus("connected");
+
     // Subscribe to real-time score updates
-    const unsubscribe = ScanningService.subscribeToScores(examId, (newScores) => {
-      setScores(newScores);
-      setLastUpdated(new Date());
-      setLoading(false);
-    });
+    const unsubscribe = ScanningService.subscribeToScores(
+      examId,
+      (newScores) => {
+        setScores(newScores);
+        setLastUpdated(new Date());
+        setLoading(false);
+      },
+    );
 
     // Load statistics
     loadStatistics();
@@ -61,10 +81,10 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
 
   const getScoreColor = (score: number) => {
     const percentage = (score / totalQuestions) * 100;
-    if (percentage >= 80) return 'text-green-600';
-    if (percentage >= 60) return 'text-blue-600';
-    if (percentage >= 40) return 'text-yellow-600';
-    return 'text-red-600';
+    if (percentage >= 80) return "text-green-600";
+    if (percentage >= 60) return "text-blue-600";
+    if (percentage >= 40) return "text-yellow-600";
+    return "text-red-600";
   };
 
   const getScorePercentage = (score: number) => {
@@ -88,18 +108,26 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Scanned</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Total Scanned
+              </CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{statistics.totalScanned}</div>
-              <p className="text-xs text-muted-foreground">Students completed</p>
+              <div className="text-2xl font-bold">
+                {statistics.totalScanned}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Students completed
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Average Score</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Average Score
+              </CardTitle>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -107,14 +135,17 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
                 {statistics.averageScore.toFixed(1)} / {totalQuestions}
               </div>
               <p className="text-xs text-muted-foreground">
-                {((statistics.averageScore / totalQuestions) * 100).toFixed(1)}% average
+                {((statistics.averageScore / totalQuestions) * 100).toFixed(1)}%
+                average
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Highest Score</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Highest Score
+              </CardTitle>
               <TrendingUp className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
@@ -129,7 +160,9 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Lowest Score</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Lowest Score
+              </CardTitle>
               <TrendingDown className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent>
@@ -150,17 +183,21 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Live Score Feed</CardTitle>
-              <CardDescription>Scores update automatically as papers are scanned</CardDescription>
+              <CardDescription>
+                Scores update automatically as papers are scanned
+              </CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
                 <div
                   className={`h-2 w-2 rounded-full ${
-                    connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                    connectionStatus === "connected"
+                      ? "bg-green-500 animate-pulse"
+                      : "bg-red-500"
                   }`}
                 />
                 <span className="text-sm text-muted-foreground">
-                  {connectionStatus === 'connected' ? 'Live' : 'Disconnected'}
+                  {connectionStatus === "connected" ? "Live" : "Disconnected"}
                 </span>
               </div>
               <span className="text-sm text-muted-foreground">
@@ -173,7 +210,9 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
           {scores.length === 0 ? (
             <div className="text-center py-12">
               <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No scores yet. Waiting for scans...</p>
+              <p className="text-muted-foreground">
+                No scores yet. Waiting for scans...
+              </p>
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
@@ -202,7 +241,8 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
                         )}
                       </TableCell>
                       <TableCell className={getScoreColor(result.score)}>
-                        <span className="font-bold">{result.score}</span> / {totalQuestions}
+                        <span className="font-bold">{result.score}</span> /{" "}
+                        {totalQuestions}
                       </TableCell>
                       <TableCell className={getScoreColor(result.score)}>
                         {getScorePercentage(result.score)}%
@@ -215,7 +255,9 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {formatDistanceToNow(new Date(result.scannedAt), { addSuffix: true })}
+                        {formatDistanceToNow(new Date(result.scannedAt), {
+                          addSuffix: true,
+                        })}
                       </TableCell>
                     </TableRow>
                   ))}
