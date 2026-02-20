@@ -1,5 +1,6 @@
 {
-  "name": "SIA",
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "sia",
   "private": true,
   "version": "1.0.0",
   "scripts": {

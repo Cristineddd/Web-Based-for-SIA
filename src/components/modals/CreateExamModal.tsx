@@ -1,19 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-
-import { type Class } from "@/services/classService";
+import { Button } from "@/components/ui/button";
 
 interface CreateExamModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateExam: (data: ExamFormData) => void | Promise<void>;
-  classes?: Class[];
+  onCreateExam: (data: ExamFormData) => Promise<void>;
 }
 
 export interface ExamFormData {
@@ -43,7 +41,8 @@ export function CreateExamModal({
   onCreateExam,
   classes = [],
 }: CreateExamModalProps) {
-  const [step, setStep] = useState(1);
+  const { user } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState<ExamFormData>({
     name: "",
     totalQuestions: 50,
@@ -54,13 +53,44 @@ export function CreateExamModal({
     examType: "Midterm Exam",
   });
 
-  const handleInputChange = (field: keyof ExamFormData, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const [step, setStep] = useState(1);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const fetchClassesData = async () => {
+      if (!isOpen) return;
+
+      try {
+        setLoadingClasses(true);
+        const userId = user?.id;
+        const fetchedClasses = await getClasses(userId);
+        setClasses(fetchedClasses);
+      } catch (error) {
+        console.error("Error fetching classes:", error);
+        toast.error("Failed to load classes");
+      } finally {
+        setLoadingClasses(false);
+      }
+    };
+
+    fetchClassesData();
+  }, [isOpen, user]);
+
+  const handleInputChange = (
+    field: keyof ExamFormData,
+    value: string | number,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
-  const handleNext = () => {
-    if (step === 1 && !formData.name.trim()) {
-      toast.error("Please enter an exam title");
+  const handleCreateExam = async () => {
+    if (!formData.name.trim()) {
+      toast.error("Please enter an exam name");
       return;
     }
     if (step === 2 && !formData.classId) {
@@ -79,20 +109,36 @@ export function CreateExamModal({
     }
   };
 
-  const handleCreate = () => {
-    onCreateExam(formData);
-    // Reset
-    setFormData({
-      name: "",
-      totalQuestions: 50,
-      date: new Date().toISOString().split("T")[0],
-      folder: "",
-      className: "N/A",
-      choicesPerItem: 4,
-      examType: "Midterm Exam",
-    });
-    setStep(1);
-    onClose();
+    setIsSubmitting(true);
+
+    try {
+      // Create exam in background - don't wait
+      onCreateExam(formData).catch((error) => {
+        console.error("Error creating exam:", error);
+        toast.error("Failed to save exam to database");
+      });
+      
+      // Close modal immediately for better UX
+      setFormData({
+        name: "",
+        totalQuestions: 50,
+        date: new Date().toISOString().split("T")[0],
+        folder: "General",
+        className: "",
+        classId: undefined,
+        choicesPerItem: 4,
+        examType: "board",
+        choicePoints: {},
+      });
+      setStep(1);
+      onClose();
+      toast.success("Exam created successfully");
+    } catch (error) {
+      console.error("Error creating exam:", error);
+      toast.error("Failed to create exam");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -147,17 +193,91 @@ export function CreateExamModal({
           )}
 
           {step === 2 && (
-            <div className="space-y-6 animate-fade-in">
-              <span className="text-sm font-black text-[#004D2C] uppercase tracking-wider block mb-4">
-                Select Class
-              </span>
-              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
-                {classes.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400 font-bold border-2 border-dashed rounded-2xl">
-                    No classes found. Please create a class first.
-                  </div>
-                ) : (
-                  classes.map((cls) => (
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-foreground mb-3 block">
+                  Number of Questions
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  {[20, 50, 100].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => handleInputChange("totalQuestions", num)}
+                      className={`py-3 px-2 rounded-md font-semibold text-sm transition-all ${
+                        formData.totalQuestions === num
+                          ? "bg-primary text-primary-foreground border-2 border-primary"
+                          : "border-2 border-muted hover:border-primary"
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </label>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-foreground mb-3 block">
+                  Number of Choices per Question
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  {[4, 5].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => handleInputChange("choicesPerItem", num)}
+                      className={`py-3 px-2 rounded-md font-semibold text-sm transition-all border-2 ${
+                        formData.choicesPerItem === num
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {num} Choices (A-{String.fromCharCode(64 + num)})
+                    </button>
+                  ))}
+                </div>
+              </label>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4">
+              <div>
+                <span className="text-sm font-semibold text-foreground mb-3 block">
+                  Select Class *
+                </span>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Choose which class this exam is for
+                </p>
+              </div>
+              {loadingClasses ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    Loading classes...
+                  </span>
+                </div>
+              ) : classes.length === 0 ? (
+                <div className="text-center py-8 space-y-4">
+                  <p className="text-muted-foreground">
+                    No classes available yet
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      router.push('/classes');
+                    }}
+                    variant="default"
+                  >
+                    Create a New Class
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {classes.map((classItem) => (
                     <button
                       key={cls.id}
                       onClick={() => {
@@ -182,19 +302,22 @@ export function CreateExamModal({
                         <ChevronRight className="w-5 h-5 text-[#BA8E23]" />
                       )}
                     </button>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {step === 3 && (
-            <div className="space-y-6 animate-fade-in">
-              <span className="text-sm font-black text-[#004D2C] uppercase tracking-wider">
-                Number of Items
-              </span>
-              <div className="grid grid-cols-1 gap-4">
-                {[20, 50, 100].map((num) => (
+          {step === 5 && (
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-foreground mb-3 block">
+                  Exam Type
+                </span>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Select the type of exam
+                </p>
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     key={num}
                     onClick={() => handleInputChange("totalQuestions", num)}
@@ -239,11 +362,23 @@ export function CreateExamModal({
             </div>
           )}
 
-          {step === 5 && (
-            <div className="space-y-6 animate-fade-in">
-              <label className="block space-y-3">
-                <span className="text-sm font-black text-[#004D2C] uppercase tracking-wider">
-                  Folder Name
+          {step === 6 && (
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-foreground mb-2 block">
+                  Exam Date
+                </span>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => handleInputChange("date", e.target.value)}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-semibold text-foreground mb-2 block">
+                  Folder
                 </span>
                 <input
                   type="text"
@@ -268,14 +403,33 @@ export function CreateExamModal({
               Back
             </button>
           )}
-          <Button
-            onClick={handleNext}
-            className={cn(
-              "flex-1 h-14 rounded-2xl font-black text-lg transition-all shadow-lg",
-              step === 4
-                ? "bg-[#004D2C] hover:bg-[#003d22] text-white"
-                : "bg-[#004D2C] hover:bg-[#003d22] text-white",
-            )}
+          {step < 6 ? (
+            <button
+              onClick={() => {
+                if (step === 4 && !formData.className) {
+                  toast.error("Please select a class before continuing");
+                  return;
+                }
+
+                setStep(step + 1);
+              }}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors"
+              disabled={step === 4 && classes.length === 0}
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              onClick={handleCreateExam}
+              disabled={isSubmitting}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? "Creating..." : "Create Exam"}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
           >
             {step === 5 ? "Create Exam" : "Continue"}
           </Button>

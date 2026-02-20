@@ -35,10 +35,11 @@ export class ScanningService {
     answers: AnswerChoice[],
     answerKey: AnswerChoice[],
     userId: string,
-    isNullId: boolean = false
+    isNullId: boolean = false,
+    choicePoints?: { [choice: string]: number }
   ): Promise<{ success: boolean; data?: ScannedResult; error?: string }> {
     try {
-      const score = this.calculateScore(answers, answerKey);
+      const score = this.calculateScore(answers, answerKey, choicePoints);
       const resultId = `result_${examId}_${studentId}_${Date.now()}`;
       const now = new Date().toISOString();
 
@@ -73,22 +74,28 @@ export class ScanningService {
   }
 
   /**
-   * Calculate score based on answer key
+   * Calculate score based on answer key and points per choice
    */
   static calculateScore(
     studentAnswers: AnswerChoice[],
-    answerKey: AnswerChoice[]
+    answerKey: AnswerChoice[],
+    choicePoints?: { [choice: string]: number }
   ): number {
-    let correct = 0;
+    let totalScore = 0;
     const length = Math.min(studentAnswers.length, answerKey.length);
 
     for (let i = 0; i < length; i++) {
       if (studentAnswers[i] === answerKey[i]) {
-        correct++;
+        // If choicePoints is provided, use it; otherwise default to 1 point per correct answer
+        if (choicePoints && answerKey[i]) {
+          totalScore += choicePoints[answerKey[i]] || 1;
+        } else {
+          totalScore += 1;
+        }
       }
     }
 
-    return correct;
+    return totalScore;
   }
 
   /**

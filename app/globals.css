@@ -154,19 +154,19 @@
 
 @layer components {
   .page-container {
-    @apply py-4 sm:py-6 md:py-8;
+    @apply py-2 sm:py-3 md:py-4 px-2 sm:px-3 md:px-4;
   }
 
   .card-elevated {
-    @apply bg-card rounded-lg border shadow-sm hover:shadow-md transition-shadow duration-200;
+    @apply bg-card rounded-md border shadow-sm hover:shadow-md transition-shadow duration-200;
   }
 
   .stat-card {
-    @apply bg-card rounded-lg border p-6 hover:border-accent/30 transition-colors duration-200;
+    @apply bg-card rounded-md border p-4 sm:p-5 md:p-6 hover:border-accent/30 transition-colors duration-200;
   }
 
   .table-container {
-    @apply bg-card rounded-lg border overflow-hidden;
+    @apply bg-card rounded-md border overflow-hidden;
   }
 
   .btn-accent {
@@ -174,23 +174,22 @@
   }
 
   .input-field {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background 
+    @apply flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background 
            placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 
            focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .sidebar-item {
-    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-foreground transition-all duration-200
-           hover:bg-primary/10 hover:text-primary hover:translate-x-1 cursor-pointer;
+    @apply flex items-center gap-2.5 rounded-md px-2.5 py-2 text-foreground transition-all duration-200
+           hover:bg-primary/10 hover:text-primary cursor-pointer;
   }
 
-  .sidebar-item-active,
-  .sidebar-item-active:hover {
-    @apply bg-primary/20 text-primary font-semibold shadow-sm border-l-2 border-primary pl-2.5;
+  .sidebar-item-active, .sidebar-item-active:hover {
+    @apply bg-primary/20 text-primary font-semibold shadow-sm border-l-2 border-primary pl-2;
   }
 
   .bubble {
-    @apply w-5 h-5 rounded-full border-2 border-primary/30 bg-exam-bubble transition-colors;
+    @apply w-4 h-4 rounded-full border-2 border-primary/30 bg-exam-bubble transition-colors;
   }
 
   .bubble-filled {
@@ -198,7 +197,7 @@
   }
 
   .answer-grid {
-    @apply grid gap-1 font-mono text-sm;
+    @apply grid gap-1 font-mono text-xs sm:text-sm;
   }
 }
 

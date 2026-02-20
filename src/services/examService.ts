@@ -5,10 +5,8 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  deleteDoc,
   query,
   where,
-  orderBy,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -19,6 +17,7 @@ export interface Exam {
   subject: string;
   num_items: number;
   choices_per_item: number;
+  student_id_length?: number;
   created_at: string;
   answer_keys: string[];
   generated_sheets: GeneratedSheet[];
@@ -27,12 +26,8 @@ export interface Exam {
   className?: string;
   examType?: string;
   choicePoints?: { [choice: string]: number };
-  examCode?: string;
-  logoUrl?: string;
-  student_id_length?: number;
-  status: "draft" | "final";
-  approvedBy?: string;
-  approvedAt?: string;
+  isArchived?: boolean;
+  archivedAt?: string;
 }
 
 export interface GeneratedSheet {
@@ -126,62 +121,126 @@ export async function createExam(
 }
 
 /**
- * Get all exams for a user
+ * Get recent exams for a user (lightweight - for dashboard)
+ * Uses client-side filtering to avoid composite index requirement
  */
-export async function getExams(userId?: string): Promise<Exam[]> {
+export async function getRecentExams(userId: string, limit: number = 5): Promise<Exam[]> {
   try {
-    let q;
-    if (userId) {
-      // Remove orderBy to avoid composite index requirement
-      q = query(collection(db, "exams"), where("createdBy", "==", userId));
-    } else {
-      q = query(collection(db, "exams"), orderBy("createdAt", "desc"));
-    }
-
+    // Fetch all exams without filters to avoid composite index
+    const q = query(collection(db, "exams"));
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
 
     querySnapshot.forEach((doc) => {
-      const data = doc.data() as any;
-      // Filter out templates from the main exam list
-      if (data.isTemplate) return;
-
-      exams.push({
-        id: doc.id,
-        title: data.title,
-        subject: data.subject,
-        num_items: data.num_items,
-        choices_per_item: data.choices_per_item,
-        created_at:
-          data.created_at ||
-          data.createdAt?.toDate?.().toISOString() ||
-          new Date().toISOString(),
-        answer_keys: data.answer_keys || [],
-        generated_sheets: data.generated_sheets || [],
-        createdBy: data.createdBy,
-        updatedAt:
-          data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
-        className: data.className || undefined,
-        examCode: data.examCode || undefined,
-        logoUrl: data.logoUrl || undefined,
-        student_id_length: data.student_id_length || 6,
-        status: data.status || "draft",
-        approvedBy: data.approvedBy || undefined,
-        approvedAt: data.approvedAt || undefined,
-      });
+      const data = doc.data();
+      // Filter by userId on client-side and exclude archived exams
+      if (data.createdBy === userId && !data.isArchived) {
+        exams.push({
+          id: doc.id,
+          title: data.title,
+          subject: data.subject,
+          num_items: data.num_items,
+          choices_per_item: data.choices_per_item,
+          created_at:
+            data.created_at ||
+            data.createdAt?.toDate?.().toISOString() ||
+            new Date().toISOString(),
+          answer_keys: data.answer_keys || [],
+          generated_sheets: data.generated_sheets || [],
+          createdBy: data.createdBy,
+          updatedAt:
+            data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
+          className: data.className || undefined,
+          isArchived: data.isArchived,
+        });
+      }
     });
 
-    // Sort in JavaScript after fetching to avoid composite index requirement
-    if (userId) {
-      exams.sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.created_at).getTime();
-        const dateB = new Date(b.updatedAt || b.created_at).getTime();
-        return dateB - dateA;
-      });
-    }
+    // Sort and limit
+    exams.sort((a, b) => {
+      const dateA = new Date(a.updatedAt || a.created_at).getTime();
+      const dateB = new Date(b.updatedAt || b.created_at).getTime();
+      return dateB - dateA;
+    });
+
+    return exams.slice(0, limit);
+  } catch (error: any) {
+    console.error("Error fetching recent exams:", error);
+    return [];
+  }
+}
+
+
+export async function getExamCount(userId: string): Promise<number> {
+  try {
+    // Fetch all exams without filters to avoid composite index
+    const q = query(collection(db, "exams"));
+    const querySnapshot = await getDocs(q);
+    let count = 0;
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      // Filter by userId on client-side and exclude archived exams
+      if (data.createdBy === userId && !data.isArchived) {
+        count++;
+      }
+    });
+
+    return count;
+  } catch (error: any) {
+    console.error("Error fetching exam count:", error);
+    return 0;
+  }
+}
+
+/**
+ * Get all exams for a user
+ */
+export async function getExams(userId?: string): Promise<Exam[]> {
+  try {
+    // If userId is provided, query with filter to avoid permission issues
+    const q = userId
+      ? query(collection(db, "exams"), where("createdBy", "==", userId))
+      : query(collection(db, "exams"));
+    
+    const querySnapshot = await getDocs(q);
+    const exams: Exam[] = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      // Filter by userId if provided (additional client-side check)
+      // Also filter out archived exams
+      if ((!userId || data.createdBy === userId) && !data.isArchived) {
+        exams.push({
+          id: doc.id,
+          title: data.title,
+          subject: data.subject,
+          num_items: data.num_items,
+          choices_per_item: data.choices_per_item,
+          created_at:
+            data.created_at ||
+            data.createdAt?.toDate?.().toISOString() ||
+            new Date().toISOString(),
+          answer_keys: data.answer_keys || [],
+          generated_sheets: data.generated_sheets || [],
+          createdBy: data.createdBy,
+          updatedAt:
+            data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
+          className: data.className || undefined,
+          isArchived: data.isArchived,
+        });
+      }
+    });
+
+    // Sort in JavaScript after fetching
+    exams.sort((a, b) => {
+      const dateA = new Date(a.updatedAt || a.created_at).getTime();
+      const dateB = new Date(b.updatedAt || b.created_at).getTime();
+      return dateB - dateA;
+    });
 
     return exams;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching exams:", error);
     throw new Error("Failed to fetch exams");
   }
@@ -223,7 +282,12 @@ export async function getExamById(examId: string): Promise<Exam | null> {
       approvedBy: data.approvedBy || undefined,
       approvedAt: data.approvedAt || undefined,
     };
-  } catch (error) {
+  } catch (error: any) {
+    // Silently handle offline errors - don't throw
+    if (error?.code === 'failed-precondition' || error?.code === 'unavailable' || error?.message?.includes('offline')) {
+      console.warn('Firestore offline - retrying...');
+      return null;
+    }
     console.error("Error fetching exam:", error);
     throw new Error("Failed to fetch exam");
   }
@@ -249,12 +313,84 @@ export async function updateExam(
 }
 
 /**
+ * Archive an exam
+ */
+export async function archiveExam(examId: string): Promise<void> {
+  try {
+    const docRef = doc(db, "exams", examId);
+    await updateDoc(docRef, {
+      isArchived: true,
+      archivedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error archiving exam:", error);
+    throw new Error("Failed to archive exam");
+  }
+}
+
+
+export async function getArchivedExams(userId: string): Promise<Exam[]> {
+  try {
+    // Use where clause to filter by userId and isArchived to minimize data read
+    const q = query(
+      collection(db, "exams"),
+      where("createdBy", "==", userId),
+      where("isArchived", "==", true)
+    );
+    const querySnapshot = await getDocs(q);
+    const exams: Exam[] = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      exams.push({
+        id: doc.id,
+        title: data.title,
+        subject: data.subject,
+        num_items: data.num_items,
+        choices_per_item: data.choices_per_item,
+        created_at:
+          data.created_at ||
+          data.createdAt?.toDate?.().toISOString() ||
+          new Date().toISOString(),
+        answer_keys: data.answer_keys || [],
+        generated_sheets: data.generated_sheets || [],
+        createdBy: data.createdBy,
+        updatedAt:
+          data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
+        className: data.className || undefined,
+        isArchived: data.isArchived,
+        archivedAt:
+          data.archivedAt?.toDate?.().toISOString() || new Date().toISOString(),
+      });
+    });
+
+    // Sort by archive date
+    exams.sort((a, b) => {
+      const dateA = new Date(a.archivedAt || a.created_at).getTime();
+      const dateB = new Date(b.archivedAt || b.created_at).getTime();
+      return dateB - dateA;
+    });
+
+    return exams;
+  } catch (error: any) {
+    console.error("Error fetching archived exams:", error);
+    return [];
+  }
+}
+
+/**
  * Delete an exam
  */
 export async function deleteExam(examId: string): Promise<void> {
   try {
     const docRef = doc(db, "exams", examId);
-    await deleteDoc(docRef);
+    // Instead of deleting the document, set isArchived to false and mark as deleted
+    await updateDoc(docRef, {
+      isArchived: false,
+      deletedAt: new Date().toISOString(),
+      status: 'deleted'
+    });
   } catch (error) {
     console.error("Error deleting exam:", error);
     throw new Error("Failed to delete exam");

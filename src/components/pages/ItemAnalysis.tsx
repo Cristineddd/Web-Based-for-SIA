@@ -25,9 +25,10 @@ export default function ItemAnalysisPage({ params }: ItemAnalysisProps) {
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState<QuestionAnalysis[]>([]);
+  const examId = params.id;
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchAnalysisData = async () => {
       try {
         const examData = await getExamById(params.id);
         if (!examData) {
@@ -67,10 +68,8 @@ export default function ItemAnalysisPage({ params }: ItemAnalysisProps) {
       }
     };
 
-    fetchData();
-  }, [params.id]);
-
-  if (loading) {
+      fetchAnalysisData();
+    }, [examId, params]);  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-3">

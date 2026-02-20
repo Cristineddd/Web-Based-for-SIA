@@ -51,6 +51,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { StudentService } from "@/services/studentService";
 
 interface Student {
   id: string;
@@ -75,6 +76,7 @@ export default function Students() {
   const [importPreview, setImportPreview] = useState<Partial<Student>[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // New state to hold file upload
+  const [exporting, setExporting] = useState(false);
 
   const [newStudent, setNewStudent] = useState({
     student_id: "",
@@ -86,8 +88,23 @@ export default function Students() {
 
   const fetchStudents = async () => {
     try {
-      // Initialize with empty students
-      setStudents([]);
+      if (!user?.id) {
+        setStudents([]);
+        return;
+      }
+
+      const records = await StudentService.getAllStudents(user.id);
+      const mappedStudents: Student[] = records.map((record) => ({
+        id: record.student_id,
+        student_id: record.student_id,
+        first_name: record.first_name,
+        last_name: record.last_name,
+        email: record.email || null,
+        section: record.section || null,
+        created_at: record.created_at,
+      }));
+
+      setStudents(mappedStudents);
     } catch (error) {
       console.error("Error fetching students:", error);
       toast.error("Failed to load students");
@@ -98,7 +115,55 @@ export default function Students() {
 
   useEffect(() => {
     fetchStudents();
-  }, []);
+  }, [user?.id]);
+
+  const exportStudentIds = async (format: "csv" | "xlsx") => {
+    try {
+      if (!user?.id) {
+        toast.error("You must be logged in to export");
+        return;
+      }
+
+      setExporting(true);
+      const records = await StudentService.getAllStudents(user.id);
+      if (records.length === 0) {
+        toast.error("No student records to export");
+        return;
+      }
+
+      const rows = records.map((record) => ({
+        student_id: record.student_id,
+        first_name: record.first_name,
+        last_name: record.last_name,
+        email: record.email || "",
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      if (format === "xlsx") {
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Student IDs");
+        XLSX.writeFile(workbook, "student_id_list.xlsx");
+      } else {
+        const csv = XLSX.utils.sheet_to_csv(worksheet);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "student_id_list.csv";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      toast.success(`Exported ${rows.length} student ID records`);
+    } catch (error) {
+      console.error("Error exporting student IDs:", error);
+      toast.error("Failed to export student IDs");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleAddStudent = async () => {
     if (
@@ -110,15 +175,27 @@ export default function Students() {
       return;
     }
 
-    try {
-      const studentId = `student_${Date.now()}`;
-      const newStudentRecord = {
-        id: studentId,
-        ...newStudent,
-        created_at: new Date().toISOString(),
-      };
+    if (!newStudent.section) {
+      toast.error("Please select a block");
+      return;
+    }
 
-      setStudents([...students, newStudentRecord]);
+    try {
+      if (!user?.id) {
+        toast.error("You must be logged in to add students");
+        return;
+      }
+
+      await StudentService.createStudent(
+        newStudent.student_id.trim(),
+        newStudent.first_name.trim(),
+        newStudent.last_name.trim(),
+        newStudent.email.trim() || undefined,
+        user.id,
+        newStudent.section,
+      );
+
+      await fetchStudents();
       toast.success("Student added successfully");
       setShowAddDialog(false);
       setNewStudent({
@@ -138,8 +215,20 @@ export default function Students() {
     if (!deleteId) return;
 
     try {
+      if (!user?.id) {
+        toast.error("You must be logged in to delete students");
+        return;
+      }
+
+      const studentToDelete = students.find((s) => s.id === deleteId);
+      if (!studentToDelete) {
+        toast.error("Student not found");
+        return;
+      }
+
+      await StudentService.deleteStudent(studentToDelete.student_id, user.id);
+      await fetchStudents();
       toast.success("Student deleted successfully");
-      setStudents(students.filter((s) => s.id !== deleteId));
     } catch (error) {
       console.error("Error deleting student:", error);
       toast.error("Failed to delete student");
@@ -220,6 +309,11 @@ export default function Students() {
     setImporting(true);
 
     try {
+      if (!user?.id) {
+        toast.error("You must be logged in to import students");
+        return;
+      }
+
       const studentsToInsert = importPreview
         .filter(
           (
@@ -232,21 +326,28 @@ export default function Students() {
             section: string | null;
           } => Boolean(s.student_id && s.first_name && s.last_name),
         )
-        .map((s, index) => ({
-          id: `imported_${Date.now()}_${index}`, // Generate unique ID
+        .map((s) => ({
           student_id: s.student_id,
           first_name: s.first_name,
           last_name: s.last_name,
-          email: s.email || null,
-          section: s.section || null,
-          created_at: new Date().toISOString(),
+          email: s.email || undefined,
+          section: s.section || undefined,
         }));
 
-      // Update students list
-      setStudents([...students, ...(studentsToInsert as any)]);
-      toast.success(
-        `Successfully imported ${studentsToInsert.length} students`,
+      const result = await StudentService.bulkCreateStudents(
+        studentsToInsert,
+        user.id,
       );
+      await fetchStudents();
+
+      if (result.created.length > 0) {
+        toast.success(`Successfully imported ${result.created.length} students`);
+      }
+      if (result.errors.length > 0) {
+        toast.error(
+          `Failed to import ${result.errors.length} student(s). Check duplicates/format.`,
+        );
+      }
 
       // NEW LOGIC: Upload the actual file to the server for backup/record keeping
       if (selectedFile) {
@@ -284,16 +385,17 @@ export default function Students() {
   };
 
   const downloadTemplate = () => {
+    const currentYear = new Date().getFullYear();
     const template = [
       {
-        student_id: "STU001",
+        student_id: `${currentYear}-0001`,
         first_name: "First Name",
         last_name: "Last Name",
         email: "email@example.com",
         section: "Section",
       },
       {
-        student_id: "STU002",
+        student_id: `${currentYear}-0002`,
         first_name: "First Name",
         last_name: "Last Name",
         email: "email@example.com",
@@ -360,7 +462,7 @@ export default function Students() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by ID, name, or section..."
+                placeholder="Search by ID, name, or block..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -369,6 +471,22 @@ export default function Students() {
             <Button variant="outline" onClick={downloadTemplate}>
               <Download className="w-4 h-4 mr-2" />
               Download Template
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => exportStudentIds("csv")}
+              disabled={exporting}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => exportStudentIds("xlsx")}
+              disabled={exporting}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export Excel
             </Button>
           </div>
         </CardContent>
@@ -382,7 +500,7 @@ export default function Students() {
               <TableHead>Student ID</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Section</TableHead>
+              <TableHead>Block</TableHead>
               <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -466,7 +584,7 @@ export default function Students() {
                 onChange={(e) =>
                   setNewStudent({ ...newStudent, student_id: e.target.value })
                 }
-                placeholder="e.g., 20230001"
+                placeholder="e.g., 2026-0001"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -506,15 +624,24 @@ export default function Students() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="section">Section</Label>
-              <Input
+              <Label htmlFor="section">Block</Label>
+              <select
                 id="section"
                 value={newStudent.section}
                 onChange={(e) =>
                   setNewStudent({ ...newStudent, section: e.target.value })
                 }
-                placeholder="e.g., Section A"
-              />
+                className="w-full px-3 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Select a block...</option>
+                {Array.from({ length: 26 }, (_, i) =>
+                  String.fromCharCode(65 + i),
+                ).map((letter) => (
+                  <option key={letter} value={letter}>
+                    {letter}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <DialogFooter>
@@ -548,7 +675,7 @@ export default function Students() {
                   <TableHead>Student ID</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Section</TableHead>
+                  <TableHead>Block</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

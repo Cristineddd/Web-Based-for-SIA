@@ -1,74 +1,74 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useParams } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-import {
-  ArrowLeft,
-  Loader2,
-  FileText,
-  Key,
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
+import { 
+  ArrowLeft, 
+  Loader2, 
+  Key, 
   Printer,
   CheckCircle,
-  AlertCircle,
-} from "lucide-react";
-import { generateAnswerSheetPDF } from "@/lib/pdfGenerator";
-import { getExamById, type Exam } from "@/services/examService";
-
-interface AnswerKey {
-  id: string;
-  item_number: number;
-  correct_answer: string;
-}
+  AlertCircle
+} from 'lucide-react';
+import { generateAnswerSheetPDF } from '@/lib/pdfGenerator';
+import { getExamById, type Exam } from '@/services/examService';
 
 export default function ExamDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuth();
-
+  
   const [exam, setExam] = useState<Exam | null>(null);
-  const [answerKeys, setAnswerKeys] = useState<AnswerKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [sheetCount, setSheetCount] = useState(1);
   const [totalGenerated, setTotalGenerated] = useState(0);
-
+  const [isOffline, setIsOffline] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  
+  // Answer key input state
   const [answers, setAnswers] = useState<Record<number, string>>({});
 
-  const fetchExamData = async () => {
+  const fetchExamData = async (isRetry: boolean = false) => {
     if (!id) return;
-
+    
     try {
+      // Fetch exam from Firestore
       const examData = await getExamById(id);
-
+      
       if (!examData) {
-        toast.error("Exam not found");
-        router.push("/exams");
+        // Only redirect if not offline
+        if (!isOffline) {
+          toast.error('Exam not found');
+          router.push('/exams');
+        }
         return;
       }
-
+      
       setExam(examData);
-      setAnswerKeys([]);
       setAnswers({});
       setTotalGenerated(0);
-    } catch (error) {
-      console.error("Error fetching exam:", error);
-      toast.error("Failed to load exam");
-      router.push("/exams");
+      setIsOffline(false);
+    } catch (error: any) {
+      console.error('Error fetching exam:', error);
+      
+      // Check if it's an offline error
+      if (error?.message?.includes('offline') || error?.code === 'failed-precondition') {
+        setIsOffline(true);
+        if (!isRetry) {
+          toast.warning('You are offline. Some features may be limited.');
+        }
+      } else {
+        toast.error('Failed to load exam');
+        router.push('/exams');
+      }
     } finally {
       setLoading(false);
     }
@@ -93,10 +93,10 @@ export default function ExamDetail() {
     setSaving(true);
 
     try {
-      toast.success("Answer keys saved successfully");
+      toast.success('Answer keys saved successfully');
     } catch (error) {
-      console.error("Error saving answer keys:", error);
-      toast.error("Failed to save answer keys");
+      console.error('Error saving answer keys:', error);
+      toast.error('Failed to save answer keys');
     } finally {
       setSaving(false);
     }
@@ -112,8 +112,8 @@ export default function ExamDetail() {
       setTotalGenerated((prev) => prev + sheetCount);
       toast.success(`Generated ${sheetCount} answer sheet(s)`);
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      toast.error("Failed to generate PDF");
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
     } finally {
       setGenerating(false);
     }
@@ -122,7 +122,13 @@ export default function ExamDetail() {
   if (loading) {
     return (
       <div className="page-container flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto" />
+          <p className="text-muted-foreground">Loading exam...</p>
+          {isOffline && (
+            <p className="text-sm text-warning">You appear to be offline</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -130,7 +136,40 @@ export default function ExamDetail() {
   if (!exam) {
     return (
       <div className="page-container">
-        <p>Exam not found</p>
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-warning" />
+              Unable to Load Exam
+            </CardTitle>
+            <CardDescription>
+              {isOffline 
+                ? 'You appear to be offline. Check your connection and try again.'
+                : 'The exam could not be found or loaded.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button 
+              onClick={() => {
+                setLoading(true);
+                setRetryCount(retryCount + 1);
+                fetchExamData(true);
+              }}
+              className="w-full"
+            >
+              {isOffline ? 'Retry' : 'Go Back to Exams'}
+            </Button>
+            {!isOffline && (
+              <Button 
+                variant="ghost"
+                onClick={() => router.push('/exams')}
+                className="w-full"
+              >
+                Back to Exams
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -142,15 +181,15 @@ export default function ExamDetail() {
     <div className="page-container">
       {/* Header */}
       <div className="mb-6">
-        <Button
-          variant="ghost"
-          onClick={() => router.push("/exams")}
+        <Button 
+          variant="ghost" 
+          onClick={() => router.push('/exams')}
           className="mb-4 -ml-2"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Exams
         </Button>
-
+        
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">{exam.title}</h1>
@@ -185,11 +224,9 @@ export default function ExamDetail() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      isComplete ? "bg-success/10" : "bg-warning/10"
-                    }`}
-                  >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    isComplete ? 'bg-success/10' : 'bg-warning/10'
+                  }`}>
                     {isComplete ? (
                       <CheckCircle className="w-5 h-5 text-success" />
                     ) : (
@@ -203,8 +240,8 @@ export default function ExamDetail() {
                     </CardDescription>
                   </div>
                 </div>
-                <Button
-                  onClick={saveAnswerKeys}
+                <Button 
+                  onClick={saveAnswerKeys} 
                   disabled={saving}
                   className="gradient-primary"
                 >
@@ -214,35 +251,30 @@ export default function ExamDetail() {
                       Saving...
                     </>
                   ) : (
-                    "Save Answer Key"
+                    'Save Answer Key'
                   )}
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-5 sm:grid-cols-10 gap-3">
-                {Array.from({ length: exam.num_items }, (_, i) => i + 1).map(
-                  (num) => (
-                    <div key={num} className="space-y-1">
-                      <Label className="text-xs text-muted-foreground text-center block">
-                        {num}
-                      </Label>
-                      <Input
-                        value={answers[num] || ""}
-                        onChange={(e) =>
-                          handleAnswerChange(num, e.target.value)
-                        }
-                        className="text-center font-mono uppercase h-10"
-                        maxLength={1}
-                        placeholder="–"
-                      />
-                    </div>
-                  ),
-                )}
+                {Array.from({ length: exam.num_items }, (_, i) => i + 1).map((num) => (
+                  <div key={num} className="space-y-1">
+                    <Label className="text-xs text-muted-foreground text-center block">
+                      {num}
+                    </Label>
+                    <Input
+                      value={answers[num] || ''}
+                      onChange={(e) => handleAnswerChange(num, e.target.value)}
+                      className="text-center font-mono uppercase h-10"
+                      maxLength={1}
+                      placeholder="–"
+                    />
+                  </div>
+                ))}
               </div>
               <p className="text-sm text-muted-foreground mt-4">
-                Enter letters A-
-                {String.fromCharCode(64 + exam.choices_per_item)} for each item
+                Enter letters A-{String.fromCharCode(64 + exam.choices_per_item)} for each item
               </p>
             </CardContent>
           </Card>
@@ -274,9 +306,7 @@ export default function ExamDetail() {
                     min={1}
                     max={100}
                     value={sheetCount}
-                    onChange={(e) =>
-                      setSheetCount(Math.max(1, parseInt(e.target.value) || 1))
-                    }
+                    onChange={(e) => setSheetCount(Math.max(1, parseInt(e.target.value) || 1))}
                   />
                   <p className="text-xs text-muted-foreground">
                     Each copy will be on a separate page
@@ -299,15 +329,12 @@ export default function ExamDetail() {
                 <ul className="text-sm text-muted-foreground space-y-1">
                   <li>• Student ID: {exam.student_id_length} digit bubbles</li>
                   <li>• Questions: {exam.num_items} items</li>
-                  <li>
-                    • Choices per item: {exam.choices_per_item} (A-
-                    {String.fromCharCode(64 + exam.choices_per_item)})
-                  </li>
+                  <li>• Choices per item: {exam.choices_per_item} (A-{String.fromCharCode(64 + exam.choices_per_item)})</li>
                 </ul>
               </div>
 
-              <Button
-                onClick={generatePDF}
+              <Button 
+                onClick={generatePDF} 
                 disabled={generating}
                 className="w-full gradient-accent text-accent-foreground"
                 size="lg"

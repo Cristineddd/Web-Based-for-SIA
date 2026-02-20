@@ -51,6 +51,15 @@ export default function Settings() {
             </select>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Current Date</label>
+            <input 
+              type="date" 
+              defaultValue={new Date().toISOString().split('T')[0]}
+              className="w-full px-4 py-2 border rounded-md bg-background"
+            />
+          </div>
+
           <button className="px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90">
             Save Changes
           </button>

@@ -26,6 +26,7 @@ export default function TagReportsPage({ params }: TagReportsProps) {
   const [showNewTagForm, setShowNewTagForm] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [selectedColor, setSelectedColor] = useState('bg-blue-500');
+  const examId = params.id;
 
   const colors = [
     'bg-blue-500',
@@ -39,7 +40,7 @@ export default function TagReportsPage({ params }: TagReportsProps) {
   ];
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchTagData = async () => {
       try {
         const examData = await getExamById(params.id);
         if (!examData) {
@@ -49,7 +50,7 @@ export default function TagReportsPage({ params }: TagReportsProps) {
         setExam(examData);
 
         // Load tags from localStorage (since we don't have a backend service yet)
-        const savedTags = localStorage.getItem(`exam_tags_${params.id}`);
+        const savedTags = localStorage.getItem(`exam_tags_${examId}`);
         if (savedTags) {
           setTags(JSON.parse(savedTags));
         }
@@ -61,8 +62,8 @@ export default function TagReportsPage({ params }: TagReportsProps) {
       }
     };
 
-    fetchData();
-  }, [params.id]);
+    fetchTagData();
+  }, [examId, params]);
 
   const handleCreateTag = () => {
     if (!newTagName.trim()) {
@@ -80,7 +81,7 @@ export default function TagReportsPage({ params }: TagReportsProps) {
 
     const updatedTags = [...tags, newTag];
     setTags(updatedTags);
-    localStorage.setItem(`exam_tags_${params.id}`, JSON.stringify(updatedTags));
+    localStorage.setItem(`exam_tags_${examId}`, JSON.stringify(updatedTags));
     setNewTagName('');
     setSelectedColor('bg-blue-500');
     setShowNewTagForm(false);
@@ -90,7 +91,7 @@ export default function TagReportsPage({ params }: TagReportsProps) {
   const handleDeleteTag = (tagId: string) => {
     const updatedTags = tags.filter(t => t.id !== tagId);
     setTags(updatedTags);
-    localStorage.setItem(`exam_tags_${params.id}`, JSON.stringify(updatedTags));
+    localStorage.setItem(`exam_tags_${examId}`, JSON.stringify(updatedTags));
     toast.success('Tag deleted');
   };
 

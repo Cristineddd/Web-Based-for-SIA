@@ -38,11 +38,16 @@ export class AnswerKeyService {
         version: 1,
       };
 
-      await setDoc(doc(db, ANSWER_KEYS_COLLECTION, answerKeyId), {
-        ...answerKeyData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      // Remove undefined fields before saving to Firestore
+      const cleanedData = Object.fromEntries(
+        Object.entries({
+          ...answerKeyData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }).filter(([, v]) => v !== undefined && v !== null)
+      );
+
+      await setDoc(doc(db, ANSWER_KEYS_COLLECTION, answerKeyId), cleanedData);
 
       return { success: true, data: answerKeyData };
     } catch (error) {
@@ -107,13 +112,19 @@ export class AnswerKeyService {
         };
       }
 
-      await updateDoc(answerKeyRef, {
+      // Only include defined fields in update
+      const updateData: Record<string, any> = {
         answers,
-        questionSettings: questionSettings || null,
         updatedAt: serverTimestamp(),
         updatedBy: userId,
         version: (currentData.version || 1) + 1,
-      });
+      };
+
+      if (questionSettings !== undefined) {
+        updateData.questionSettings = questionSettings;
+      }
+
+      await updateDoc(answerKeyRef, updateData);
 
       return { success: true };
     } catch (error) {

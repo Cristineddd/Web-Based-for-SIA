@@ -1,19 +1,13 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { Exam } from "@/services/examService";
+import jsPDF from 'jspdf';
 
-/**
- * Generate a PDF answer sheet using a provided PDF template
- */
-export async function generateAnswerSheetPDF(
-  exam: Exam,
-  copies: number = 1,
-  options: { preview?: boolean; useStandardLayout?: boolean } = {},
-) {
-  try {
-    // Determine which template to use
-    let templatePath = "";
-    const isStandard =
-      options.useStandardLayout || exam.id.includes("standard");
+interface Exam {
+  id: string;
+  title: string;
+  subject: string;
+  num_items: number;
+  choices_per_item: number;
+  student_id_length?: number;
+}
 
     if (exam.num_items <= 20) {
       templatePath = isStandard
@@ -31,32 +25,54 @@ export async function generateAnswerSheetPDF(
       throw new Error("No template available for more than 100 questions");
     }
 
-    // Fetch the template
-    const response = await fetch(templatePath);
-    if (!response.ok) throw new Error("Failed to load PDF template");
-    const templateBytes = await response.arrayBuffer();
+    let yPos = margin;
 
-    // Create a new PDF document or load existing
-    const finalDoc = await PDFDocument.create();
-    const font = await finalDoc.embedFont(StandardFonts.HelveticaBold);
-    const regularFont = await finalDoc.embedFont(StandardFonts.Helvetica);
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(exam.title, margin, yPos);
+    yPos += 7;
 
-    // Fetch and embed logo if present (Task 2.2)
-    let logoImage: any = null;
-    if (exam.logoUrl) {
-      try {
-        const logoResponse = await fetch(exam.logoUrl);
-        if (logoResponse.ok) {
-          const logoBytes = await logoResponse.arrayBuffer();
-          const contentType = logoResponse.headers.get("Content-Type");
-          if (contentType?.includes("png")) {
-            logoImage = await finalDoc.embedPng(logoBytes);
-          } else {
-            logoImage = await finalDoc.embedJpg(logoBytes);
-          }
-        }
-      } catch (error) {
-        console.error("Error embedding logo:", error);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Subject: ${exam.subject}`, margin, yPos);
+    doc.text(`Items: ${exam.num_items}`, pageWidth - margin - 30, yPos);
+    yPos += 10;
+
+    // Student Name field
+    doc.setFontSize(10);
+    doc.text('Name:', margin, yPos);
+    doc.line(margin + 15, yPos, pageWidth / 2 - 10, yPos);
+    
+    doc.text('Date:', pageWidth / 2, yPos);
+    doc.line(pageWidth / 2 + 15, yPos, pageWidth - margin, yPos);
+    yPos += 10;
+
+    // Student ID Section
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Student ID', margin, yPos);
+    yPos += 6;
+
+    // Student ID bubbles
+    const idStartX = margin;
+    const idLength = exam.student_id_length ?? 8;
+    for (let digit = 0; digit < idLength; digit++) {
+      const x = idStartX + digit * (bubbleSpacing + bubbleRadius * 2);
+      
+      // Column header
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(digit + 1), x + bubbleRadius - 1, yPos);
+      
+      // Draw bubbles for 0-9
+      for (let num = 0; num < 10; num++) {
+        const bubbleY = yPos + 4 + num * bubbleSpacing;
+        doc.circle(x + bubbleRadius, bubbleY, bubbleRadius);
+        
+        // Number label
+        doc.setFontSize(6);
+        doc.text(String(num), x + bubbleRadius - 1, bubbleY + 1);
       }
     }
 

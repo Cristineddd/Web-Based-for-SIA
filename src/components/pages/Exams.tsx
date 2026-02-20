@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Eye, Trash2, Edit2, FileText } from "lucide-react";
+import { Plus, Search, FileText, Eye, Archive } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -30,7 +30,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   createExam,
   getExams,
-  deleteExam,
+  archiveExam,
   type Exam,
   type ExamFormData,
 } from "@/services/examService";
@@ -53,7 +53,7 @@ export default function Exams() {
   const [exams, setExams] = useState<ExamWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
@@ -69,16 +69,34 @@ export default function Exams() {
 
       console.log(`[Exams] Fetching exams for user: ${user.id}`);
       const fetchedExams = await getExams(user.id);
-      console.log(`[Exams] Found ${fetchedExams.length} exams`);
+      // Filter out archived exams
+      const activeExams = fetchedExams.filter((exam) => !exam.isArchived);
 
-      // Map to include status and mock student count for UI demo/realism
-      const examsWithMetadata = fetchedExams.map((exam) => ({
-        ...exam,
-        uiStatus: (exam.status === "final" ? "Completed" : "Grading") as
-          | "Completed"
-          | "Grading",
-        students_count: exam.generated_sheets?.length || 0,
-      }));
+      // Fetch answer key status for each exam
+      const examsWithStatus = await Promise.all(
+        activeExams.map(async (exam) => {
+          try {
+            const result = await AnswerKeyService.getAnswerKeyByExamId(exam.id);
+            if (result.success && result.data) {
+              const answersCount = result.data.answers.length;
+              return {
+                ...exam,
+                answerKeyStatus: {
+                  total: exam.num_items,
+                  completed: answersCount,
+                  hasAnswerKey: true,
+                },
+              };
+            }
+          } catch (error) {
+            console.error(
+              `Error fetching answer key for exam ${exam.id}:`,
+              error,
+            );
+            if (error instanceof Error) {
+              console.error("Error details:", error.message, error.stack);
+            }
+          }
 
       setExams(examsWithMetadata);
     } catch (error) {
@@ -103,27 +121,59 @@ export default function Exams() {
         return;
       }
 
-      await createExam(formData, user.id);
+      // Create temporary ID for optimistic update
+      const tempId = `temp_${Date.now()}`;
+      const tempExam: Exam = {
+        id: tempId,
+        title: formData.name,
+        subject: formData.folder,
+        num_items: formData.totalQuestions,
+        choices_per_item: formData.choicesPerItem || 4,
+        created_at: new Date().toISOString(),
+        answer_keys: [],
+        generated_sheets: [],
+        createdBy: user.id,
+        className: formData.className,
+        examType: formData.examType || 'board',
+      };
+
+      // Add to UI immediately (optimistic)
+      setExams([tempExam, ...exams]);
       toast.success(`Exam "${formData.name}" created successfully`);
       setShowCreateModal(false);
-      fetchExams();
+
+      // Save to Firebase in background (don't wait for it)
+      try {
+        const newExam = await createExam(formData, user.id);
+        // Replace temp exam with real one
+        setExams((prevExams) =>
+          prevExams.map((e) => (e.id === tempId ? newExam : e))
+        );
+      } catch (error) {
+        console.error("Error saving exam to Firebase:", error);
+        // Remove temp exam if save fails
+        setExams((prevExams) => prevExams.filter((e) => e.id !== tempId));
+        toast.error("Failed to save exam to database. Please try again.");
+      }
     } catch (error) {
       console.error("Error creating exam:", error);
       toast.error("Failed to create exam");
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
+  const handleArchive = async () => {
+    if (!archiveId) return;
+
     try {
-      await deleteExam(deleteId);
-      setExams(exams.filter((e) => e.id !== deleteId));
-      toast.success("Exam deleted successfully");
+      await archiveExam(archiveId);
+
+      setExams(exams.filter((e) => e.id !== archiveId));
+      toast.success("Exam archived successfully");
     } catch (error) {
-      console.error("Error deleting exam:", error);
-      toast.error("Failed to delete exam");
+      console.error("Error archiving exam:", error);
+      toast.error("Failed to archive exam");
     } finally {
-      setDeleteId(null);
+      setArchiveId(null);
     }
   };
 
@@ -220,13 +270,21 @@ export default function Exams() {
                       <span className="font-bold">Loading exams...</span>
                     </div>
                   </TableCell>
-                </TableRow>
-              ) : filteredExams.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-20">
-                    <div className="space-y-4 opacity-40">
-                      <FileText className="w-16 h-16 mx-auto text-gray-400" />
-                      <p className="font-extrabold text-lg">No created exam</p>
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-1">
+                      <Link href={`/exams/${exam.id}`}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => setArchiveId(exam.id)}
+                      >
+                        <Archive className="w-4 h-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -331,17 +389,13 @@ export default function Exams() {
         }}
       />
 
-      {/* Delete Dialog */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent className="rounded-2xl border-[#BA8E23]/20">
+      {/* Archive Dialog */}
+      <AlertDialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#004D2C] font-bold">
-              Delete Exam
-            </AlertDialogTitle>
-            <AlertDialogDescription className="font-medium">
-              Are you sure you want to delete this exam? This will also delete
-              all associated answer keys and generated sheets. This action
-              cannot be undone.
+            <AlertDialogTitle>Archive Exam</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to archive this exam? It will be moved to the Archive page and you can restore it later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -349,10 +403,10 @@ export default function Exams() {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-red-600 hover:bg-red-700 text-white rounded-xl"
+              onClick={handleArchive}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              Delete
+              Archive
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

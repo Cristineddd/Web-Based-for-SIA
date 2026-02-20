@@ -27,9 +27,10 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'reviewed' | 'flagged'>('all');
   const [selectedPaper, setSelectedPaper] = useState<ScannedPaper | null>(null);
+  const examId = params.id;
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchPaperData = async () => {
       try {
         const examData = await getExamById(params.id);
         if (!examData) {
@@ -56,8 +57,8 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
       }
     };
 
-    fetchData();
-  }, [params.id]);
+    fetchPaperData();
+    }, [examId, params]);
 
   const filteredPapers = filterStatus === 'all' 
     ? papers 

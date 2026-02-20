@@ -120,6 +120,25 @@ export default function ClassManagement() {
     }
   };
 
+  const handleCloseAddDialog = () => {
+    setShowAddDialog(false);
+    // Reset form data when closing dialog
+    setNewClass({
+      class_name: "",
+      course_subject: "",
+      section_block: "",
+      room: "",
+    });
+    setStudents([]);
+    setNewStudent({
+      student_id: "",
+      first_name: "",
+      last_name: "",
+      email: "",
+    });
+    setCurrentTab("basic");
+  };
+
   const handleAddClass = async () => {
     if (
       !newClass.class_name ||
@@ -135,36 +154,49 @@ export default function ClassManagement() {
       return;
     }
 
+    // Save the class data before resetting
+    const classToAdd: Omit<Class, "id"> = {
+      ...newClass,
+      students: students,
+      created_at: new Date().toISOString(),
+    };
+
+    // Create temporary ID for optimistic update
+    const tempId = `temp_${Date.now()}`;
+    const tempClass: Class = {
+      id: tempId,
+      ...newClass,
+      students: students,
+      created_at: new Date().toISOString(),
+      createdBy: user.id,
+    };
+
+    // Add to UI immediately (optimistic)
+    setClasses([tempClass, ...classes]);
+    setShowAddDialog(false);
+    setNewClass({
+      class_name: "",
+      course_subject: "",
+      section_block: "",
+      room: "",
+    });
+    setStudents([]);
+    setCurrentTab("basic");
+
+    toast.success("Class added successfully");
+
+    // Save to Firebase in background (don't wait for it)
     try {
-      setSaving(true);
-
-      const classToAdd: Omit<Class, "id"> = {
-        ...newClass,
-        students: students,
-        created_at: new Date().toISOString(),
-      };
-
       const newClassDoc = await createClass(classToAdd, user.id);
-      setClasses((prev) => [newClassDoc, ...prev]);
-      await fetchClasses(); // Robust fallback to ensure list is in sync
-
-      setShowAddDialog(false);
-      setNewClass({
-        class_name: "",
-        course_subject: "",
-        section_block: "",
-        room: "",
-        class_code: "",
-      });
-      setStudents([]);
-      setCurrentTab("basic");
-
-      toast.success("Class added successfully");
+      // Replace temp class with real one
+      setClasses((prevClasses) =>
+        prevClasses.map((c) => (c.id === tempId ? newClassDoc : c))
+      );
     } catch (error) {
-      console.error("Error adding class:", error);
-      toast.error("Failed to add class");
-    } finally {
-      setSaving(false);
+      console.error("Error saving class to Firebase:", error);
+      // Remove temp class if save fails
+      setClasses((prevClasses) => prevClasses.filter((c) => c.id !== tempId));
+      toast.error("Failed to save class to database. Please try again.");
     }
   };
 
@@ -264,6 +296,18 @@ export default function ClassManagement() {
       !newStudent.last_name
     ) {
       toast.error("Please fill in student ID, first name, and last name");
+      return;
+    }
+
+    // Check for duplicate student ID
+    if (students.some(s => s.student_id === newStudent.student_id)) {
+      toast.error(`Student ID "${newStudent.student_id}" already exists in this class`);
+      return;
+    }
+
+    // Check for duplicate student name (first name + last name combination)
+    if (students.some(s => s.first_name === newStudent.first_name && s.last_name === newStudent.last_name)) {
+      toast.error(`Student "${newStudent.first_name} ${newStudent.last_name}" already exists in this class`);
       return;
     }
 
@@ -618,7 +662,13 @@ export default function ClassManagement() {
       )}
 
       {/* Add Class Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog} onOpenChange={(open) => {
+        if (!open) {
+          handleCloseAddDialog();
+        } else {
+          setShowAddDialog(true);
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Class</DialogTitle>
@@ -665,8 +715,8 @@ export default function ClassManagement() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="section_block">Section/Block *</Label>
-                  <Input
+                  <Label htmlFor="section_block">Block *</Label>
+                  <select
                     id="section_block"
                     value={newClass.section_block}
                     onChange={(e) =>
@@ -675,8 +725,17 @@ export default function ClassManagement() {
                         section_block: e.target.value,
                       })
                     }
-                    placeholder="e.g., A"
-                  />
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select a block...</option>
+                    {Array.from({ length: 26 }, (_, i) =>
+                      String.fromCharCode(65 + i)
+                    ).map((letter) => (
+                      <option key={letter} value={letter}>
+                        {letter}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="room">Room</Label>
@@ -778,8 +837,8 @@ export default function ClassManagement() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {students.map((student) => (
-                        <TableRow key={student.student_id}>
+                      {students.map((student, idx) => (
+                        <TableRow key={`add-class-${idx}`}>
                           <TableCell>{student.student_id}</TableCell>
                           <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
                           <TableCell>{student.email || "—"}</TableCell>
@@ -813,7 +872,7 @@ export default function ClassManagement() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowAddDialog(false)}
+              onClick={handleCloseAddDialog}
               disabled={saving}
             >
               Cancel
@@ -884,8 +943,8 @@ export default function ClassManagement() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit_section_block">Section/Block *</Label>
-                  <Input
+                  <Label htmlFor="edit_section_block">Block *</Label>
+                  <select
                     id="edit_section_block"
                     value={newClass.section_block}
                     onChange={(e) =>
@@ -894,8 +953,17 @@ export default function ClassManagement() {
                         section_block: e.target.value,
                       })
                     }
-                    placeholder="e.g., A"
-                  />
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select a block...</option>
+                    {Array.from({ length: 26 }, (_, i) =>
+                      String.fromCharCode(65 + i)
+                    ).map((letter) => (
+                      <option key={letter} value={letter}>
+                        {letter}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit_room">Room</Label>
@@ -997,8 +1065,8 @@ export default function ClassManagement() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {students.map((student) => (
-                        <TableRow key={student.student_id}>
+                      {students.map((student, idx) => (
+                        <TableRow key={`edit-class-${idx}`}>
                           <TableCell>{student.student_id}</TableCell>
                           <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
                           <TableCell>{student.email || "—"}</TableCell>
@@ -1289,20 +1357,25 @@ export default function ClassManagement() {
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-4 text-center">
-                <Button
-                  variant="outline"
-                  className="flex-1 h-14 rounded-2xl font-black text-gray-400 border-2"
-                  onClick={() => setShowImportDialog(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 h-14 rounded-2xl bg-[#004D2C] hover:bg-[#003d22] text-white font-black shadow-lg"
-                  onClick={() => setImportStep(4)}
-                >
-                  Import Roster
-                </Button>
+              <div className="max-h-48 overflow-y-auto border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importPreview.map((student, idx) => (
+                      <TableRow key={`cm-import-${idx}`}>
+                        <TableCell>{student.student_id}</TableCell>
+                        <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
+                        <TableCell>{student.email || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </div>
           )}
@@ -1533,8 +1606,8 @@ export default function ClassManagement() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedClass.students.map((student) => (
-                          <TableRow key={student.student_id}>
+                        {selectedClass.students.map((student, idx) => (
+                          <TableRow key={`${selectedClass.id}-view-${idx}`}>
                             <TableCell>{student.student_id}</TableCell>
                             <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
                             <TableCell>{student.email || "—"}</TableCell>

@@ -43,6 +43,8 @@ export async function createClass(
   userId: string,
 ): Promise<Class> {
   try {
+    console.log('Creating class with data:', classData, 'for user:', userId);
+    
     const newClassData = {
       ...classData,
       createdBy: userId,
@@ -50,11 +52,10 @@ export async function createClass(
       updatedAt: serverTimestamp(),
     };
 
-    const docRef = await addDoc(
-      collection(db, CLASSES_COLLECTION),
-      newClassData,
-    );
-
+    console.log('Sending to Firestore:', newClassData);
+    const docRef = await addDoc(collection(db, CLASSES_COLLECTION), newClassData);
+    console.log('Class created successfully with ID:', docRef.id);
+    
     // Return the class with the generated ID
     const newClass: Class = {
       id: docRef.id,
@@ -65,8 +66,36 @@ export async function createClass(
 
     return newClass;
   } catch (error) {
-    console.error("Error creating class:", error);
+    console.error('Error creating class:', error);
+    console.error('Error code:', (error as any).code);
+    console.error('Error message:', (error as any).message);
     throw error;
+  }
+}
+
+/**
+ * Get total student count for a user (lightweight - for dashboard)
+ * Uses client-side filtering to avoid composite index requirement
+ */
+export async function getTotalStudentCount(userId: string): Promise<number> {
+  try {
+    // Fetch all classes without filters to avoid composite index
+    const q = query(collection(db, CLASSES_COLLECTION));
+    const querySnapshot = await getDocs(q);
+    let totalStudents = 0;
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data() as any;
+      // Filter by userId on client-side
+      if (data.createdBy === userId) {
+        totalStudents += (data.students?.length || 0);
+      }
+    });
+
+    return totalStudents;
+  } catch (error: any) {
+    console.error('Error fetching student count:', error);
+    return 0;
   }
 }
 

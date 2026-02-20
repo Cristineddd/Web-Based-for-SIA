@@ -1,12 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryProvider } from "@/components/providers/QueryProvider";
-import { ThemeProvider } from "@/components/providers/ThemeProvider";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { RootProviders } from "@/components/providers/RootProviders";
 
 const poppins = Poppins({
   weight: ["500", "700"],
@@ -17,6 +12,9 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "SIA - Smart Exam Checking & Auto-Grading System",
   description: "A streamlined, paper-based exam checking solution for efficient exam management and automatic grading.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -27,17 +25,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${poppins.variable} antialiased`}>
-        <ThemeProvider>
-          <QueryProvider>
-            <TooltipProvider>
-              <AuthProvider>
-                <Toaster />
-                <Sonner />
-                {children}
-              </AuthProvider>
-            </TooltipProvider>
-          </QueryProvider>
-        </ThemeProvider>
+        <RootProviders>{children}</RootProviders>
       </body>
     </html>
   );
