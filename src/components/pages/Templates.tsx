@@ -1,23 +1,57 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
-import { Download, Eye, FileText } from "lucide-react";
-import { useState, useEffect } from "react";
-import { type ExamTemplate } from "@/services/templateService";
+import { Download, Eye, FileText, Plus } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { type ExamTemplate, TemplateService } from "@/services/templateService";
 import { BatchService } from "@/services/batchService";
 import { generateAnswerSheetPDF } from "@/lib/pdfGenerator";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PDFPreviewModal } from "@/components/scanning/PDFPreviewModal";
+import { CreateTemplateModal } from "@/components/modals/CreateTemplateModal";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ... (PRESET_TEMPLATES stays the same)
 
-const PRESET_TEMPLATES: ExamTemplate[] = [
+const PRESET_TEMPLATES: (ExamTemplate & { isStandard?: boolean })[] = [
+  {
+    id: "standard-20",
+    name: "Standard 20-Item Template",
+    description: "Multi-quadrant layout based on standard PNG reference",
+    num_items: 20,
+    choices_per_item: 4,
+    student_id_length: 6,
+    createdBy: "system",
+    createdAt: new Date(),
+    isStandard: true,
+  },
+  {
+    id: "standard-50",
+    name: "Standard 50-Item Template",
+    description: "Standard midterm format with Zip-Grade style ID fields",
+    num_items: 50,
+    choices_per_item: 4,
+    student_id_length: 6,
+    createdBy: "system",
+    createdAt: new Date(),
+    isStandard: true,
+  },
+  {
+    id: "standard-100",
+    name: "Standard 100-Item Template",
+    description: "Standard final exam format with comprehensive OMR fields",
+    num_items: 100,
+    choices_per_item: 4,
+    student_id_length: 6,
+    createdBy: "system",
+    createdAt: new Date(),
+    isStandard: true,
+  },
   {
     id: "preset-20",
-    name: "20-Item Template",
-    description: "Perfect for quizzes and short tests",
+    name: "Classic 20-Item Template",
+    description: "Previous version for legacy compatibility",
     num_items: 20,
     choices_per_item: 4,
     student_id_length: 6,
@@ -26,8 +60,8 @@ const PRESET_TEMPLATES: ExamTemplate[] = [
   },
   {
     id: "preset-50",
-    name: "50-Item Template",
-    description: "Ideal for midterm examinations",
+    name: "Classic 50-Item Template",
+    description: "Previous version for legacy compatibility",
     num_items: 50,
     choices_per_item: 4,
     student_id_length: 6,
@@ -36,8 +70,8 @@ const PRESET_TEMPLATES: ExamTemplate[] = [
   },
   {
     id: "preset-100",
-    name: "100-Item Template",
-    description: "Comprehensive final exam format",
+    name: "Classic 100-Item Template",
+    description: "Previous version for legacy compatibility",
     num_items: 100,
     choices_per_item: 4,
     student_id_length: 6,
@@ -54,16 +88,39 @@ export default function Templates() {
   const [previewDataUri, setPreviewDataUri] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [previewTitle, setPreviewTitle] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const allTemplates = [...PRESET_TEMPLATES, ...customTemplates];
   const selectedTemplate =
     allTemplates.find((t) => t.id === selectedTemplateId) ||
     PRESET_TEMPLATES[0];
 
-  useEffect(() => {
-    // Only fetch common data if needed, but we remove customTemplates logic as requested.
-    setCustomTemplates([]);
+  const fetchCustomTemplates = useCallback(async () => {
+    if (!user?.id) return;
+    const result = await TemplateService.getAllTemplates(user.id);
+    if (result.success && result.data) {
+      setCustomTemplates(result.data);
+    }
   }, [user?.id]);
+
+  useEffect(() => {
+    fetchCustomTemplates();
+  }, [fetchCustomTemplates]);
+
+  const handleSaveTemplate = async (templateData: any) => {
+    if (!user?.id) return;
+    const result = await TemplateService.saveTemplate({
+      ...templateData,
+      createdBy: user.id,
+    });
+
+    if (result.success) {
+      toast.success("Template created successfully");
+      fetchCustomTemplates();
+    } else {
+      toast.error("Failed to create template");
+    }
+  };
 
   const [exportingReport, setExportingReport] = useState(false);
 
@@ -127,10 +184,12 @@ export default function Templates() {
     }
   };
 
-  const handleDownload = async (template: ExamTemplate) => {
+  const handleDownload = async (
+    template: ExamTemplate & { isStandard?: boolean },
+  ) => {
     try {
       const dummyExam = {
-        id: "template-download",
+        id: template.isStandard ? "standard-download" : "template-download",
         title: "",
         subject: "",
         num_items: template.num_items,
@@ -138,11 +197,13 @@ export default function Templates() {
         student_id_length: template.student_id_length,
         logoUrl: template.logoUrl,
         examCode: template.examCode,
-        created_at: new Date().toISOString(),
+        created_at: "",
         answer_keys: [],
         generated_sheets: [],
       };
-      await generateAnswerSheetPDF(dummyExam as any, 1);
+      await generateAnswerSheetPDF(dummyExam as any, 1, {
+        useStandardLayout: template.isStandard,
+      });
 
       // Log template generation (Task 3.2)
       if (user?.id) {
@@ -161,10 +222,12 @@ export default function Templates() {
     }
   };
 
-  const handlePreview = async (template: ExamTemplate) => {
+  const handlePreview = async (
+    template: ExamTemplate & { isStandard?: boolean },
+  ) => {
     try {
       const dummyExam = {
-        id: "template-preview",
+        id: template.isStandard ? "standard-preview" : "template-preview",
         title: "",
         subject: "",
         num_items: template.num_items,
@@ -172,13 +235,14 @@ export default function Templates() {
         student_id_length: template.student_id_length,
         logoUrl: template.logoUrl,
         examCode: template.examCode,
-        created_at: new Date().toISOString(),
+        created_at: "",
         answer_keys: [],
         generated_sheets: [],
       };
 
       const dataUri = await generateAnswerSheetPDF(dummyExam as any, 1, {
         preview: true,
+        useStandardLayout: template.isStandard,
       });
       if (dataUri) {
         setPreviewDataUri(dataUri as string);
@@ -213,15 +277,24 @@ export default function Templates() {
             Download the official Gordon College answer sheet templates
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={handleExportReport}
-          disabled={exportingReport}
-          className="flex items-center gap-2 border-[#1A4D2E] text-[#1A4D2E] hover:bg-[#1A4D2E] hover:text-white transition-colors"
-        >
-          <FileText className="w-4 h-4" />
-          {exportingReport ? "Exporting..." : "Export Batch Report"}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 bg-[#1A4D2E] text-white hover:bg-[#143D24] transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create New Template
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportReport}
+            disabled={exportingReport}
+            className="flex items-center gap-2 border-[#1A4D2E] text-[#1A4D2E] hover:bg-[#1A4D2E] hover:text-white transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            {exportingReport ? "Exporting..." : "Export Batch Report"}
+          </Button>
+        </div>
       </div>
 
       {/* Templates Grid */}
@@ -415,6 +488,12 @@ export default function Templates() {
           setShowPreview(false);
         }}
         title={previewTitle}
+      />
+
+      <CreateTemplateModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSave={handleSaveTemplate}
       />
     </div>
   );

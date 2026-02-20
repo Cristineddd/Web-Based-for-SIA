@@ -34,8 +34,10 @@ import {
   type Exam,
   type ExamFormData,
 } from "@/services/examService";
-import { cn } from "@/lib/utils";
+import { cn, isExamEditable } from "@/lib/utils";
 import { getClasses, type Class } from "@/services/classService";
+import { updateExam } from "@/services/examService";
+import { EditExamModal } from "@/components/modals/EditExamModal";
 
 interface ExamWithStatus extends Exam {
   uiStatus: "Completed" | "Grading";
@@ -53,6 +55,8 @@ export default function Exams() {
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [classes, setClasses] = useState<Class[]>([]);
 
   const fetchExams = async () => {
@@ -63,7 +67,9 @@ export default function Exams() {
         return;
       }
 
+      console.log(`[Exams] Fetching exams for user: ${user.id}`);
       const fetchedExams = await getExams(user.id);
+      console.log(`[Exams] Found ${fetchedExams.length} exams`);
 
       // Map to include status and mock student count for UI demo/realism
       const examsWithMetadata = fetchedExams.map((exam) => ({
@@ -76,8 +82,8 @@ export default function Exams() {
 
       setExams(examsWithMetadata);
     } catch (error) {
-      console.error("Error fetching exams:", error);
-      toast.error("Failed to load exams");
+      console.error("Error fetching exams detail:", error);
+      toast.error(`Failed to load exams: ${(error as Error).message}`);
     } finally {
       setLoading(false);
     }
@@ -136,6 +142,14 @@ export default function Exams() {
           Smart Exam Checking & Auto-Grading System
         </h2>
         <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchExams}
+            className="text-xs font-bold text-gray-400 hover:text-[#004D2C]"
+          >
+            Refresh Data
+          </Button>
           <div className="px-3 py-1 bg-gray-50 border rounded-lg text-xs flex items-center gap-2">
             <span className="text-gray-500">Role:</span>
             <span className="font-bold text-[#004D2C]">Prof</span>
@@ -263,10 +277,17 @@ export default function Exams() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-9 w-9 text-gray-400 hover:text-amber-700 hover:bg-amber-100 rounded-lg transition-all"
-                          onClick={() =>
-                            router.push(`/exams/${exam.id}?edit=true`)
-                          }
+                          disabled={!isExamEditable(exam)}
+                          className={cn(
+                            "h-9 w-9 rounded-lg transition-all",
+                            isExamEditable(exam)
+                              ? "text-gray-400 hover:text-amber-700 hover:bg-amber-100"
+                              : "text-gray-200 cursor-not-allowed",
+                          )}
+                          onClick={() => {
+                            setEditingExam(exam);
+                            setShowEditModal(true);
+                          }}
                         >
                           <Edit2 className="w-4 h-4" />
                         </Button>
@@ -294,6 +315,20 @@ export default function Exams() {
         onClose={() => setShowCreateModal(false)}
         onCreateExam={handleCreateExam}
         classes={classes}
+      />
+
+      {/* Edit Exam Modal */}
+      <EditExamModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingExam(null);
+        }}
+        exam={editingExam}
+        onUpdate={async (id, data) => {
+          await updateExam(id, data);
+          fetchExams();
+        }}
       />
 
       {/* Delete Dialog */}

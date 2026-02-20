@@ -22,9 +22,10 @@ export interface ExamTemplate {
   examCode?: string;
   createdBy: string;
   createdAt: any;
+  isTemplate?: boolean;
 }
 
-const TEMPLATES_COLLECTION = "exam_templates";
+const TEMPLATES_COLLECTION = "exams";
 
 export const TemplateService = {
   /**
@@ -34,6 +35,10 @@ export const TemplateService = {
     try {
       const docRef = await addDoc(collection(db, TEMPLATES_COLLECTION), {
         ...template,
+        isTemplate: true,
+        title: template.name, // Compatibility with exams collection schema
+        num_items: template.num_items,
+        choices_per_item: template.choices_per_item,
         createdAt: serverTimestamp(),
       });
       return { success: true, id: docRef.id };
@@ -53,9 +58,13 @@ export const TemplateService = {
         q = query(
           collection(db, TEMPLATES_COLLECTION),
           where("createdBy", "==", userId),
+          where("isTemplate", "==", true),
         );
       } else {
-        q = collection(db, TEMPLATES_COLLECTION);
+        q = query(
+          collection(db, TEMPLATES_COLLECTION),
+          where("isTemplate", "==", true),
+        );
       }
 
       const querySnapshot = await getDocs(q as any);

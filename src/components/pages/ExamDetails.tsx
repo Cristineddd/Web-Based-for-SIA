@@ -18,10 +18,13 @@ import { BatchService } from "@/services/batchService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, isExamEditable } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnswerChoice } from "@/types/scanning";
 import { useSearchParams } from "next/navigation";
+import { updateExam } from "@/services/examService";
+import { EditExamModal } from "@/components/modals/EditExamModal";
+import { Edit2 } from "lucide-react";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -44,6 +47,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   const [answers, setAnswers] = useState<AnswerChoice[]>([]);
   const [answerKeyId, setAnswerKeyId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     async function fetchExamAndKey() {
@@ -172,6 +176,17 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     }
   };
 
+  const handleUpdateExam = async (id: string, data: Partial<Exam>) => {
+    try {
+      await updateExam(id, data);
+      const updatedExam = await getExamById(id);
+      setExam(updatedExam);
+    } catch (error) {
+      console.error("Error updating exam:", error);
+      throw error;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -194,7 +209,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
       {/* Header Container */}
       <div className="p-8 pb-0 border-b relative">
         <button
-          className="absolute top-8 right-8 p-2 hover:bg-gray-100 rounded-full"
+          className="absolute top-7 right-8 p-2 hover:bg-gray-100 rounded-full"
           onClick={() => window.history.back()}
         >
           <X className="w-6 h-6 text-gray-400" />
@@ -228,7 +243,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               <Button
                 onClick={handleFinalize}
                 disabled={isSaving}
-                className="bg-[#BA8E23] hover:bg-[#a67d1f] text-white px-6 rounded-xl font-black shadow-md border-b-4 border-[#8c6a1a]"
+                className="mt-10 bg-[#BA8E23] hover:bg-[#a67d1f] text-white px-6 rounded-xl font-black shadow-md border-b-4 border-[#8c6a1a]"
               >
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -313,7 +328,11 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
       {/* Content Area */}
       <div className="p-8 min-h-[500px] bg-[#FAF9F6]">
         {activeTab === "Overview" && (
-          <OverviewTab exam={exam} hasAnswerKey={!!answerKeyId} />
+          <OverviewTab
+            exam={exam}
+            hasAnswerKey={!!answerKeyId}
+            onEdit={() => setShowEditModal(true)}
+          />
         )}
         {activeTab === "Answer Key" && (
           <AnswerKeyTab
@@ -322,7 +341,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             setAnswers={setAnswers}
             onSave={handleSaveAnswerKey}
             isSaving={isSaving}
-            isLocked={exam.status === "final"}
+            isLocked={!isExamEditable(exam)}
           />
         )}
         {activeTab === "Scan Sheets" && <ScanSheetsTab />}
@@ -343,6 +362,13 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           Close
         </Button>
       </div>
+
+      <EditExamModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        exam={exam}
+        onUpdate={handleUpdateExam}
+      />
     </div>
   );
 }
@@ -350,12 +376,30 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 function OverviewTab({
   exam,
   hasAnswerKey,
+  onEdit,
 }: {
   exam: Exam;
   hasAnswerKey: boolean;
+  onEdit: () => void;
 }) {
+  const isEditable = isExamEditable(exam);
+
   return (
     <div className="space-y-6">
+      {!isEditable && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+          <AlertCircle className="w-6 h-6 text-amber-500 shrink-0" />
+          <div>
+            <p className="text-[#004D2C] font-extrabold text-[15px]">
+              Exam is Locked
+            </p>
+            <p className="text-[#004D2C]/70 font-medium text-sm mt-1">
+              Editing is restricted because the exam has either started or been
+              finalized.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Exam Info Card */}
         <Card className="rounded-[24px] border-[#BA8E23]/20 shadow-sm overflow-hidden bg-white">
@@ -405,6 +449,23 @@ function OverviewTab({
               >
                 {exam.status}
               </div>
+            </div>
+
+            <div className="pt-4">
+              <Button
+                variant="outline"
+                onClick={onEdit}
+                disabled={!isEditable}
+                className={cn(
+                  "w-full border-[#BA8E23]/30 rounded-xl font-bold flex items-center justify-center gap-2 transition-all",
+                  isEditable
+                    ? "text-[#BA8E23] hover:bg-[#BA8E23]/5"
+                    : "text-gray-300 border-gray-100 cursor-not-allowed",
+                )}
+              >
+                <Edit2 className="w-4 h-4" />
+                {isEditable ? "Edit Exam Information" : "Information Locked"}
+              </Button>
             </div>
           </CardContent>
         </Card>

@@ -143,6 +143,9 @@ export async function getExams(userId?: string): Promise<Exam[]> {
 
     querySnapshot.forEach((doc) => {
       const data = doc.data() as any;
+      // Filter out templates from the main exam list
+      if (data.isTemplate) return;
+
       exams.push({
         id: doc.id,
         title: data.title,

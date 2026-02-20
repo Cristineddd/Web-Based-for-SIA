@@ -48,7 +48,7 @@ export function CreateExamModal({
     name: "",
     totalQuestions: 50,
     date: new Date().toISOString().split("T")[0],
-    folder: "ETHICS",
+    folder: "",
     className: "N/A", // Default for now to avoid errors in legacy code
     choicesPerItem: 4,
     examType: "Midterm Exam",
@@ -86,7 +86,7 @@ export function CreateExamModal({
       name: "",
       totalQuestions: 50,
       date: new Date().toISOString().split("T")[0],
-      folder: "ETHICS",
+      folder: "",
       className: "N/A",
       choicesPerItem: 4,
       examType: "Midterm Exam",
