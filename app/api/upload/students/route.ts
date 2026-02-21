@@ -4,16 +4,11 @@
  * Handles file upload, parsing, and validation of student data
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { StudentFileUploadService, MAX_FILE_SIZE_BYTES } from '@/services/studentFileUploadService';
-
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
-};
+import { NextRequest, NextResponse } from "next/server";
+import {
+  StudentFileUploadService,
+  MAX_FILE_SIZE_BYTES,
+} from "@/services/studentFileUploadService";
 
 /**
  * POST /api/upload/students
@@ -32,12 +27,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     // Parse multipart form data
     const formData = await req.formData();
-    const file = formData.get('file') as File | null;
+    const file = formData.get("file") as File | null;
 
     if (!file) {
       return NextResponse.json(
-        { error: 'No file provided. Please upload a CSV or Excel file.' },
-        { status: 400 }
+        { error: "No file provided. Please upload a CSV or Excel file." },
+        { status: 400 },
       );
     }
 
@@ -47,7 +42,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         {
           error: `File size exceeds 10MB limit. Received: ${(file.size / 1024 / 1024).toFixed(2)}MB`,
         },
-        { status: 413 }
+        { status: 413 },
       );
     }
 
@@ -56,15 +51,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     if (!parseResult.success) {
       return NextResponse.json(
-        { error: parseResult.error || 'Failed to parse file' },
-        { status: 400 }
+        { error: parseResult.error || "Failed to parse file" },
+        { status: 400 },
       );
     }
 
     if (parseResult.rowCount === 0) {
       return NextResponse.json(
-        { error: 'No student records found in file' },
-        { status: 400 }
+        { error: "No student records found in file" },
+        { status: 400 },
       );
     }
 
@@ -76,16 +71,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         fileName: file.name,
         fileSize: file.size,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
-    console.error('Error in file upload endpoint:', error);
+    console.error("Error in file upload endpoint:", error);
 
-    const errorMessage = error instanceof Error ? error.message : 'Unknown server error';
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown server error";
 
     return NextResponse.json(
       { error: `Server error: ${errorMessage}` },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -100,10 +96,10 @@ export async function OPTIONS(): Promise<NextResponse> {
     {
       status: 200,
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
       },
-    }
+    },
   );
 }

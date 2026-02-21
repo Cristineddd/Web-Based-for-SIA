@@ -13,8 +13,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, FileText, Eye, Archive } from "lucide-react";
+import {
+  Plus,
+  Search,
+  FileText,
+  Eye,
+  Archive,
+  Edit2,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +47,7 @@ import { cn, isExamEditable } from "@/lib/utils";
 import { getClasses, type Class } from "@/services/classService";
 import { updateExam } from "@/services/examService";
 import { EditExamModal } from "@/components/modals/EditExamModal";
+import { AnswerKeyService } from "@/services/answerKeyService";
 
 interface ExamWithStatus extends Exam {
   uiStatus: "Completed" | "Grading";
@@ -57,6 +67,7 @@ export default function Exams() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [classes, setClasses] = useState<Class[]>([]);
 
   const fetchExams = async () => {
@@ -88,17 +99,18 @@ export default function Exams() {
                 },
               };
             }
+            return exam;
           } catch (error) {
             console.error(
               `Error fetching answer key for exam ${exam.id}:`,
               error,
             );
-            if (error instanceof Error) {
-              console.error("Error details:", error.message, error.stack);
-            }
+            return exam;
           }
+        }),
+      );
 
-      setExams(examsWithMetadata);
+      setExams(examsWithStatus as any);
     } catch (error) {
       console.error("Error fetching exams detail:", error);
       toast.error(`Failed to load exams: ${(error as Error).message}`);
@@ -134,11 +146,11 @@ export default function Exams() {
         generated_sheets: [],
         createdBy: user.id,
         className: formData.className,
-        examType: formData.examType || 'board',
+        examType: formData.examType || "board",
       };
 
       // Add to UI immediately (optimistic)
-      setExams([tempExam, ...exams]);
+      setExams([tempExam as any, ...exams]);
       toast.success(`Exam "${formData.name}" created successfully`);
       setShowCreateModal(false);
 
@@ -147,7 +159,7 @@ export default function Exams() {
         const newExam = await createExam(formData, user.id);
         // Replace temp exam with real one
         setExams((prevExams) =>
-          prevExams.map((e) => (e.id === tempId ? newExam : e))
+          prevExams.map((e) => (e.id === tempId ? newExam : e)),
         );
       } catch (error) {
         console.error("Error saving exam to Firebase:", error);
@@ -270,23 +282,6 @@ export default function Exams() {
                       <span className="font-bold">Loading exams...</span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center gap-1">
-                      <Link href={`/exams/${exam.id}`}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => setArchiveId(exam.id)}
-                      >
-                        <Archive className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
                 </TableRow>
               ) : (
                 filteredExams.map((exam) => (
@@ -372,7 +367,6 @@ export default function Exams() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreateExam={handleCreateExam}
-        classes={classes}
       />
 
       {/* Edit Exam Modal */}
@@ -395,7 +389,8 @@ export default function Exams() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive Exam</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to archive this exam? It will be moved to the Archive page and you can restore it later.
+              Are you sure you want to archive this exam? It will be moved to
+              the Archive page and you can restore it later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
