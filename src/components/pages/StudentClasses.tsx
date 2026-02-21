@@ -437,7 +437,9 @@ export default function StudentClasses() {
     if (user) {
       const isOfficial = await OfficialRecordService.markAsOfficial(
         student.student_id,
-        user.id
+        user.id,
+        user.email,
+        `${student.first_name} ${student.last_name}`
       );
       if (!isOfficial) {
         console.warn(`Failed to mark student ${student.student_id} as official`);
@@ -724,7 +726,8 @@ export default function StudentClasses() {
       const studentIds = importPreview.map((s) => s.student_id);
       const markResult = await OfficialRecordService.markMultipleAsOfficial(
         studentIds,
-        user.id
+        user.id,
+        user.email
       );
       
       if (markResult.success > 0) {
@@ -1269,7 +1272,8 @@ export default function StudentClasses() {
                       const studentIds = studentsWithIds.map((s) => s.student_id);
                       const markResult = await OfficialRecordService.markMultipleAsOfficial(
                         studentIds,
-                        user.id
+                        user.id,
+                        user.email
                       );
                       
                       if (markResult.success > 0) {

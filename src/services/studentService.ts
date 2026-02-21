@@ -20,6 +20,7 @@ export interface StudentRecord {
   student_id: string; // PRIMARY KEY
   first_name: string;
   last_name: string;
+  grade?: string;
   email?: string;
   section?: string;
   phone?: string;
@@ -78,6 +79,7 @@ export class StudentService {
           student_id: data.student_id || studentDoc.id,
           first_name: data.first_name || '',
           last_name: data.last_name || '',
+          grade: data.grade || data.year || undefined,
           email: data.email || undefined,
           section: data.section || data.block || undefined,
           phone: data.phone || undefined,
@@ -121,12 +123,15 @@ export class StudentService {
     last_name: string,
     email: string | undefined,
     created_by: string,
-    section?: string
+    section: string,
+    grade: string
   ): Promise<StudentRecord> {
-    const { normalizedStudentId } = await validateCreateStudentInput({
+    const { normalizedStudentId, normalizedGrade, normalizedSection } = await validateCreateStudentInput({
       student_id,
       first_name,
       last_name,
+      grade,
+      section,
     });
 
     // Check if student already exists (prevent duplicates)
@@ -153,8 +158,9 @@ export class StudentService {
       student_id: normalizedStudentId,
       first_name,
       last_name,
+      grade: normalizedGrade,
       email,
-      section,
+      section: normalizedSection,
       enrolled_classes: [],
       created_at: now,
       updated_at: now,
@@ -456,6 +462,7 @@ export class StudentService {
       last_name: string;
       email?: string;
       section?: string;
+      grade?: string;
     }>,
     created_by: string
   ): Promise<{ created: StudentRecord[]; errors: string[] }> {
@@ -470,7 +477,8 @@ export class StudentService {
           student.last_name,
           student.email,
           created_by,
-          student.section
+          student.section || '',
+          student.grade || ''
         );
         created.push(result);
       } catch (error) {

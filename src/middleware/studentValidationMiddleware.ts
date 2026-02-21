@@ -4,6 +4,8 @@ export interface CreateStudentValidationInput {
   student_id: string;
   first_name: string;
   last_name: string;
+  grade: string;
+  section: string;
 }
 
 export interface UpdateStudentValidationInput {
@@ -13,6 +15,8 @@ export interface UpdateStudentValidationInput {
 
 export interface CreateStudentValidationResult {
   normalizedStudentId: string;
+  normalizedGrade: string;
+  normalizedSection: string;
 }
 
 
@@ -23,6 +27,8 @@ export async function validateCreateStudentInput(
   input: CreateStudentValidationInput
 ): Promise<CreateStudentValidationResult> {
   const normalizedStudentId = (input.student_id || '').trim();
+  const normalizedGrade = (input.grade || '').trim();
+  const normalizedSection = (input.section || '').trim();
   if (!normalizedStudentId) {
     throw new Error('Student ID is required');
   }
@@ -30,7 +36,9 @@ export async function validateCreateStudentInput(
   const recordValidation = await StudentIDValidationService.validateStudentRecord(
     normalizedStudentId,
     input.first_name,
-    input.last_name
+    input.last_name,
+    normalizedGrade,
+    normalizedSection
   );
 
   if (!recordValidation.isValid) {
@@ -42,7 +50,11 @@ export async function validateCreateStudentInput(
     throw new Error(idValidation.error || 'Invalid student ID');
   }
 
-  return { normalizedStudentId };
+  return {
+    normalizedStudentId,
+    normalizedGrade,
+    normalizedSection,
+  };
 }
 
 

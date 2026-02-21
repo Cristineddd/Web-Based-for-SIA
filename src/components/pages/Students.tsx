@@ -58,6 +58,7 @@ interface Student {
   student_id: string;
   first_name: string;
   last_name: string;
+  grade: string | null;
   email: string | null;
   section: string | null;
   created_at: string;
@@ -82,6 +83,7 @@ export default function Students() {
     student_id: "",
     first_name: "",
     last_name: "",
+    grade: "",
     email: "",
     section: "",
   });
@@ -99,6 +101,7 @@ export default function Students() {
         student_id: record.student_id,
         first_name: record.first_name,
         last_name: record.last_name,
+        grade: record.grade || null,
         email: record.email || null,
         section: record.section || null,
         created_at: record.created_at,
@@ -169,7 +172,8 @@ export default function Students() {
     if (
       !newStudent.student_id ||
       !newStudent.first_name ||
-      !newStudent.last_name
+      !newStudent.last_name ||
+      !newStudent.grade
     ) {
       toast.error("Please fill in all required fields");
       return;
@@ -193,6 +197,7 @@ export default function Students() {
         newStudent.email.trim() || undefined,
         user.id,
         newStudent.section,
+        newStudent.grade.trim(),
       );
 
       await fetchStudents();
@@ -202,6 +207,7 @@ export default function Students() {
         student_id: "",
         first_name: "",
         last_name: "",
+        grade: "",
         email: "",
         section: "",
       });
@@ -272,11 +278,14 @@ export default function Students() {
               last_name: String(
                 row["last_name"] || row["Last Name"] || row["LastName"] || "",
               ).trim(),
+              grade: String(
+                row["grade"] || row["Grade"] || row["year"] || row["Year"] || "",
+              ).trim(),
               email: String(row["email"] || row["Email"] || "").trim() || null,
               section:
                 String(row["section"] || row["Section"] || "").trim() || null,
             }))
-            .filter((s) => s.student_id && s.first_name && s.last_name);
+            .filter((s) => s.student_id && s.first_name && s.last_name && s.grade && s.section);
 
           if (parsedStudents.length === 0) {
             toast.error("No valid student records found in file");
@@ -322,14 +331,16 @@ export default function Students() {
             student_id: string;
             first_name: string;
             last_name: string;
+            grade: string;
             email: string | null;
             section: string | null;
-          } => Boolean(s.student_id && s.first_name && s.last_name),
+          } => Boolean(s.student_id && s.first_name && s.last_name && s.grade && s.section),
         )
         .map((s) => ({
           student_id: s.student_id,
           first_name: s.first_name,
           last_name: s.last_name,
+          grade: s.grade,
           email: s.email || undefined,
           section: s.section || undefined,
         }));
@@ -391,6 +402,7 @@ export default function Students() {
         student_id: `${currentYear}-0001`,
         first_name: "First Name",
         last_name: "Last Name",
+        grade: "10",
         email: "email@example.com",
         section: "Section",
       },
@@ -398,6 +410,7 @@ export default function Students() {
         student_id: `${currentYear}-0002`,
         first_name: "First Name",
         last_name: "Last Name",
+        grade: "10",
         email: "email@example.com",
         section: "Section",
       },
@@ -499,6 +512,7 @@ export default function Students() {
             <TableRow className="bg-table-header hover:bg-table-header">
               <TableHead>Student ID</TableHead>
               <TableHead>Name</TableHead>
+              <TableHead>Grade</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Block</TableHead>
               <TableHead className="text-center">Actions</TableHead>
@@ -507,7 +521,7 @@ export default function Students() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12">
+                <TableCell colSpan={6} className="text-center py-12">
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-accent" />
                     Loading students...
@@ -516,7 +530,7 @@ export default function Students() {
               </TableRow>
             ) : filteredStudents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12">
+                <TableCell colSpan={6} className="text-center py-12">
                   <Users className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
                   <p className="text-muted-foreground">
                     {search
@@ -543,6 +557,7 @@ export default function Students() {
                   <TableCell className="font-medium">
                     {student.last_name}, {student.first_name}
                   </TableCell>
+                  <TableCell>{student.grade || "—"}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {student.email || "—"}
                   </TableCell>
@@ -612,6 +627,17 @@ export default function Students() {
               </div>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="grade">Grade *</Label>
+              <Input
+                id="grade"
+                value={newStudent.grade}
+                onChange={(e) =>
+                  setNewStudent({ ...newStudent, grade: e.target.value })
+                }
+                placeholder="e.g., 10"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -674,6 +700,7 @@ export default function Students() {
                 <TableRow className="bg-table-header">
                   <TableHead>Student ID</TableHead>
                   <TableHead>Name</TableHead>
+                  <TableHead>Grade</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Block</TableHead>
                 </TableRow>
@@ -687,6 +714,7 @@ export default function Students() {
                     <TableCell>
                       {student.last_name}, {student.first_name}
                     </TableCell>
+                    <TableCell>{student.grade || "-"}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {student.email || "—"}
                     </TableCell>

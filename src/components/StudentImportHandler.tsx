@@ -67,6 +67,8 @@ export function StudentImportHandler({
           first_name: row['First Name'] || row['first_name'] || row['First'] || row['first'] || '',
           last_name: row['Last Name'] || row['last_name'] || row['Last'] || row['last'] || '',
           email: row['Email'] || row['email'] || row['E-mail'] || '',
+          grade: row['Grade'] || row['grade'] || row['Year'] || row['year'] || '',
+          section: row['Section'] || row['section'] || row['Block'] || row['block'] || '',
         }));
 
         setParsedRecords(normalizedRecords);
@@ -167,7 +169,9 @@ export function StudentImportHandler({
           const finalValidation = await StudentIDValidationService.validateStudentRecord(
             record.student_id,
             record.first_name,
-            record.last_name
+            record.last_name,
+            record.grade,
+            record.section
           );
 
           if (!finalValidation.isValid) {
@@ -181,7 +185,9 @@ export function StudentImportHandler({
             record.first_name,
             record.last_name,
             record.email,
-            'import' // system user
+            'import', // system user
+            record.section,
+            record.grade
           );
 
           importedStudents.push(student);

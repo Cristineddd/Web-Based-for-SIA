@@ -234,7 +234,7 @@ export class StudentFieldValidationService {
       case 'section':
       case 'block':
         // Section/Block should be alphanumeric
-        return /^[a-zA-Z0-9\-]+$/.test(value) && value.length >= 1;
+        return /^[a-zA-Z0-9-]+$/.test(value) && value.length >= 1;
 
       default:
         return true;
@@ -355,7 +355,8 @@ export class StudentFieldValidationService {
       const { OfficialRecordService } = await import('./officialRecordService');
       const result = await OfficialRecordService.markMultipleAsOfficial(
         studentIds,
-        validatedBy
+        validatedBy,
+        adminEmail
       );
 
       // Log the bulk official marking

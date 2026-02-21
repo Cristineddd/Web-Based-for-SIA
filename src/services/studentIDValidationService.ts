@@ -210,7 +210,9 @@ export class StudentIDValidationService {
   static async validateStudentRecord(
     student_id: string,
     first_name?: string,
-    last_name?: string
+    last_name?: string,
+    grade?: string,
+    section?: string
   ): Promise<ValidationResult> {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -233,6 +235,26 @@ export class StudentIDValidationService {
       errors.push('Last name is required');
     } else if (last_name.trim().length > 100) {
       errors.push('Last name must not exceed 100 characters');
+    }
+
+    // Validate grade
+    if (!grade || !grade.trim()) {
+      errors.push('Grade is required');
+    } else {
+      const normalizedGrade = grade.trim().toUpperCase();
+      if (!/^(\d{1,4}|[A-Z])$/.test(normalizedGrade)) {
+        errors.push('Grade format is invalid');
+      }
+    }
+
+    // Validate section
+    if (!section || !section.trim()) {
+      errors.push('Section is required');
+    } else {
+      const normalizedSection = section.trim();
+      if (!/^[a-zA-Z0-9-]+$/.test(normalizedSection)) {
+        errors.push('Section format is invalid');
+      }
     }
 
     // Add warnings for potential issues
@@ -259,6 +281,9 @@ export class StudentIDValidationService {
       first_name?: string;
       last_name?: string;
       email?: string;
+      year?: string;
+      grade?: string;
+      section?: string;
     }>
   ): Promise<{
     isValid: boolean;
@@ -291,6 +316,18 @@ export class StudentIDValidationService {
       }
       if (!record.last_name || !record.last_name.trim()) {
         recordErrors.push(`Row ${i + 1}: Last name is required`);
+      }
+      const sectionValue = (record as any).section;
+      const gradeValue = (record as any).grade ?? (record as any).year;
+      if (!gradeValue || !String(gradeValue).trim()) {
+        recordErrors.push(`Row ${i + 1}: Grade is required`);
+      } else if (!/^(\d{1,4}|[A-Z])$/.test(String(gradeValue).trim().toUpperCase())) {
+        recordErrors.push(`Row ${i + 1}: Grade format is invalid`);
+      }
+      if (!sectionValue || !String(sectionValue).trim()) {
+        recordErrors.push(`Row ${i + 1}: Section is required`);
+      } else if (!/^[a-zA-Z0-9-]+$/.test(String(sectionValue).trim())) {
+        recordErrors.push(`Row ${i + 1}: Section format is invalid`);
       }
 
       if (recordErrors.length > 0) {

@@ -36,6 +36,12 @@ export type ValidationStatus = 'official' | 'unvalidated' | 'pending';
 const STUDENTS_COLLECTION = 'students';
 
 export class OfficialRecordService {
+  private static getAuditEmail(adminId: string, adminEmail?: string): string {
+    const normalized = (adminEmail || '').trim();
+    if (normalized) return normalized;
+    return `${adminId}@system.local`;
+  }
+
   /**
    * Mark a single student record as official after validation with logging
    * @param studentId - Student ID to mark as official
@@ -50,29 +56,7 @@ export class OfficialRecordService {
     validatedByEmail: string,
     studentName: string
   ): Promise<boolean> {
-    try {
-      const studentRef = doc(db, STUDENTS_COLLECTION, studentId);
-      await updateDoc(studentRef, {
-        validation_status: 'official',
-        validation_date: new Date().toISOString(),
-        validated_by: validatedBy,
-        updated_at: new Date().toISOString(),
-      });
-
-      // Log the action
-      await ValidationActionLogger.logMarkAsOfficial(
-        validatedBy,
-        validatedByEmail,
-        studentId,
-        studentName,
-        false
-      );
-
-      return true;
-    } catch (error) {
-      console.error(`Failed to mark student ${studentId} as official:`, error);
-      return false;
-    }
+    return this.markAsOfficial(studentId, validatedBy, validatedByEmail, studentName);
   }
 
   /**
@@ -91,33 +75,7 @@ export class OfficialRecordService {
     failed: string[];
     total: number;
   }> {
-    const failed: string[] = [];
-    let success = 0;
-
-    for (const studentId of studentIds) {
-      const result = await this.markAsOfficial(studentId, validatedBy);
-      if (result) {
-        success++;
-      } else {
-        failed.push(studentId);
-      }
-    }
-
-    // Log the bulk action
-    await ValidationActionLogger.logMarkAsOfficial(
-      validatedBy,
-      validatedByEmail,
-      '',
-      'Multiple students',
-      true,
-      studentIds.length
-    );
-
-    return {
-      success,
-      failed,
-      total: studentIds.length,
-    };
+    return this.markMultipleAsOfficial(studentIds, validatedBy, validatedByEmail);
   }
 
   /**
@@ -128,7 +86,9 @@ export class OfficialRecordService {
    */
   static async markAsOfficial(
     studentId: string,
-    validatedBy: string
+    validatedBy: string,
+    validatedByEmail?: string,
+    studentName?: string
   ): Promise<boolean> {
     try {
       const studentRef = doc(db, STUDENTS_COLLECTION, studentId);
@@ -138,6 +98,14 @@ export class OfficialRecordService {
         validated_by: validatedBy,
         updated_at: new Date().toISOString(),
       });
+
+      await ValidationActionLogger.logMarkAsOfficial(
+        validatedBy,
+        this.getAuditEmail(validatedBy, validatedByEmail),
+        studentId,
+        studentName || studentId,
+        false
+      );
       return true;
     } catch (error) {
       console.error(`Failed to mark student ${studentId} as official:`, error);
@@ -153,7 +121,8 @@ export class OfficialRecordService {
    */
   static async markMultipleAsOfficial(
     studentIds: string[],
-    validatedBy: string
+    validatedBy: string,
+    validatedByEmail?: string
   ): Promise<{
     success: number;
     failed: string[];
@@ -163,7 +132,7 @@ export class OfficialRecordService {
     let success = 0;
 
     for (const studentId of studentIds) {
-      const result = await this.markAsOfficial(studentId, validatedBy);
+      const result = await this.markAsOfficial(studentId, validatedBy, validatedByEmail);
       if (result) {
         success++;
       } else {
@@ -354,29 +323,7 @@ export class OfficialRecordService {
     studentName: string,
     reason: string
   ): Promise<boolean> {
-    try {
-      const studentRef = doc(db, STUDENTS_COLLECTION, studentId);
-      await updateDoc(studentRef, {
-        validation_status: 'unvalidated',
-        validation_date: null,
-        validated_by: null,
-        updated_at: new Date().toISOString(),
-      });
-
-      // Log the reset action
-      await ValidationActionLogger.logValidationReset(
-        adminId,
-        adminEmail,
-        [studentId],
-        [studentName],
-        reason
-      );
-
-      return true;
-    } catch (error) {
-      console.error(`Failed to reset validation status for ${studentId}:`, error);
-      return false;
-    }
+    return this.resetValidationStatus(studentId, adminId, adminEmail, studentName, reason);
   }
 
   /**
@@ -384,7 +331,13 @@ export class OfficialRecordService {
    * @param studentId - Student ID to reset
    * @returns true if successful, false otherwise
    */
-  static async resetValidationStatus(studentId: string): Promise<boolean> {
+  static async resetValidationStatus(
+    studentId: string,
+    adminId?: string,
+    adminEmail?: string,
+    studentName: string = 'Unknown Student',
+    reason: string = 'Validation status reset'
+  ): Promise<boolean> {
     try {
       const studentRef = doc(db, STUDENTS_COLLECTION, studentId);
       await updateDoc(studentRef, {
@@ -393,6 +346,16 @@ export class OfficialRecordService {
         validated_by: null,
         updated_at: new Date().toISOString(),
       });
+
+      if (adminId) {
+        await ValidationActionLogger.logValidationReset(
+          adminId,
+          this.getAuditEmail(adminId, adminEmail),
+          [studentId],
+          [studentName],
+          reason
+        );
+      }
       return true;
     } catch (error) {
       console.error(`Failed to reset validation status for ${studentId}:`, error);
