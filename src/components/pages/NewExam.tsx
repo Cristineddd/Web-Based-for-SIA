@@ -26,6 +26,18 @@ import { ArrowLeft, Loader2, FileText } from "lucide-react";
 import { z } from "zod";
 import { createExam } from "@/services/examService";
 import { getClasses, type Class } from "@/services/classService";
+import { ExamDuplicateService } from "@/services/examDuplicateService";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Archive } from "lucide-react";
 
 const examSchema = z.object({
   title: z
@@ -62,6 +74,8 @@ export default function NewExam() {
   const [loading, setLoading] = useState(false);
   const [classes, setClasses] = useState<Class[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
+  const [duplicateConfirmed, setDuplicateConfirmed] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -132,21 +146,41 @@ export default function NewExam() {
         student_id_length: Number(formData.student_id_length),
       });
 
-        // Prevent selecting a past date
-        try {
-          const selected = new Date(validated.date + 'T00:00:00');
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          if (selected < today) {
-            toast.error('Exam date cannot be in the past');
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          toast.error('Invalid date selected');
+      // Prevent selecting a past date
+      try {
+        const selected = new Date(validated.date + "T00:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (selected < today) {
+          toast.error("Exam date cannot be in the past");
           setLoading(false);
           return;
         }
+      } catch (e) {
+        toast.error("Invalid date selected");
+        setLoading(false);
+        return;
+      }
+
+      // Check for duplicates first using the service
+      if (!duplicateConfirmed && user?.id) {
+        const { isDuplicate } = await ExamDuplicateService.checkDuplicateTitle(
+          validated.title,
+          user.id,
+        );
+
+        if (isDuplicate) {
+          // Log the detection
+          await ExamDuplicateService.logDuplicateDetection(validated.title, {
+            userId: user.id,
+            adminEmail: user.email || "unknown",
+          });
+
+          setShowDuplicateDialog(true);
+          setLoading(false);
+          return;
+        }
+      }
 
       // Prepare data for the service
       const examData = {
@@ -159,18 +193,20 @@ export default function NewExam() {
         className: formData.className,
       };
 
-      console.log('📝 Creating exam from NewExam page');
-      console.log('  - User:', user);
-      console.log('  - InstructorId:', user.instructorId);
-      
+      console.log("📝 Creating exam from NewExam page");
+      console.log("  - User:", user);
+      console.log("  - InstructorId:", user.instructorId);
+
       if (!user.instructorId) {
-        toast.error('⚠️ Instructor ID not found. Please log out and log back in.');
+        toast.error(
+          "⚠️ Instructor ID not found. Please log out and log back in.",
+        );
         setLoading(false);
         return;
       }
 
       const newExam = await createExam(examData, user.id, user.instructorId);
-      console.log('✅ Exam created:', newExam);
+      console.log("✅ Exam created:", newExam);
 
       toast.success("Exam created successfully");
       router.push(`/exams/${newExam.id}`);
@@ -414,6 +450,50 @@ export default function NewExam() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Duplicate Batch Warning Dialog */}
+      <AlertDialog
+        open={showDuplicateDialog}
+        onOpenChange={setShowDuplicateDialog}
+      >
+        <AlertDialogContent className="border-2 border-warning">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
+              <Archive className="w-5 h-5" />
+              Duplicate Batch Detected
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-foreground">
+              An exam with the title{" "}
+              <strong className="text-primary">"{formData.title}"</strong>{" "}
+              already exists in your records.
+              <br />
+              <br />
+              Creating multiple exams with the same name can lead to confusion
+              during grading and reporting. Are you sure you want to proceed
+              with creating this duplicate batch?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowDuplicateDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setDuplicateConfirmed(true);
+                setShowDuplicateDialog(false);
+                // Trigger re-submit with confirmed flag
+                setTimeout(() => {
+                  const form = document.querySelector("form");
+                  if (form) form.requestSubmit();
+                }, 100);
+              }}
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
+            >
+              Proceed Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

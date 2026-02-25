@@ -19,7 +19,14 @@ import { AnswerKeyService } from "@/services/answerKeyService";
 import { ScanningService } from "@/services/scanningService";
 import { useAuth } from "@/contexts/AuthContext";
 import { db, auth } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
 import { toast } from "sonner";
 import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
 
@@ -78,9 +85,12 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
           // Fetch scanned results count
           try {
-            const scannedResult = await ScanningService.getScannedResultsByExamId(params.id);
+            const scannedResult =
+              await ScanningService.getScannedResultsByExamId(params.id);
             if (scannedResult.success && scannedResult.data) {
-              setScannedPaperCount(scannedResult.data.filter(r => !r.isNullId).length);
+              setScannedPaperCount(
+                scannedResult.data.filter((r) => !r.isNullId).length,
+              );
             }
           } catch (error) {
             console.error("Error fetching scanned results:", error);
@@ -89,8 +99,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           // Check if a template already exists for this exam
           try {
             const templateQuery = query(
-              collection(db, 'templates'),
-              where('examId', '==', params.id)
+              collection(db, "templates"),
+              where("examId", "==", params.id),
             );
             const templateSnap = await getDocs(templateQuery);
             setHasTemplate(!templateSnap.empty);
@@ -150,17 +160,19 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
   const handleCreateTemplate = async () => {
     if (!user?.instructorId) {
-      toast.error('⚠️ Instructor ID not found. Please log out and log back in.');
+      toast.error(
+        "⚠️ Instructor ID not found. Please log out and log back in.",
+      );
       return;
     }
 
     if (!exam) {
-      toast.error('Exam information not found');
+      toast.error("Exam information not found");
       return;
     }
 
     if (hasTemplate) {
-      toast.error('A template has already been generated for this exam.');
+      toast.error("A template has already been generated for this exam.");
       return;
     }
 
@@ -168,17 +180,17 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
     try {
       const currentUser = auth.currentUser;
-      console.log('🔍 Firebase Auth State:', {
+      console.log("🔍 Firebase Auth State:", {
         isAuthenticated: !!currentUser,
         uid: currentUser?.uid,
       });
 
       const templateData = {
         name: exam.title,
-        description: exam.subject || 'Answer Sheet Template',
+        description: exam.subject || "Answer Sheet Template",
         numQuestions: exam.num_items,
         choicesPerQuestion: exam.choices_per_item,
-        layout: 'single',
+        layout: "single",
         includeStudentId: true,
         studentIdLength: 10,
         createdBy: user.id,
@@ -188,39 +200,90 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         createdAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, 'templates'), templateData);
-      
+      await addDoc(collection(db, "templates"), templateData);
+
       // Generate exam code
-      const classPrefix = exam.className 
+      const classPrefix = exam.className
         ? exam.className.substring(0, 2).toUpperCase()
-        : 'XX';
-      const examSuffix = exam.title.length >= 2
-        ? exam.title.substring(exam.title.length - 2).toUpperCase().replace(/[^A-Z]/g, '')
-        : exam.title.substring(0, 2).toUpperCase().replace(/[^A-Z]/g, '');
-      const dayDigits = new Date().getDate().toString().padStart(2, '0');
+        : "XX";
+      const examSuffix =
+        exam.title.length >= 2
+          ? exam.title
+              .substring(exam.title.length - 2)
+              .toUpperCase()
+              .replace(/[^A-Z]/g, "")
+          : exam.title
+              .substring(0, 2)
+              .toUpperCase()
+              .replace(/[^A-Z]/g, "");
+      const dayDigits = new Date().getDate().toString().padStart(2, "0");
       const examCode = `${classPrefix}${examSuffix}${dayDigits}`;
-      
+
       await generateTemplatePDF({
         name: exam.title,
-        description: exam.subject || 'Answer Sheet Template',
+        description: exam.subject || "Answer Sheet Template",
         numQuestions: exam.num_items,
         choicesPerQuestion: exam.choices_per_item,
         examName: exam.title,
         examCode: examCode,
       });
-      
+
       setHasTemplate(true);
-      toast.success('✅ Template created and downloaded!');
+      toast.success("✅ Template created and downloaded!");
     } catch (error: any) {
-      console.error('❌ Error creating template:', error);
-      
-      if (error?.code === 'permission-denied') {
-        toast.error('Permission denied. Please check if you are logged in and try again.');
+      console.error("❌ Error creating template:", error);
+
+      if (error?.code === "permission-denied") {
+        toast.error(
+          "Permission denied. Please check if you are logged in and try again.",
+        );
       } else {
-        toast.error(`Failed to create template: ${error?.message || 'Unknown error'}`);
+        toast.error(
+          `Failed to create template: ${error?.message || "Unknown error"}`,
+        );
       }
     } finally {
       setCreatingTemplate(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    if (!exam) return;
+
+    try {
+      // Generate exam code
+      const classPrefix = exam.className
+        ? exam.className.substring(0, 2).toUpperCase()
+        : "XX";
+      const examSuffix =
+        exam.title.length >= 2
+          ? exam.title
+              .substring(exam.title.length - 2)
+              .toUpperCase()
+              .replace(/[^A-Z]/g, "")
+          : exam.title
+              .substring(0, 2)
+              .toUpperCase()
+              .replace(/[^A-Z]/g, "");
+      const dayDigits = new Date(exam.created_at)
+        .getDate()
+        .toString()
+        .padStart(2, "0");
+      const examCode = `${classPrefix}${examSuffix}${dayDigits}`;
+
+      await generateTemplatePDF({
+        name: exam.title,
+        description: exam.subject || "Answer Sheet Template",
+        numQuestions: exam.num_items,
+        choicesPerQuestion: exam.choices_per_item,
+        examName: exam.title,
+        examCode: examCode,
+      });
+
+      toast.success("✅ Template downloaded!");
+    } catch (error: any) {
+      console.error("❌ Error downloading template:", error);
+      toast.error("Failed to download template.");
     }
   };
 
@@ -234,13 +297,23 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     },
     {
       icon: hasTemplate ? CheckCircle : creatingTemplate ? Loader2 : FilePlus,
-      label: hasTemplate ? "Template Created" : creatingTemplate ? "Generating..." : "Create Template",
+      label: hasTemplate
+        ? "Download Template"
+        : creatingTemplate
+          ? "Generating..."
+          : "Create Template",
       description: hasTemplate
-        ? "Answer sheet template already generated"
+        ? "Re-download the answer sheet PDF"
         : "Auto-generate and download answer sheet PDF",
-      color: hasTemplate ? "bg-green-100 text-green-600" : "bg-green-50 text-green-600",
-      onClick: hasTemplate || creatingTemplate ? undefined : () => handleCreateTemplate(),
-      disabled: hasTemplate || creatingTemplate,
+      color: hasTemplate
+        ? "bg-green-100 text-green-600"
+        : "bg-green-50 text-green-600",
+      onClick: creatingTemplate
+        ? undefined
+        : hasTemplate
+          ? () => handleDownloadTemplate()
+          : () => handleCreateTemplate(),
+      disabled: creatingTemplate,
     },
     {
       icon: Smartphone,
@@ -366,9 +439,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             <p className="text-muted-foreground font-semibold mb-1">
               Papers Scanned
             </p>
-            <p className="text-foreground">
-              {scannedPaperCount} papers
-            </p>
+            <p className="text-foreground">{scannedPaperCount} papers</p>
           </div>
         </div>
       </Card>
@@ -401,7 +472,11 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
             if (btn.onClick) {
               return (
-                <button key={btn.label} onClick={btn.onClick} className="group text-left">
+                <button
+                  key={btn.label}
+                  onClick={btn.onClick}
+                  className="group text-left"
+                >
                   {content}
                 </button>
               );
@@ -416,7 +491,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             }
 
             return (
-              <Link key={btn.label} href={btn.href || '#'} className="group">
+              <Link key={btn.label} href={btn.href || "#"} className="group">
                 {content}
               </Link>
             );
