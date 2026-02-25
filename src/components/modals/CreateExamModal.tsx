@@ -41,7 +41,7 @@ export function CreateExamModal({
     folder: "General",
     className: "",
     classId: undefined,
-    choicesPerItem: 4,
+    choicesPerItem: 5,
     examType: "board",
   });
 
@@ -128,7 +128,7 @@ export function CreateExamModal({
         folder: "General",
         className: "",
         classId: undefined,
-        choicesPerItem: 4,
+        choicesPerItem: 5,
         examType: "board",
         choicePoints: {},
       });
@@ -167,7 +167,7 @@ export function CreateExamModal({
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleInputChange("name", e.target.value)}
-                  placeholder="e.g., Midterm Exam 2026"
+                  placeholder="Create New Exam"
                   className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </label>
@@ -208,20 +208,8 @@ export function CreateExamModal({
                 <span className="text-sm font-semibold text-foreground mb-3 block">
                   Number of Choices per Question
                 </span>
-                <div className="grid grid-cols-2 gap-2">
-                  {[4, 5].map((num) => (
-                    <button
-                      key={num}
-                      onClick={() => handleInputChange("choicesPerItem", num)}
-                      className={`py-3 px-2 rounded-md font-semibold text-sm transition-all border-2 ${
-                        formData.choicesPerItem === num
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-muted hover:border-primary"
-                      }`}
-                    >
-                      {num} Choices (A-{String.fromCharCode(64 + num)})
-                    </button>
-                  ))}
+                <div className="w-full py-3 px-6 rounded-md font-semibold text-sm border-2 border-primary bg-primary text-primary-foreground text-center">
+                  5 Choices (A-E)
                 </div>
               </label>
             </div>

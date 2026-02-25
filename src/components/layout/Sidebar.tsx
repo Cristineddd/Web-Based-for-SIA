@@ -12,25 +12,14 @@ import {
   ChevronRight,
   BarChart3,
   Archive,
-  Settings,
   Menu,
   X,
-  AlertTriangle,
-  Sparkles
+  AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebarContext } from '@/contexts/SidebarContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -252,10 +241,10 @@ export function Sidebar() {
                 Are you sure you want to sign out? You'll need to log in again to access your exams and data.
               </p>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => setShowSignOutModal(false)}
-                  className="flex-1 h-12 px-4 py-2 rounded-xl font-medium transition-all duration-200 border-2"
+                  className="w-full h-12 px-4 py-2 rounded-xl font-medium transition-all duration-200 border-2"
                   style={{ 
                     borderColor: '#F0E6D2',
                     color: '#166534',
@@ -266,7 +255,7 @@ export function Sidebar() {
                 </button>
                 <button
                   onClick={handleSignOut}
-                  className="flex-1 h-12 px-4 py-2 text-white hover:opacity-90 rounded-xl font-medium transition-all duration-200"
+                  className="w-full h-12 px-4 py-2 text-white hover:opacity-90 rounded-xl font-medium transition-all duration-200"
                   style={{ 
                     backgroundColor: '#166534',
                     boxShadow: '0 4px 8px -2px rgba(22, 101, 52, 0.2)'

@@ -53,6 +53,8 @@ import {
   type Class,
   type Student,
 } from "@/services/classService";
+import { StudentIDValidationService } from "@/services/studentIDValidationService";
+import { InvalidRecordLogger } from "@/services/invalidRecordLogger";
 
 export default function ClassManagement() {
   const { user } = useAuth();
@@ -276,7 +278,7 @@ export default function ClassManagement() {
     }
   };
 
-  const handleAddStudent = () => {
+  const handleAddStudent = async () => {
     if (
       !newStudent.student_id ||
       !newStudent.first_name ||
@@ -286,15 +288,67 @@ export default function ClassManagement() {
       return;
     }
 
+    // Validate Student ID format
+    const validation = StudentIDValidationService.validateStudentIdFormat(newStudent.student_id);
+    if (!validation.isValid) {
+      toast.error(validation.error || "Invalid Student ID format");
+      
+      // Log invalid attempt
+      if (user?.id) {
+        await InvalidRecordLogger.logInvalidRecord(
+          'grade',
+          { student_id: newStudent.student_id, first_name: newStudent.first_name, last_name: newStudent.last_name },
+          [{ field: 'student_id', message: validation.error || 'Invalid format', value: newStudent.student_id }],
+          user.id,
+          {
+            entity_id: newStudent.student_id,
+            user_email: user.email,
+            metadata: { action: 'manual_add_student', context: 'class_management' }
+          }
+        );
+      }
+      return;
+    }
+
     // Check for duplicate student ID
     if (students.some(s => s.student_id === newStudent.student_id)) {
       toast.error(`Student ID "${newStudent.student_id}" already exists in this class`);
+      
+      // Log duplicate attempt
+      if (user?.id) {
+        await InvalidRecordLogger.logInvalidRecord(
+          'grade',
+          { student_id: newStudent.student_id, first_name: newStudent.first_name, last_name: newStudent.last_name },
+          [{ field: 'student_id', message: 'Duplicate Student ID in class', value: newStudent.student_id }],
+          user.id,
+          {
+            entity_id: newStudent.student_id,
+            user_email: user.email,
+            metadata: { action: 'manual_add_student', context: 'class_management', reason: 'duplicate' }
+          }
+        );
+      }
       return;
     }
 
     // Check for duplicate student name (first name + last name combination)
     if (students.some(s => s.first_name === newStudent.first_name && s.last_name === newStudent.last_name)) {
       toast.error(`Student "${newStudent.first_name} ${newStudent.last_name}" already exists in this class`);
+      
+      // Log duplicate name attempt
+      if (user?.id) {
+        await InvalidRecordLogger.logInvalidRecord(
+          'grade',
+          { student_id: newStudent.student_id, first_name: newStudent.first_name, last_name: newStudent.last_name },
+          [{ field: 'name', message: 'Duplicate student name in class', value: `${newStudent.first_name} ${newStudent.last_name}` }],
+          user.id,
+          {
+            entity_id: newStudent.student_id,
+            user_email: user.email,
+            metadata: { action: 'manual_add_student', context: 'class_management', reason: 'duplicate_name' }
+          }
+        );
+      }
       return;
     }
 
@@ -327,7 +381,7 @@ export default function ClassManagement() {
 
     try {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const data = e.target?.result;
           const workbook = XLSX.read(data, { type: "array" });
@@ -335,8 +389,8 @@ export default function ClassManagement() {
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-          // Skip header row and map data to Student objects
-          const importedStudents: Student[] = jsonData
+          // Skip header row and create raw student data
+          const rawStudents = jsonData
             .slice(1) // Skip header
             .filter((row: any) => row.length >= 3) // Ensure basic validation
             .map((row: any) => ({
@@ -346,12 +400,69 @@ export default function ClassManagement() {
               email: row[3] ? String(row[3]) : undefined,
             }));
 
-          if (importedStudents.length === 0) {
+          if (rawStudents.length === 0) {
             toast.error("No valid students found in file");
             return;
           }
 
-          setImportPreview(importedStudents);
+          // Validate all student IDs
+          const validStudents: Student[] = [];
+          const invalidStudents: Array<{student: Student, errors: string[]}> = [];
+
+          for (const student of rawStudents) {
+            const validation = StudentIDValidationService.validateStudentIdFormat(student.student_id);
+            
+            if (!validation.isValid) {
+              invalidStudents.push({
+                student,
+                errors: [validation.error || 'Invalid Student ID format']
+              });
+              
+              // Log invalid student ID
+              if (user?.id) {
+                await InvalidRecordLogger.logInvalidRecord(
+                  'grade',
+                  student,
+                  [{ field: 'student_id', message: validation.error || 'Invalid format', value: student.student_id }],
+                  user.id,
+                  {
+                    entity_id: student.student_id,
+                    user_email: user.email,
+                    metadata: { action: 'bulk_upload', context: 'class_management', file_name: file.name }
+                  }
+                );
+              }
+            } else {
+              validStudents.push(student);
+            }
+          }
+
+          // Show feedback to admin about invalid entries
+          if (invalidStudents.length > 0) {
+            const errorMessage = `${invalidStudents.length} student(s) have invalid Student IDs and will be skipped. Expected format: YYYY-XXXX (e.g., 2026-0001)`;
+            toast.error(errorMessage, { duration: 5000 });
+            
+            // Show detailed errors in console for admin review
+            console.error('Invalid Student IDs detected during bulk upload:', invalidStudents.map(s => ({
+              student_id: s.student.student_id,
+              name: `${s.student.first_name} ${s.student.last_name}`,
+              errors: s.errors
+            })));
+          }
+
+          if (validStudents.length === 0) {
+            toast.error("No valid students to import after validation");
+            return;
+          }
+
+          // Show success message with valid count
+          if (invalidStudents.length > 0) {
+            toast.success(`${validStudents.length} valid student(s) ready to import. ${invalidStudents.length} invalid student(s) were logged and skipped.`);
+          } else {
+            toast.success(`All ${validStudents.length} student(s) validated successfully.`);
+          }
+
+          setImportPreview(validStudents);
           setShowImportDialog(true);
 
           if (fileInputRef.current) {
@@ -428,27 +539,29 @@ export default function ClassManagement() {
     <div className="page-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Class</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Class</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Manage student roster and information
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             onClick={downloadTemplate}
             variant="outline"
-            className="gap-2"
+            className="gap-2 flex-shrink-0"
           >
             <Download className="w-4 h-4" />
-            Download Template
+            <span className="hidden sm:inline">Download Template</span>
+            <span className="sm:hidden">Template</span>
           </Button>
           <Button
             onClick={() => fileInputRef.current?.click()}
             variant="outline"
-            className="gap-2"
+            className="gap-2 flex-shrink-0"
           >
             <Upload className="w-4 h-4" />
-            Import Excel
+            <span className="hidden sm:inline">Import Excel</span>
+            <span className="sm:hidden">Import</span>
           </Button>
           <input
             ref={fileInputRef}
@@ -585,7 +698,7 @@ export default function ClassManagement() {
           setShowAddDialog(true);
         }
       }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto border-2 border-green-200 rounded-xl">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto border-2 border-green-200 rounded-xl">
           <DialogHeader className="bg-gradient-to-r from-green-50 to-emerald-50 -m-6 mb-6 p-6 rounded-t-xl border-b border-green-200">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -620,8 +733,8 @@ export default function ClassManagement() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="basic" className="space-y-6 mt-6 p-6 bg-gradient-to-br from-green-50/50 to-emerald-50/50 rounded-lg border border-green-200">
-              <div className="grid grid-cols-2 gap-6">
+            <TabsContent value="basic" className="space-y-6 mt-6 p-3 sm:p-6 bg-gradient-to-br from-green-50/50 to-emerald-50/50 rounded-lg border border-green-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-3">
                   <Label htmlFor="class_name" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                     Class Name <span className="text-red-500">*</span>
@@ -786,16 +899,17 @@ export default function ClassManagement() {
             </TabsContent>
 
             <TabsContent value="students" className="space-y-4 mt-4">
-              <div className="flex gap-2 mb-4">
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importing}
+                  className="w-full sm:w-auto"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   {importing ? "Importing..." : "Import CSV/Excel"}
                 </Button>
-                <Button variant="outline" onClick={downloadTemplate}>
+                <Button variant="outline" onClick={downloadTemplate} className="w-full sm:w-auto">
                   <Download className="w-4 h-4 mr-2" />
                   Download Template
                 </Button>
@@ -947,23 +1061,23 @@ export default function ClassManagement() {
               </div>
 
               {students.length > 0 && (
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Student ID</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className="min-w-[100px]">Student ID</TableHead>
+                        <TableHead className="min-w-[120px]">Name</TableHead>
+                        <TableHead className="hidden sm:table-cell min-w-[150px]">Email</TableHead>
+                        <TableHead className="text-right min-w-[80px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {students.map((student, idx) => (
                         <TableRow key={`add-class-${idx}`}>
-                          <TableCell>{student.student_id}</TableCell>
-                          <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                          <TableCell>{student.email || "—"}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="min-w-[100px]">{student.student_id}</TableCell>
+                          <TableCell className="min-w-[120px]">{`${student.first_name} ${student.last_name}`}</TableCell>
+                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "—"}</TableCell>
+                          <TableCell className="text-right min-w-[80px]">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1018,7 +1132,7 @@ export default function ClassManagement() {
 
       {/* Edit Class Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Class</DialogTitle>
             <DialogDescription>
@@ -1037,7 +1151,7 @@ export default function ClassManagement() {
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit_class_name">Class Name *</Label>
                   <Input
@@ -1101,16 +1215,17 @@ export default function ClassManagement() {
             </TabsContent>
 
             <TabsContent value="students" className="space-y-4 mt-4">
-              <div className="flex gap-2 mb-4">
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importing}
+                  className="w-full sm:w-auto"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   {importing ? "Importing..." : "Import CSV/Excel"}
                 </Button>
-                <Button variant="outline" onClick={downloadTemplate}>
+                <Button variant="outline" onClick={downloadTemplate} className="w-full sm:w-auto">
                   <Download className="w-4 h-4 mr-2" />
                   Download Template
                 </Button>
@@ -1262,23 +1377,23 @@ export default function ClassManagement() {
               </div>
 
               {students.length > 0 && (
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Student ID</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className="min-w-[100px]">Student ID</TableHead>
+                        <TableHead className="min-w-[120px]">Name</TableHead>
+                        <TableHead className="hidden sm:table-cell min-w-[150px]">Email</TableHead>
+                        <TableHead className="text-right min-w-[80px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {students.map((student, idx) => (
                         <TableRow key={`edit-class-${idx}`}>
-                          <TableCell>{student.student_id}</TableCell>
-                          <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                          <TableCell>{student.email || "—"}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="min-w-[100px]">{student.student_id}</TableCell>
+                          <TableCell className="min-w-[120px]">{`${student.first_name} ${student.last_name}`}</TableCell>
+                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "—"}</TableCell>
+                          <TableCell className="text-right min-w-[80px]">
                             <Button
                               variant="ghost"
                               size="sm"

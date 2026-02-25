@@ -251,6 +251,14 @@ export class InvalidRecordLogger {
   }
 
   /**
+   * Get invalid records - simplified wrapper that returns array directly
+   */
+  static async getInvalidRecords(query: InvalidRecordQuery): Promise<InvalidRecordLog[]> {
+    const result = await this.queryInvalidRecords(query);
+    return result.data || [];
+  }
+
+  /**
    * Get invalid records within a date range
    */
   static async getInvalidRecordsByDateRange(
