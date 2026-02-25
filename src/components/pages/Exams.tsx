@@ -36,7 +36,6 @@ import {
   type ExamFormData,
 } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
-import { ExamDuplicateService } from "@/services/examDuplicateService";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -57,8 +56,7 @@ export default function Exams() {
   const [search, setSearch] = useState("");
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [duplicateExamData, setDuplicateExamData] =
-    useState<ExamFormData | null>(null);
+  const [duplicateExamData, setDuplicateExamData] = useState<ExamFormData | null>(null);
 
   useEffect(() => {
     const title = searchParams.get("title");
@@ -107,78 +105,54 @@ export default function Exams() {
       // Filter out archived exams
       const activeExams = fetchedExams.filter((exam) => !exam.isArchived);
 
-      // OPTIMIZATION: Show exams immediately without waiting for heavy metadata
-      setExams(activeExams);
-      setLoading(false);
+      // Fetch answer key status for each exam
+      const examsWithStatus = await Promise.all(
+        activeExams.map(async (exam) => {
+          let answerKeyStatus = {
+            total: exam.num_items,
+            completed: 0,
+            hasAnswerKey: false,
+          };
 
-      // Fetch metadata incrementally in small batches to avoid hitting connection limits
-      // and to show status updates as they become available
-      const examsWithStatus: ExamWithStatus[] = [...activeExams];
-      const BATCH_SIZE = 5;
-
-      for (let i = 0; i < examsWithStatus.length; i += BATCH_SIZE) {
-        const batchEnd = Math.min(i + BATCH_SIZE, examsWithStatus.length);
-        const batchPromises = [];
-
-        for (let j = i; j < batchEnd; j++) {
-          const examIdx = j;
-          const exam = examsWithStatus[examIdx];
-
-          batchPromises.push(
-            (async () => {
-              let answerKeyStatus = {
+          try {
+            const result = await AnswerKeyService.getAnswerKeyByExamId(exam.id);
+            if (result.success && result.data) {
+              const answersCount = result.data.answers.length;
+              answerKeyStatus = {
                 total: exam.num_items,
-                completed: 0,
-                hasAnswerKey: false,
+                completed: answersCount,
+                hasAnswerKey: true,
               };
+            }
+          } catch (error) {
+            console.error(
+              `Error fetching answer key for exam ${exam.id}:`,
+              error,
+            );
+          }
 
-              try {
-                const result = await AnswerKeyService.getAnswerKeyByExamId(
-                  exam.id,
-                );
-                if (result.success && result.data) {
-                  const answersCount = result.data.answers.length;
-                  answerKeyStatus = {
-                    total: exam.num_items,
-                    completed: answersCount,
-                    hasAnswerKey: true,
-                  };
-                }
-              } catch (error) {
-                console.error(
-                  `Error fetching answer key for exam ${exam.id}:`,
-                  error,
-                );
-              }
+          // Check if a template exists for this exam
+          let hasTemplate = false;
+          try {
+            const templateQuery = query(
+              collection(db, 'templates'),
+              where('examId', '==', exam.id)
+            );
+            const templateSnap = await getDocs(templateQuery);
+            hasTemplate = !templateSnap.empty;
+          } catch (error) {
+            console.error(`Error checking template for exam ${exam.id}:`, error);
+          }
 
-              let hasTemplate = false;
-              try {
-                const templateQuery = query(
-                  collection(db, "templates"),
-                  where("examId", "==", exam.id),
-                );
-                const templateSnap = await getDocs(templateQuery);
-                hasTemplate = !templateSnap.empty;
-              } catch (error) {
-                console.error(
-                  `Error checking template for exam ${exam.id}:`,
-                  error,
-                );
-              }
+          return {
+            ...exam,
+            answerKeyStatus,
+            hasTemplate,
+          };
+        }),
+      );
 
-              examsWithStatus[examIdx] = {
-                ...exam,
-                answerKeyStatus,
-                hasTemplate,
-              };
-            })(),
-          );
-        }
-
-        await Promise.all(batchPromises);
-        // Step-by-step UI update
-        setExams([...examsWithStatus]);
-      }
+      setExams(examsWithStatus);
     } catch (error) {
       console.error("Error fetching exams:", error);
       toast.error("Failed to load exams");
@@ -192,24 +166,15 @@ export default function Exams() {
   }, [user]);
 
   const handleCreateExam = async (formData: ExamFormData) => {
-    // Check for duplicates first using the service (more robust than local state)
-    if (!duplicateExamData && user?.id) {
-      const { isDuplicate } = await ExamDuplicateService.checkDuplicateTitle(
-        formData.name,
-        user.id,
-      );
+    // Check for duplicates first
+    const isDuplicate = exams.some(
+      (e) => e.title.toLowerCase().trim() === formData.name.toLowerCase().trim()
+    );
 
-      if (isDuplicate) {
-        // Log the detection (with spam prevention handled by service)
-        await ExamDuplicateService.logDuplicateDetection(formData.name, {
-          userId: user.id,
-          adminEmail: user.email || "unknown",
-        });
-
-        setDuplicateExamData(formData);
-        setShowCreateModal(false);
-        return;
-      }
+    if (isDuplicate && !duplicateExamData) {
+      setDuplicateExamData(formData);
+      setShowCreateModal(false);
+      return;
     }
 
     try {
@@ -220,7 +185,7 @@ export default function Exams() {
 
       // Create temporary ID for optimistic update
       const tempId = `temp_${Date.now()}`;
-      const tempExam: ExamWithStatus = {
+      const tempExam: Exam = {
         id: tempId,
         title: formData.name,
         subject: formData.folder,
@@ -231,7 +196,7 @@ export default function Exams() {
         generated_sheets: [],
         createdBy: user.id,
         className: formData.className,
-        examType: formData.examType || "board",
+        examType: formData.examType || 'board',
       };
 
       // Add to UI immediately (optimistic)
@@ -241,24 +206,22 @@ export default function Exams() {
 
       // Save to Firebase in background (don't wait for it)
       try {
-        console.log("📝 Creating exam from Exams page");
-        console.log("  - User:", user);
-        console.log("  - InstructorId:", user.instructorId);
-
+        console.log('📝 Creating exam from Exams page');
+        console.log('  - User:', user);
+        console.log('  - InstructorId:', user.instructorId);
+        
         if (!user.instructorId) {
-          toast.error(
-            "⚠️ Instructor ID not found. Please log out and log back in.",
-          );
+          toast.error('⚠️ Instructor ID not found. Please log out and log back in.');
           setExams((prevExams) => prevExams.filter((e) => e.id !== tempId));
           return;
         }
-
+        
         const newExam = await createExam(formData, user.id, user.instructorId);
-        console.log("✅ Exam created:", newExam);
-
+        console.log('✅ Exam created:', newExam);
+        
         // Replace temp exam with real one
         setExams((prevExams) =>
-          prevExams.map((e) => (e.id === tempId ? newExam : e)),
+          prevExams.map((e) => (e.id === tempId ? newExam : e))
         );
       } catch (error) {
         console.error("Error saving exam to Firebase:", error);
@@ -462,8 +425,7 @@ export default function Exams() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive Exam</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to archive this exam? It will be moved to
-              the Archive page and you can restore it later.
+              Are you sure you want to archive this exam? It will be moved to the Archive page and you can restore it later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -479,8 +441,8 @@ export default function Exams() {
       </AlertDialog>
 
       {/* Duplicate Batch Warning Dialog */}
-      <AlertDialog
-        open={!!duplicateExamData}
+      <AlertDialog 
+        open={!!duplicateExamData} 
         onOpenChange={(open) => !open && setDuplicateExamData(null)}
       >
         <AlertDialogContent className="border-2 border-warning">
@@ -490,16 +452,9 @@ export default function Exams() {
               Duplicate Batch Detected
             </AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">
-              An exam with the title{" "}
-              <strong className="text-primary">
-                "{duplicateExamData?.name}"
-              </strong>{" "}
-              already exists in your records.
-              <br />
-              <br />
-              Creating multiple exams with the same name can lead to confusion
-              during grading and reporting. Are you sure you want to proceed
-              with creating this duplicate batch?
+              An exam with the title <strong className="text-primary">"{duplicateExamData?.name}"</strong> already exists in your records.
+              <br /><br />
+              Creating multiple exams with the same name can lead to confusion during grading and reporting. Are you sure you want to proceed with creating this duplicate batch?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
