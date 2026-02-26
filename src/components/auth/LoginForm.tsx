@@ -73,38 +73,23 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#FEF9E7' }}>
-      <div className="w-full max-w-md">
-        {/* Back to Home Button */}
-        <button
-          onClick={() => router.push('/')}
-          className="mb-6 flex items-center gap-2 text-sm font-medium hover:underline transition-all group"
-          style={{ color: '#166534' }}
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" style={{ color: '#B38B00' }} />
-          Back to Home
-        </button>
-
-        {/* Logo with design department styling and S box */}
+    <>
+      <div className="w-full">
+        {/* Logo */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3">
-            <div className="w-12 h-12 flex items-center justify-center rounded-lg" style={{ backgroundColor: '#166534' }}>
+            <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-[#166534]">
               <span className="text-2xl font-bold text-white">S</span>
             </div>
-            <h1 className="text-5xl font-bold tracking-tight" style={{ color: '#166534' }}>SIA</h1>
+            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900">SIA</h1>
           </div>
         </div>
 
-        <div className="rounded-2xl p-8" style={{ 
-          backgroundColor: '#FFFFFF', 
-          borderColor: '#F0E6D2', 
-          borderWidth: '1px',
-          boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.15)'
-        }}>
+        <div>
           {!showPasswordField ? (
             <>
-              <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Sign in</h2>
-              <p className="text-sm mb-8" style={{ color: '#B38B00' }}>
+              <h2 className="text-2xl font-bold mb-2 text-gray-900">Sign in</h2>
+              <p className="text-sm mb-8 text-gray-600">
                 to continue to SIA
               </p>
 
@@ -119,18 +104,13 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                 if (email) setShowPasswordField(true);
               }} className="space-y-6">
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5" style={{ color: '#B38B00' }} />
+                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input
                     type="email"
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-14 text-base rounded-xl pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0"
-                    style={{ 
-                      borderColor: '#F0E6D2',
-                      color: '#166534',
-                      backgroundColor: '#FEF9E7'
-                    }}
+                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
                     required
                     autoFocus
                   />
@@ -139,11 +119,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                 <button 
                   type="submit" 
                   disabled={!email} 
-                  className="w-full h-14 px-4 py-2 text-white hover:opacity-90 rounded-xl font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50 transform hover:scale-[1.02] active:scale-[0.98]"
-                  style={{ 
-                    backgroundColor: '#166534',
-                    boxShadow: '0 8px 16px -4px rgba(22, 101, 52, 0.3)'
-                  }}
+                  className="w-full h-12 sm:h-14 px-4 py-2 bg-[#166534] hover:bg-[#1a7a3e] text-white rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
                 >
                   Next
                 </button>
@@ -152,7 +128,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
               {/* Divider */}
               <div className="flex items-center gap-4 my-6">
                 <div className="flex-1 h-px" style={{ backgroundColor: '#F0E6D2' }} />
-                <span className="text-sm font-medium" style={{ color: '#B38B00' }}>or</span>
+                <span className="text-sm font-medium text-gray-600">or</span>
                 <div className="flex-1 h-px" style={{ backgroundColor: '#F0E6D2' }} />
               </div>
 
@@ -197,7 +173,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                   type="button"
                   onClick={onToggleMode}
                   className="text-sm font-medium hover:underline transition-all"
-                  style={{ color: '#B38B00' }}
+                  className="text-gray-600"
                 >
                   Create an account
                 </button>
@@ -208,15 +184,15 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
               <button
                 onClick={() => setShowPasswordField(false)}
                 className="flex items-center gap-2 text-sm font-medium hover:underline mb-6 transition-all"
-                style={{ color: '#B38B00' }}
+                className="text-gray-600"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back
               </button>
 
               <div className="mb-6">
-                <p className="text-sm mb-1" style={{ color: '#B38B00' }}>{email}</p>
-                <h2 className="text-2xl font-bold" style={{ color: '#166534' }}>Enter password</h2>
+                <p className="text-sm mb-1 text-gray-600">{email}</p>
+                <h2 className="text-2xl font-bold text-gray-900">Enter password</h2>
               </div>
 
               {error && (
@@ -227,18 +203,13 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5" style={{ color: '#B38B00' }} />
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input
                     type={passwordVisible ? "text" : "password"}
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-14 text-base rounded-xl pl-12 pr-12 border-2 focus-visible:ring-2 focus-visible:ring-offset-0"
-                    style={{ 
-                      borderColor: '#F0E6D2',
-                      color: '#166534',
-                      backgroundColor: '#FEF9E7'
-                    }}
+                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-12 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
                     required
                     autoFocus
                   />
@@ -248,9 +219,9 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                     className="absolute right-4 top-1/2 transform -translate-y-1/2"
                   >
                     {passwordVisible ? (
-                      <Eye className="w-5 h-5" style={{ color: '#B38B00' }} />
+                      <Eye className="w-5 h-5 text-gray-400" />
                     ) : (
-                      <EyeOff className="w-5 h-5" style={{ color: '#B38B00' }} />
+                      <EyeOff className="w-5 h-5 text-gray-400" />
                     )}
                   </button>
                 </div>
@@ -269,11 +240,10 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                     />
                     <span className="text-sm font-medium" style={{ color: '#166534' }}>Remember me</span>
                   </label>
-                  <button
-                    type="button"
+                  <button 
+                    type="button" 
                     onClick={() => setShowForgotModal(true)}
-                    className="text-sm font-medium hover:underline transition-all"
-                    style={{ color: '#B38B00' }}
+                    className="text-sm font-medium hover:underline transition-all text-gray-600"
                   >
                     Forgot password?
                   </button>
@@ -302,132 +272,132 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
           )}
         </div>
 
-        <div className="mt-8 text-center text-sm">
-          <a href="#" className="hover:underline transition-all" style={{ color: '#B38B00' }}>Terms of use</a>
-          <span style={{ color: '#B38B00' }}> · </span>
-          <a href="#" className="hover:underline transition-all" style={{ color: '#B38B00' }}>Privacy policy</a>
+        <div className="mt-8 text-center text-sm text-gray-600">
+          <a href="#" className="hover:underline transition-all">Terms of use</a>
+          <span> · </span>
+          <a href="#" className="hover:underline transition-all">Privacy policy</a>
         </div>
       </div>
 
       {/* Forgot Password Modal */}
       {showForgotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/50" 
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div 
+          className="absolute inset-0 bg-black/50" 
+          onClick={closeModal}
+        />
+        <div 
+          className="relative w-full max-w-md rounded-2xl p-8"
+          style={{ 
+            backgroundColor: '#FFFFFF', 
+            borderColor: '#F0E6D2', 
+            borderWidth: '1px',
+            boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.3)'
+          }}
+        >
+          <button
             onClick={closeModal}
-          />
-          <div 
-            className="relative w-full max-w-md rounded-2xl p-8"
-            style={{ 
-              backgroundColor: '#FFFFFF', 
-              borderColor: '#F0E6D2', 
-              borderWidth: '1px',
-              boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.3)'
-            }}
+            className="absolute right-4 top-4 p-1 rounded-full hover:bg-[#F0E6D2] transition-colors"
           >
-            <button
-              onClick={closeModal}
-              className="absolute right-4 top-4 p-1 rounded-full hover:bg-[#F0E6D2] transition-colors"
-            >
-              <X className="w-5 h-5" style={{ color: '#166534' }} />
-            </button>
+            <X className="w-5 h-5" style={{ color: '#166534' }} />
+          </button>
 
-            <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Reset password</h2>
-            <p className="text-sm mb-6" style={{ color: '#B38B00' }}>
-              Enter your email address and we'll send you a link to reset your password.
-            </p>
+          <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Reset password</h2>
+          <p className="text-sm mb-6 text-gray-600">
+            Enter your email address and we'll send you a link to reset your password.
+          </p>
 
-            {resetSuccess ? (
-              <div className="text-center py-4">
-                <div className="w-16 h-16 rounded-full bg-[#166534]/10 flex items-center justify-center mx-auto mb-4">
-                  <Mail className="w-8 h-8" style={{ color: '#166534' }} />
-                </div>
-                <h3 className="text-lg font-semibold mb-2" style={{ color: '#166534' }}>Check your email</h3>
-                <p className="text-sm mb-6" style={{ color: '#B38B00' }}>
-                  We've sent a password reset link to <strong style={{ color: '#166534' }}>{resetEmail}</strong>
-                </p>
-<button
-  onClick={closeModal}
-  className="
-    px-6 py-2 rounded-lg font-medium 
-    border-2 transition-all duration-300
-    hover:bg-[#166534] hover:text-white
-    hover:shadow-lg hover:scale-105
-    active:scale-95
-  "
-  style={{
-    borderColor: "#166534",
-    color: "#166534",
-    backgroundColor: "transparent",
-  }}
->
-  Close
-</button>
+          {resetSuccess ? (
+            <div className="text-center py-4">
+              <div className="w-16 h-16 rounded-full bg-[#166534]/10 flex items-center justify-center mx-auto mb-4">
+                <Mail className="w-8 h-8" style={{ color: '#166534' }} />
               </div>
-            ) : (
-              <form onSubmit={handleForgotPassword} className="space-y-6">
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5" style={{ color: '#B38B00' }} />
-                  <Input
-                    type="email"
-                    placeholder="Enter your email"
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    className="h-14 text-base rounded-xl pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0"
-                    style={{ 
-                      borderColor: '#F0E6D2',
-                      color: '#166534',
-                      backgroundColor: '#FEF9E7'
-                    }}
-                    required
-                    autoFocus
-                  />
-                </div>
+              <h3 className="text-lg font-semibold mb-2" style={{ color: '#166534' }}>Check your email</h3>
+              <p className="text-sm mb-6 text-gray-600">
+                We've sent a password reset link to <strong style={{ color: '#166534' }}>{resetEmail}</strong>
+              </p>
+              <button
+                onClick={closeModal}
+                className="
+                  px-6 py-2 rounded-lg font-medium 
+                  border-2 transition-all duration-300
+                  hover:bg-[#166534] hover:text-white
+                  hover:shadow-lg hover:scale-105
+                  active:scale-95
+                "
+                style={{
+                  borderColor: "#166534",
+                  color: "#166534",
+                  backgroundColor: "transparent",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleForgotPassword} className="space-y-6">
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <Input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="h-14 text-base rounded-xl pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0"
+                  style={{ 
+                    borderColor: '#F0E6D2',
+                    color: '#166534',
+                    backgroundColor: '#FEF9E7'
+                  }}
+                  required
+                  autoFocus
+                />
+              </div>
 
-                <div className="flex gap-3">
-<button
-  type="button"
-  onClick={closeModal}
-  className="
-    flex-1 h-12 px-4 py-2 rounded-xl font-medium 
-    border-2 transition-all duration-300
-    hover:bg-[#F0E6D2] hover:border-[#166534]
-    hover:shadow-md hover:scale-[1.02]
-    active:scale-95
-  "
-  style={{
-    borderColor: "#F0E6D2",
-    color: "#166534",
-    backgroundColor: "transparent",
-  }}
->
-  Cancel
-</button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="
+                    flex-1 h-12 px-4 py-2 rounded-xl font-medium 
+                    border-2 transition-all duration-300
+                    hover:bg-[#F0E6D2] hover:border-[#166534]
+                    hover:shadow-md hover:scale-[1.02]
+                    active:scale-95
+                  "
+                  style={{
+                    borderColor: "#F0E6D2",
+                    color: "#166534",
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  Cancel
+                </button>
 
-                  <button
-                    type="submit"
-                    disabled={resetLoading || !resetEmail}
-                    className="flex-1 h-12 px-4 py-2 text-white hover:opacity-90 rounded-xl font-medium transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
-                    style={{ 
-                      backgroundColor: '#166534',
-                      boxShadow: '0 4px 8px -2px rgba(22, 101, 52, 0.2)'
-                    }}
-                  >
-                    {resetLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Sending...
-                      </>
-                    ) : (
-                      'Send reset link'
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
+                <button
+                  type="submit"
+                  disabled={resetLoading || !resetEmail}
+                  className="flex-1 h-12 px-4 py-2 text-white hover:opacity-90 rounded-xl font-medium transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
+                  style={{ 
+                    backgroundColor: '#166534',
+                    boxShadow: '0 4px 8px -2px rgba(22, 101, 52, 0.2)'
+                  }}
+                >
+                  {resetLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Send reset link'
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    )}
+    </>
   );
 }

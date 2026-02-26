@@ -288,7 +288,7 @@ export default function ClassManagement() {
       return;
     }
 
-    // Validate Student ID format
+    // Validate Student ID format and get formatted ID
     const validation = StudentIDValidationService.validateStudentIdFormat(newStudent.student_id);
     if (!validation.isValid) {
       toast.error(validation.error || "Invalid Student ID format");
@@ -310,19 +310,22 @@ export default function ClassManagement() {
       return;
     }
 
-    // Check for duplicate student ID
-    if (students.some(s => s.student_id === newStudent.student_id)) {
-      toast.error(`Student ID "${newStudent.student_id}" already exists in this class`);
+    // Use the formatted student ID
+    const formattedStudentId = validation.student_id;
+
+    // Check for duplicate student ID using formatted ID
+    if (students.some(s => s.student_id === formattedStudentId)) {
+      toast.error(`Student ID "${formattedStudentId}" already exists in this class`);
       
       // Log duplicate attempt
       if (user?.id) {
         await InvalidRecordLogger.logInvalidRecord(
           'grade',
-          { student_id: newStudent.student_id, first_name: newStudent.first_name, last_name: newStudent.last_name },
-          [{ field: 'student_id', message: 'Duplicate Student ID in class', value: newStudent.student_id }],
+          { student_id: formattedStudentId, first_name: newStudent.first_name, last_name: newStudent.last_name },
+          [{ field: 'student_id', message: 'Duplicate Student ID in class', value: formattedStudentId }],
           user.id,
           {
-            entity_id: newStudent.student_id,
+            entity_id: formattedStudentId,
             user_email: user.email,
             metadata: { action: 'manual_add_student', context: 'class_management', reason: 'duplicate' }
           }
@@ -353,7 +356,7 @@ export default function ClassManagement() {
     }
 
     const student: Student = {
-      student_id: newStudent.student_id,
+      student_id: formattedStudentId, // Use formatted ID
       first_name: newStudent.first_name,
       last_name: newStudent.last_name,
       ...(newStudent.email && { email: newStudent.email }), // Only include email if it has a value
@@ -366,7 +369,7 @@ export default function ClassManagement() {
       last_name: "",
       email: "",
     });
-    toast.success("Student added to roster");
+    toast.success(`Student added to roster (ID: ${formattedStudentId})`);
   };
 
   const handleRemoveStudent = (studentId: string) => {

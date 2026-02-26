@@ -60,7 +60,7 @@ export function Sidebar() {
       <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-[#166534] border-b z-50 flex items-center px-3">
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="p-1.5 hover:bg-[#B38B00] rounded-md text-white transition-colors"
+          className="p-1.5 hover:bg-[#1a7a3e] rounded-md text-white transition-colors"
         >
           {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </button>
@@ -105,7 +105,7 @@ export function Sidebar() {
                 key={item.path}
                 href={item.path}
                 className={cn(
-                  "sidebar-item text-white/80 hover:text-white hover:bg-[#B38B00] transition-colors",
+                  "sidebar-item text-white/80 hover:text-white hover:bg-[#1a7a3e] transition-colors",
                   isActive && "bg-[#B38B00] text-white border-l-4 border-[#F0E6D2]"
                 )}
               >
@@ -130,7 +130,7 @@ export function Sidebar() {
           <div className="flex justify-center">
             <button
               onClick={() => setShowSignOutModal(true)}
-              className="sidebar-item w-full justify-center text-left text-white/80 border-2 rounded-lg hover:text-white hover:bg-[#B38B00] hover:border-[#B38B00] transition-all duration-200"
+              className="sidebar-item w-full justify-center text-left text-white/80 border-2 rounded-lg hover:text-white hover:bg-[#1a7a3e] hover:border-[#1a7a3e] transition-all duration-200"
               style={{
                 borderColor: "#F0E6D2",
                 backgroundColor: "transparent",
@@ -176,7 +176,7 @@ export function Sidebar() {
                 href={item.path}
                 onClick={handleNavClick}
                 className={cn(
-                  "sidebar-item text-white/80 hover:text-white hover:bg-[#B38B00] transition-colors",
+                  "sidebar-item text-white/80 hover:text-white hover:bg-[#1a7a3e] transition-colors",
                   isActive && "bg-[#B38B00] text-white"
                 )}
               >
@@ -199,9 +199,9 @@ export function Sidebar() {
             </div>
           )}
           <div className="flex justify-center">
-            <button
-              onClick={() => setShowSignOutModal(true)}
-              className="sidebar-item w-full justify-center text-left border-2 rounded-lg hover:text-white hover:bg-[#B38B00] hover:border-[#B38B00] transition-all duration-200"
+              <button
+                onClick={() => setShowSignOutModal(true)}
+                className="sidebar-item w-full justify-center text-left border-2 rounded-lg hover:text-white hover:bg-[#1a7a3e] hover:border-[#1a7a3e] transition-all duration-200"
               style={{
                 borderColor: "#F0E6D2",
                 backgroundColor: "#FEF9E7",
