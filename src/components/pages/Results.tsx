@@ -1,8 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { useDebounce } from '@/hooks/useDebounce';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   ChevronLeft, 
   FileText, 
@@ -15,7 +26,10 @@ import {
   Check,
   FileSpreadsheet,
   Table2,
-  Info
+  Info,
+  Search,
+  Filter,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getClasses, Class } from '@/services/classService';
@@ -29,6 +43,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import jsPDF from 'jspdf';
+import ExamScoresTable from '@/components/pages/ExamScoresTable';
 
 // Types for our component
 interface ClassResult {
@@ -293,6 +308,10 @@ function SendResultsPanel({
 
 export default function Results() {
   const { user } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<Class[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -305,9 +324,121 @@ export default function Results() {
   const [studentResults, setStudentResults] = useState<StudentResult[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
 
+  // Passing threshold
+  const [passingThreshold, setPassingThreshold] = useState(60);
+
+  // Update threshold when instructor changes it inline
+  const handleThresholdChange = useCallback(
+    (newThreshold: number) => {
+      setPassingThreshold(newThreshold);
+    },
+    []
+  );
+
   // Modal states
   const [exportModalType, setExportModalType] = useState<'PDF' | 'Excel' | 'CSV' | null>(null);
   const [showSendPanel, setShowSendPanel] = useState(false);
+
+  // ── Filter state ────────────────────────────────────────────────────────
+  // Class list filters
+  const [classSearch, setClassSearch] = useState(searchParams.get('cs') || '');
+  const [classMinAvg, setClassMinAvg] = useState(searchParams.get('cmin') || '');
+  const [classMaxAvg, setClassMaxAvg] = useState(searchParams.get('cmax') || '');
+
+  // Exam list filters
+  const [examSearch, setExamSearch] = useState(searchParams.get('es') || '');
+  const [subjectFilter, setSubjectFilter] = useState(searchParams.get('subj') || 'all');
+
+  // Show/hide filter panels
+  const [showClassFilters, setShowClassFilters] = useState(false);
+
+  // ── URL state sync helper ───────────────────────────────────────────────
+  const updateURL = useCallback((params: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    Object.entries(params).forEach(([key, value]) => {
+      if (value && value !== 'all') {
+        current.set(key, value);
+      } else {
+        current.delete(key);
+      }
+    });
+    const qs = current.toString();
+    router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+  }, [searchParams, router, pathname]);
+
+  // ── Filtered class results ──────────────────────────────────────────────
+  const debouncedClassSearch = useDebounce(classSearch, 200);
+  const filteredClassResults = useMemo(() => {
+    let results = classResults;
+    if (debouncedClassSearch.trim()) {
+      const q = debouncedClassSearch.toLowerCase();
+      results = results.filter(r =>
+        r.className.toLowerCase().includes(q) ||
+        r.schedule.toLowerCase().includes(q)
+      );
+    }
+    if (classMinAvg !== '') {
+      const min = Number(classMinAvg);
+      if (!isNaN(min)) results = results.filter(r => r.averageScore >= min);
+    }
+    if (classMaxAvg !== '') {
+      const max = Number(classMaxAvg);
+      if (!isNaN(max)) results = results.filter(r => r.averageScore <= max);
+    }
+    return results;
+  }, [classResults, debouncedClassSearch, classMinAvg, classMaxAvg]);
+
+  // ── Unique subjects for exam filter ───────────────────────────────────
+  const availableSubjects = useMemo(() => {
+    const subjects = new Set(classExamsList.map(e => e.subject).filter(Boolean));
+    return Array.from(subjects).sort();
+  }, [classExamsList]);
+
+  // ── Filtered exams list ────────────────────────────────────────────────
+  const debouncedExamSearch = useDebounce(examSearch, 200);
+  const filteredExamsList = useMemo(() => {
+    let list = classExamsList;
+    if (debouncedExamSearch.trim()) {
+      const q = debouncedExamSearch.toLowerCase();
+      list = list.filter(e =>
+        e.title.toLowerCase().includes(q) ||
+        (e.subject && e.subject.toLowerCase().includes(q))
+      );
+    }
+    if (subjectFilter !== 'all') {
+      list = list.filter(e => e.subject === subjectFilter);
+    }
+    return list;
+  }, [classExamsList, examSearch, subjectFilter]);
+
+  // ── Active filter counts ──────────────────────────────────────────────
+  const classFilterCount = useMemo(() => {
+    let n = 0;
+    if (classSearch.trim()) n++;
+    if (classMinAvg !== '') n++;
+    if (classMaxAvg !== '') n++;
+    return n;
+  }, [classSearch, classMinAvg, classMaxAvg]);
+
+  const examFilterCount = useMemo(() => {
+    let n = 0;
+    if (examSearch.trim()) n++;
+    if (subjectFilter !== 'all') n++;
+    return n;
+  }, [examSearch, subjectFilter]);
+
+  const clearClassFilters = useCallback(() => {
+    setClassSearch('');
+    setClassMinAvg('');
+    setClassMaxAvg('');
+    updateURL({ cs: null, cmin: null, cmax: null });
+  }, [updateURL]);
+
+  const clearExamFilters = useCallback(() => {
+    setExamSearch('');
+    setSubjectFilter('all');
+    updateURL({ es: null, subj: null });
+  }, [updateURL]);
 
   // Fetch classes and exams
   const fetchData = useCallback(async () => {
@@ -622,6 +753,33 @@ export default function Results() {
       });
       y += 7;
     });
+
+    // ── Statistics Summary ──────────────────────────────────────────
+    y += 10;
+    if (y > 240) { doc.addPage(); y = 20; }
+
+    const percentages = studentResults.map(r => r.percentage);
+    const avg = percentages.length > 0 ? Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length) : 0;
+    const passCount = percentages.filter(p => p >= passingThreshold).length;
+    const failCount = percentages.length - passCount;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Statistics Summary', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const statLines = [
+      `Class Average: ${avg}%`,
+      `Highest Score: ${Math.max(...percentages)}%`,
+      `Lowest Score: ${Math.min(...percentages)}%`,
+      `Passed (≥${passingThreshold}%): ${passCount}`,
+      `Failed (<${passingThreshold}%): ${failCount}`,
+    ];
+    statLines.forEach(line => {
+      doc.text(line, 14, y);
+      y += 6;
+    });
     
     doc.save(`${selectedClass.className}_results.pdf`);
     setExportModalType(null);
@@ -630,6 +788,11 @@ export default function Results() {
   const exportToExcel = () => {
     if (!selectedClass || studentResults.length === 0) return;
     
+    // Calculate stats
+    const percentages = studentResults.map(r => r.percentage);
+    const avg = Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length);
+    const passCount = percentages.filter(p => p >= passingThreshold).length;
+
     // Create CSV content (Excel compatible)
     const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Total', 'Percentage', 'Grade', 'Date'];
     const rows = studentResults.map((result, index) => [
@@ -643,7 +806,18 @@ export default function Results() {
       result.date
     ]);
     
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    // Append statistics summary
+    const statsRows = [
+      [],
+      ['Statistics Summary'],
+      ['Class Average', `${avg}%`],
+      ['Highest Score', `${Math.max(...percentages)}%`],
+      ['Lowest Score', `${Math.min(...percentages)}%`],
+      [`Passed (≥${passingThreshold}%)`, passCount],
+      [`Failed (<${passingThreshold}%)`, percentages.length - passCount],
+    ];
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(',')), ...statsRows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -657,6 +831,11 @@ export default function Results() {
   const exportToCSV = () => {
     if (!selectedClass || studentResults.length === 0) return;
     
+    // Calculate stats
+    const percentages = studentResults.map(r => r.percentage);
+    const avg = Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length);
+    const passCount = percentages.filter(p => p >= passingThreshold).length;
+
     const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Total', 'Percentage', 'Grade', 'Date'];
     const rows = studentResults.map((result, index) => [
       index + 1,
@@ -669,7 +848,18 @@ export default function Results() {
       result.date
     ]);
     
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    // Append statistics summary
+    const statsRows = [
+      [],
+      ['Statistics Summary'],
+      ['Class Average', `${avg}%`],
+      ['Highest Score', `${Math.max(...percentages)}%`],
+      ['Lowest Score', `${Math.min(...percentages)}%`],
+      [`Passed (≥${passingThreshold}%)`, passCount],
+      [`Failed (<${passingThreshold}%)`, percentages.length - passCount],
+    ];
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(',')), ...statsRows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -738,6 +928,66 @@ export default function Results() {
           </div>
         </div>
 
+        {/* Exam Search & Filter Bar */}
+        {classExamsList.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search exams..."
+                  value={examSearch}
+                  onChange={(e) => {
+                    setExamSearch(e.target.value);
+                    updateURL({ es: e.target.value || null });
+                  }}
+                  className="pl-9"
+                />
+              </div>
+              {/* Subject filter */}
+              {availableSubjects.length > 1 && (
+                <Select
+                  value={subjectFilter}
+                  onValueChange={(v) => {
+                    setSubjectFilter(v);
+                    updateURL({ subj: v === 'all' ? null : v });
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="All Subjects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Subjects</SelectItem>
+                    {availableSubjects.map((subj) => (
+                      <SelectItem key={subj} value={subj}>{subj}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {/* Clear filters */}
+              {examFilterCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearExamFilters}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9 text-xs"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Clear ({examFilterCount})
+                </Button>
+              )}
+            </div>
+
+            {/* Result count */}
+            {examFilterCount > 0 && (
+              <p className="text-sm text-muted-foreground">
+                Showing {filteredExamsList.length} of {classExamsList.length} exams
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Exams List */}
         {classExamsList.length === 0 ? (
           <Card className="p-12 border text-center">
@@ -745,9 +995,19 @@ export default function Results() {
             <h3 className="text-lg font-semibold text-gray-700">No Exams Found</h3>
             <p className="text-gray-500 mt-2">No exams are linked to this class yet.</p>
           </Card>
+        ) : filteredExamsList.length === 0 ? (
+          <Card className="p-12 border text-center">
+            <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-semibold text-gray-700">No Matching Exams</h3>
+            <p className="text-gray-500 mt-2">Try adjusting your search or subject filter.</p>
+            <Button variant="outline" className="mt-4" onClick={clearExamFilters}>
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Clear Filters
+            </Button>
+          </Card>
         ) : (
           <div className="space-y-3">
-            {classExamsList.map((exam) => {
+            {filteredExamsList.map((exam) => {
               const stats = examStats[exam.id];
               const scanned = stats?.scannedCount || 0;
               const avg = stats?.averageScore || 0;
@@ -880,68 +1140,18 @@ export default function Results() {
           </Button>
         </div>
 
-        {/* Results Table */}
-        <Card className="border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-[#fffde7]">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">#</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Student ID</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Student Name</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Score</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Grade</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingStudents ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
-                      <div className="w-6 h-6 border-2 border-[#1a472a] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                      Loading results...
-                    </td>
-                  </tr>
-                ) : studentResults.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
-                      <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p>No results found for this class yet.</p>
-                      <p className="text-sm">Scan answer sheets to generate grades.</p>
-                    </td>
-                  </tr>
-                ) : (
-                  studentResults.map((result, index) => (
-                    <tr 
-                      key={result.studentId} 
-                      className="border-b hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-4 py-4 text-gray-600">{index + 1}</td>
-                      <td className="px-4 py-4 text-gray-900">{result.studentId}</td>
-                      <td className="px-4 py-4 font-medium text-[#1a472a]">{result.studentName}</td>
-                      <td className="px-4 py-4 font-semibold text-gray-900">
-                        {result.score} / {result.totalQuestions}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getGradeColorClass(result.grade)}`}>
-                          {result.grade}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-gray-600">{result.date}</td>
-                      <td className="px-4 py-4">
-                        <Button variant="outline" size="sm" className="text-gray-600">
-                          <Download className="w-4 h-4 mr-1" />
-                          View
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        {/* Sortable Results Table with Pagination */}
+        <ExamScoresTable
+          data={studentResults}
+          loading={loadingStudents}
+          examTitle={selectedExam.title}
+          passingThreshold={passingThreshold}
+          onThresholdChange={handleThresholdChange}
+          onViewStudent={(row) => {
+            // placeholder — can be wired to a detail view later
+            console.log('View student:', row.studentId);
+          }}
+        />
 
         {/* Export Modal */}
         <ConfirmationModal
@@ -968,10 +1178,130 @@ export default function Results() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-        <p className="text-gray-600 mt-1">View and export grading results by class</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+        </div>
       </div>
+
+      {/* Class Search & Filter Bar */}
+      {classResults.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search classes..."
+                value={classSearch}
+                onChange={(e) => {
+                  setClassSearch(e.target.value);
+                  updateURL({ cs: e.target.value || null });
+                }}
+                className="pl-9"
+              />
+            </div>
+            {/* Filters toggle */}
+            <Button
+              variant={showClassFilters ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowClassFilters(!showClassFilters)}
+              className={showClassFilters ? 'bg-[#1a472a] hover:bg-[#2d6b47] text-white' : ''}
+            >
+              <Filter className="h-4 w-4 mr-1.5" />
+              Filters
+              {classFilterCount > 0 && (
+                <Badge className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0 h-4 min-w-[16px] rounded-full">
+                  {classFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </div>
+
+          {/* Collapsible class filter panel */}
+          {showClassFilters && (
+            <Card className="p-4 border">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-[#1a472a]">Filter by Average Score</h4>
+                {classFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearClassFilters}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 text-xs"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Min Average %</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="0"
+                    value={classMinAvg}
+                    onChange={(e) => {
+                      setClassMinAvg(e.target.value);
+                      updateURL({ cmin: e.target.value || null });
+                    }}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Max Average %</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="100"
+                    value={classMaxAvg}
+                    onChange={(e) => {
+                      setClassMaxAvg(e.target.value);
+                      updateURL({ cmax: e.target.value || null });
+                    }}
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+              {/* Active filter badges */}
+              {classFilterCount > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {classSearch.trim() && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Search: &ldquo;{classSearch}&rdquo;
+                      <button onClick={() => { setClassSearch(''); updateURL({ cs: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                    </Badge>
+                  )}
+                  {classMinAvg !== '' && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Min: {classMinAvg}%
+                      <button onClick={() => { setClassMinAvg(''); updateURL({ cmin: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                    </Badge>
+                  )}
+                  {classMaxAvg !== '' && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Max: {classMaxAvg}%
+                      <button onClick={() => { setClassMaxAvg(''); updateURL({ cmax: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Result count */}
+          {classFilterCount > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Showing {filteredClassResults.length} of {classResults.length} classes
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Class Cards */}
       {classResults.length === 0 ? (
@@ -980,9 +1310,19 @@ export default function Results() {
           <h3 className="text-lg font-semibold text-gray-700">No Classes Found</h3>
           <p className="text-gray-500 mt-2">Create a class and add students to start grading exams.</p>
         </Card>
+      ) : filteredClassResults.length === 0 ? (
+        <Card className="p-12 border text-center">
+          <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <h3 className="text-lg font-semibold text-gray-700">No Matching Classes</h3>
+          <p className="text-gray-500 mt-2">Try adjusting your search or filters.</p>
+          <Button variant="outline" className="mt-4" onClick={clearClassFilters}>
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Clear Filters
+          </Button>
+        </Card>
       ) : (
         <div className="space-y-4">
-          {classResults.map((classResult) => {
+          {filteredClassResults.map((classResult) => {
             return (
               <Card
                 key={classResult.classId}
@@ -1004,12 +1344,18 @@ export default function Results() {
                   <ChevronRight className="w-5 h-5 text-gray-400" />
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 grid grid-cols-2 gap-3">
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-500">Total Students</p>
                     <p className="text-lg font-bold text-[#1a472a] flex items-center gap-1">
                       <Users className="w-4 h-4" />
                       {classResult.totalStudents}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Class Average</p>
+                    <p className="text-lg font-bold text-[#1a472a]">
+                      {classResult.scannedCount > 0 ? `${classResult.averageScore}%` : '—'}
                     </p>
                   </div>
                 </div>

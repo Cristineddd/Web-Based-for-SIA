@@ -471,8 +471,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           // Draw ID bubble sample positions as blue dots with column/row annotations
           // This lets us verify the grid is properly aligned with the ID bubbles
           const layout = getTemplateLayout(exam.num_items);
-          for (let col = 0; col < 9; col++) {
-            for (let row = 0; row < 9; row++) {
+          for (let col = 0; col < 10; col++) {
+            for (let row = 0; row < 10; row++) {
               const nx = layout.id.firstColNX + col * layout.id.colSpacingNX;
               const ny = layout.id.firstRowNY + row * layout.id.rowSpacingNY;
               // Bilinear interpolation (same as mapToPixel)
@@ -1314,10 +1314,10 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     console.log(`[ID] First bubble px=(${Math.round(firstIdPx.px)},${Math.round(firstIdPx.py)}), Last bubble px=(${Math.round(lastIdPx.px)},${Math.round(lastIdPx.py)})`);
     console.log(`[ID] Frame: TL=(${Math.round(markers.topLeft.x)},${Math.round(markers.topLeft.y)}) BR=(${Math.round(markers.bottomRight.x)},${Math.round(markers.bottomRight.y)}) size=${Math.round(frameW)}x${Math.round(frameH)}`);
 
-    for (let col = 0; col < 10; col++) {
+    for (let col = 0; col < 9; col++) {
       const fills: number[] = []; // raw brightness values (lower = darker)
 
-      for (let row = 0; row < 10; row++) {
+      for (let row = 0; row < 9; row++) {
         const nx = id.firstColNX + col * id.colSpacingNX;
         const ny = id.firstRowNY + row * id.rowSpacingNY;
         const { px, py } = mapToPixel(markers, nx, ny);

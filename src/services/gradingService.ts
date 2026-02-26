@@ -24,6 +24,7 @@ import {
   DuplicateScoreDetectionService,
   DuplicateScoreMatch,
 } from './duplicateScoreDetectionService';
+import { GradeAuditService } from './gradeAuditService';
 
 
 export interface StudentGrade {
@@ -214,6 +215,35 @@ export class GradingService {
           overriddenBy: gradeData.graded_by,
           overrideReason: gradeData.override_reason || 'Faculty override — no reason provided',
         });
+
+        // Audit: grade override
+        await GradeAuditService.logGradeOverride(
+          {
+            userId: gradeData.graded_by,
+            userEmail: gradeData.graded_by,
+            gradeId,
+            studentId: gradeData.student_id,
+            examId: gradeData.exam_id,
+            classId: gradeData.class_id,
+          },
+          duplicateCheck.duplicateMatch.existingGradeId,
+          { score: duplicateCheck.duplicateMatch.existingScore },
+          GradeAuditService.buildSnapshot(grade),
+          gradeData.override_reason || 'Faculty override — no reason provided'
+        );
+      } else {
+        // Audit: new grade created
+        await GradeAuditService.logGradeCreated(
+          {
+            userId: gradeData.graded_by,
+            userEmail: gradeData.graded_by,
+            gradeId,
+            studentId: gradeData.student_id,
+            examId: gradeData.exam_id,
+            classId: gradeData.class_id,
+          },
+          GradeAuditService.buildSnapshot(grade)
+        );
       }
 
       return { success: true, data: grade };
@@ -529,6 +559,30 @@ export class GradingService {
       const updatedDoc = await getDoc(gradeRef);
       const data = updatedDoc.data() as StudentGrade;
 
+      // Audit: grade updated — capture before/after diff
+      const beforeSnapshot = GradeAuditService.buildSnapshot(existingData);
+      const afterSnapshot = GradeAuditService.buildSnapshot({
+        score: data.score,
+        max_score: data.max_score,
+        percentage: data.percentage,
+        letter_grade: data.letter_grade,
+        status: data.status,
+        is_final: data.is_final,
+        comments: data.comments,
+      });
+      await GradeAuditService.logGradeUpdated(
+        {
+          userId: updates.updated_by,
+          userEmail: updates.updated_by,
+          gradeId,
+          studentId: existingData.student_id,
+          examId: existingData.exam_id,
+          classId: existingData.class_id,
+        },
+        beforeSnapshot,
+        afterSnapshot
+      );
+
       return { success: true, data };
     } catch (error) {
       console.error('Error updating grade:', error);
@@ -539,7 +593,7 @@ export class GradingService {
   /**
    * Delete a grade record
    */
-  static async deleteGrade(gradeId: string): Promise<{
+  static async deleteGrade(gradeId: string, deletedBy?: string): Promise<{
     success: boolean;
     error?: string;
   }> {
@@ -551,7 +605,24 @@ export class GradingService {
         return { success: false, error: `Grade with ID ${gradeId} not found` };
       }
 
+      const existingData = gradeDoc.data() as StudentGrade;
+
       await deleteDoc(gradeRef);
+
+      // Audit: grade deleted — capture the values at time of deletion
+      const userId = deletedBy || existingData.graded_by || 'unknown';
+      await GradeAuditService.logGradeDeleted(
+        {
+          userId,
+          userEmail: userId,
+          gradeId,
+          studentId: existingData.student_id,
+          examId: existingData.exam_id,
+          classId: existingData.class_id,
+        },
+        GradeAuditService.buildSnapshot(existingData)
+      );
+
       return { success: true };
     } catch (error) {
       console.error('Error deleting grade:', error);

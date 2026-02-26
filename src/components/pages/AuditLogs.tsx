@@ -28,7 +28,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { AuditLogger } from '@/services/auditLogger';
-import { AuditLog, ActivityType } from '@/types/audit';
+import { AuditLog, ActivityType, GradeSnapshot } from '@/types/audit';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Download,
@@ -48,6 +48,12 @@ const ACTIVITY_TYPES: ActivityType[] = [
   'exam_deleted',
   'admin_action',
   'settings_changed',
+  'grade_created',
+  'grade_updated',
+  'grade_deleted',
+  'grade_override',
+  'score_submitted',
+  'score_override',
 ];
 
 export default function AuditLogsViewer() {
@@ -138,6 +144,12 @@ export default function AuditLogsViewer() {
       exam_deleted: 'bg-red-50 text-red-700',
       admin_action: 'bg-orange-50 text-orange-700',
       settings_changed: 'bg-gray-50 text-gray-700',
+      grade_created: 'bg-emerald-50 text-emerald-700',
+      grade_updated: 'bg-amber-50 text-amber-700',
+      grade_deleted: 'bg-rose-50 text-rose-700',
+      grade_override: 'bg-violet-50 text-violet-700',
+      score_submitted: 'bg-cyan-50 text-cyan-700',
+      score_override: 'bg-fuchsia-50 text-fuchsia-700',
     };
 
     const labels: Record<ActivityType, string> = {
@@ -150,6 +162,12 @@ export default function AuditLogsViewer() {
       exam_deleted: 'Exam Deleted',
       admin_action: 'Admin Action',
       settings_changed: 'Settings Changed',
+      grade_created: 'Grade Created',
+      grade_updated: 'Grade Updated',
+      grade_deleted: 'Grade Deleted',
+      grade_override: 'Grade Override',
+      score_submitted: 'Score Submitted',
+      score_override: 'Score Override',
     };
 
     return (
@@ -159,9 +177,72 @@ export default function AuditLogsViewer() {
     );
   };
 
+  /** Whether a log entry is grade-related and may have before/after values */
+  const isGradeActivity = (activity: ActivityType): boolean =>
+    activity === 'grade_created' ||
+    activity === 'grade_updated' ||
+    activity === 'grade_deleted' ||
+    activity === 'grade_override' ||
+    activity === 'score_submitted' ||
+    activity === 'score_override';
+
+  /** Render before/after diff inline for grade logs */
+  const renderGradeDiff = (before?: GradeSnapshot, after?: GradeSnapshot) => {
+    if (!before && !after) return null;
+
+    const rows: { label: string; old?: string | number | boolean; new?: string | number | boolean }[] = [];
+    const keys: (keyof GradeSnapshot)[] = ['score', 'max_score', 'percentage', 'letter_grade', 'status', 'is_final'];
+
+    for (const key of keys) {
+      const bv = before?.[key];
+      const av = after?.[key];
+      if (bv !== undefined || av !== undefined) {
+        if (bv !== av) {
+          rows.push({ label: key.replace('_', ' '), old: bv, new: av });
+        }
+      }
+    }
+
+    if (rows.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+
+    return (
+      <div className="space-y-0.5">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-1 text-xs">
+            <span className="font-medium capitalize">{r.label}:</span>
+            {r.old !== undefined && (
+              <span className="line-through text-red-500">{String(r.old)}</span>
+            )}
+            {r.old !== undefined && r.new !== undefined && <span>→</span>}
+            {r.new !== undefined && (
+              <span className="text-green-600 font-medium">{String(r.new)}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  /** Plain text version for CSV export */
+  const formatDiffForCsv = (before?: GradeSnapshot, after?: GradeSnapshot): string => {
+    if (!before && !after) return '-';
+    const parts: string[] = [];
+    const keys: (keyof GradeSnapshot)[] = ['score', 'max_score', 'percentage', 'letter_grade', 'status', 'is_final'];
+    for (const key of keys) {
+      const bv = before?.[key];
+      const av = after?.[key];
+      if (bv !== undefined || av !== undefined) {
+        if (bv !== av) {
+          parts.push(`${key}: ${bv ?? '—'} → ${av ?? '—'}`);
+        }
+      }
+    }
+    return parts.length > 0 ? parts.join('; ') : '-';
+  };
+
   const downloadLogs = () => {
     const csv = [
-      ['Timestamp', 'Admin', 'Activity', 'Description', 'Status', 'File', 'File Size', 'Error'],
+      ['Timestamp', 'Admin', 'Activity', 'Description', 'Status', 'File', 'File Size', 'Changes', 'Error'],
       ...filteredLogs.map((log) => [
         new Date(log.timestamp).toLocaleString(),
         log.adminEmail,
@@ -170,6 +251,7 @@ export default function AuditLogsViewer() {
         log.status,
         log.fileName || '-',
         log.fileSize ? `${(log.fileSize / 1024).toFixed(2)} KB` : '-',
+        formatDiffForCsv(log.beforeValues, log.afterValues),
         log.errorMessage || '-',
       ]),
     ]
@@ -206,12 +288,12 @@ export default function AuditLogsViewer() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Audit Logs</h1>
         <p className="text-muted-foreground mt-1">
-          Monitor all upload and administrative activities
+          Monitor all upload, administrative, and grade modification activities
         </p>
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -258,6 +340,26 @@ export default function AuditLogsViewer() {
           <CardContent>
             <div className="text-2xl font-bold">
               {logs.filter((l) => l.activity === 'file_upload').length}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Grade Modifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-600">
+              {logs.filter((l) =>
+                l.activity === 'grade_created' ||
+                l.activity === 'grade_updated' ||
+                l.activity === 'grade_deleted' ||
+                l.activity === 'grade_override' ||
+                l.activity === 'score_submitted' ||
+                l.activity === 'score_override'
+              ).length}
             </div>
           </CardContent>
         </Card>
@@ -359,6 +461,7 @@ export default function AuditLogsViewer() {
                     <TableHead>Description</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>File/Entity</TableHead>
+                    <TableHead>Changes</TableHead>
                     <TableHead>Size</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -385,6 +488,12 @@ export default function AuditLogsViewer() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {log.fileName || log.entityName || '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {isGradeActivity(log.activity)
+                          ? renderGradeDiff(log.beforeValues, log.afterValues)
+                          : <span className="text-xs text-muted-foreground">—</span>
+                        }
                       </TableCell>
                       <TableCell className="text-sm">
                         {log.fileSize ? `${(log.fileSize / 1024).toFixed(2)} KB` : '-'}

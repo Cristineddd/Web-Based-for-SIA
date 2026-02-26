@@ -15,7 +15,7 @@ import {
   QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { AuditLog, AuditLogQuery, ActivityType } from '@/types/audit';
+import { AuditLog, AuditLogQuery, ActivityType, GradeSnapshot } from '@/types/audit';
 
 const AUDIT_LOGS_COLLECTION = 'auditLogs';
 const LOG_RETENTION_DAYS = 90; // Keep logs for 90 days
@@ -42,6 +42,8 @@ export class AuditLogger {
       metadata?: Record<string, unknown>;
       status?: 'success' | 'failed' | 'pending';
       errorMessage?: string;
+      beforeValues?: GradeSnapshot;
+      afterValues?: GradeSnapshot;
     }
   ): Promise<AuditLog | null> {
     try {
@@ -67,6 +69,8 @@ export class AuditLogger {
         status: options?.status || 'success',
         errorMessage: options?.errorMessage,
         metadata: options?.metadata,
+        beforeValues: options?.beforeValues || null,
+        afterValues: options?.afterValues || null,
         createdAt: serverTimestamp(),
         expiresAt: Timestamp.fromDate(expiresAt),
       };
