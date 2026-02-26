@@ -46,12 +46,13 @@ describe('Record Validation Guard Service', () => {
       expect(result.errors.some((e) => e.field === 'student_id')).toBe(true);
     });
 
-    test('should reject grade with invalid score range', async () => {
+    test('should reject grade with score exceeding max_score', async () => {
       const invalidGrade = {
         student_id: 'STU001',
         exam_id: 'EXAM001',
         class_id: 'CLASS001',
-        score: 150, // Out of range
+        score: 150, // Exceeds max_score
+        max_score: 100,
         grade_letter: 'B',
         recorded_by: 'TEACHER001',
       };
@@ -60,7 +61,41 @@ describe('Record Validation Guard Service', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.errors.some((e) => e.field === 'score')).toBe(true);
-      expect(result.errors.some((e) => e.message.includes('between 0 and 100'))).toBe(true);
+      expect(result.errors.some((e) => e.message.includes('cannot exceed max score'))).toBe(true);
+    });
+
+    test('should reject grade with negative score', async () => {
+      const invalidGrade = {
+        student_id: 'STU001',
+        exam_id: 'EXAM001',
+        class_id: 'CLASS001',
+        score: -5,
+        grade_letter: 'F',
+        recorded_by: 'TEACHER001',
+      };
+
+      const result = await RecordValidationGuardService.validateGradeRecord(invalidGrade);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some((e) => e.field === 'score')).toBe(true);
+      expect(result.errors.some((e) => e.message.includes('cannot be negative'))).toBe(true);
+    });
+
+    test('should reject grade with invalid max_score', async () => {
+      const invalidGrade = {
+        student_id: 'STU001',
+        exam_id: 'EXAM001',
+        class_id: 'CLASS001',
+        score: 50,
+        max_score: 0, // Invalid — must be positive
+        grade_letter: 'C',
+        recorded_by: 'TEACHER001',
+      };
+
+      const result = await RecordValidationGuardService.validateGradeRecord(invalidGrade);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some((e) => e.field === 'max_score')).toBe(true);
     });
 
     test('should reject grade with invalid letter grade', async () => {

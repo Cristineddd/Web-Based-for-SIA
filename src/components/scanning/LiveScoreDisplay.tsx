@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -13,8 +12,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { AlertCircle, TrendingUp, TrendingDown, Users, Activity } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { AlertCircle, AlertTriangle, TrendingUp, TrendingDown, Users, Activity, Copy } from 'lucide-react';
 import { ScanningService } from '@/services/scanningService';
+import { DuplicateScoreDetectionService } from '@/services/duplicateScoreDetectionService';
 import { ScannedResult, ExamStatistics } from '@/types/scanning';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -70,6 +76,15 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
   const getScorePercentage = (score: number) => {
     return ((score / totalQuestions) * 100).toFixed(1);
   };
+
+  // Build a set of student IDs that appear more than once in the score list.
+  // These represent in-batch duplicates (same student scanned multiple times).
+  const duplicateStudentIds = useMemo(() => {
+    const inBatch = DuplicateScoreDetectionService.detectInBatchDuplicates(
+      scores.map((s, i) => ({ studentId: s.studentId, index: i }))
+    );
+    return new Set(inBatch.keys());
+  }, [scores]);
 
   if (loading) {
     return (
@@ -170,6 +185,17 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
           </div>
         </CardHeader>
         <CardContent>
+          {/* Duplicate warning banner */}
+          {duplicateStudentIds.size > 0 && (
+            <Alert className="mb-4 border-amber-200 bg-amber-50">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-800">
+                <strong>{duplicateStudentIds.size}</strong> student{duplicateStudentIds.size !== 1 ? 's have' : ' has'} multiple
+                scanned scores for this exam. Duplicates are highlighted below.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {scores.length === 0 ? (
             <div className="text-center py-12">
               <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -188,10 +214,14 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {scores.map((result) => (
+                  {scores.map((result) => {
+                    const isDuplicate = duplicateStudentIds.has(result.studentId);
+                    return (
                     <TableRow
                       key={result.id}
-                      className="animate-in fade-in-0 slide-in-from-top-1"
+                      className={`animate-in fade-in-0 slide-in-from-top-1 ${
+                        isDuplicate ? 'bg-amber-50/60' : ''
+                      }`}
                     >
                       <TableCell className="font-medium">
                         {result.studentId}
@@ -199,6 +229,21 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
                           <Badge variant="destructive" className="ml-2">
                             Unrecognized
                           </Badge>
+                        )}
+                        {isDuplicate && !result.isNullId && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="ml-2 border-amber-400 text-amber-700 bg-amber-50">
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Duplicate
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>This student has multiple scores for this exam.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </TableCell>
                       <TableCell className={getScoreColor(result.score)}>
@@ -218,7 +263,8 @@ export default function LiveScoreDisplay({ examId, totalQuestions }: LiveScoreDi
                         {formatDistanceToNow(new Date(result.scannedAt), { addSuffix: true })}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

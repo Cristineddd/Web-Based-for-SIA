@@ -21,11 +21,78 @@ import {
   ExamStatistics,
   AnswerChoice,
 } from '@/types/scanning';
+import {
+  DuplicateScoreDetectionService,
+  DuplicateScoreMatch,
+} from './duplicateScoreDetectionService';
+import { getExamById } from './examService';
 
 const SCANNED_RESULTS_COLLECTION = 'scannedResults';
 const NULL_ID_ALERTS_COLLECTION = 'nullIdAlerts';
 
+/** Validation error returned by scanning validation */
+export interface ScanValidationError {
+  field: string;
+  message: string;
+}
+
 export class ScanningService {
+  /**
+   * Validate scanned result inputs before saving.
+   * Returns an array of validation errors (empty means valid).
+   */
+  static validateScannedInput(
+    examId: string,
+    studentId: string,
+    answers: AnswerChoice[],
+    answerKey: AnswerChoice[],
+    userId: string,
+    isNullId: boolean
+  ): ScanValidationError[] {
+    const errors: ScanValidationError[] = [];
+
+    // Exam ID is always required
+    if (!examId || typeof examId !== 'string' || !examId.trim()) {
+      errors.push({ field: 'examId', message: 'Exam ID is required' });
+    }
+
+    // Student ID required unless it's a null-ID scan
+    if (!isNullId) {
+      if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
+        errors.push({ field: 'studentId', message: 'Student ID is required for non-null-ID scans' });
+      }
+    }
+
+    // User ID (scanner) is required
+    if (!userId || typeof userId !== 'string' || !userId.trim()) {
+      errors.push({ field: 'userId', message: 'User ID (scanner) is required' });
+    }
+
+    // Answer key must be non-empty
+    if (!answerKey || !Array.isArray(answerKey) || answerKey.length === 0) {
+      errors.push({ field: 'answerKey', message: 'Answer key is required and must contain at least one item' });
+    }
+
+    // Answers must be an array (can be empty – unanswered sheet)
+    if (!answers || !Array.isArray(answers)) {
+      errors.push({ field: 'answers', message: 'Answers must be an array' });
+    }
+
+    // If both arrays exist, warn on length mismatch (not a blocker, but notable)
+    if (
+      answers && Array.isArray(answers) &&
+      answerKey && Array.isArray(answerKey) &&
+      answers.length !== answerKey.length
+    ) {
+      // This is a warning-level issue – we still allow saving since calculateScore
+      // handles the mismatch by using Math.min of both lengths
+      console.warn(
+        `[ScanningService] Answer count (${answers.length}) does not match answer key length (${answerKey.length})`
+      );
+    }
+
+    return errors;
+  }
   /**
    * Save scanned result
    */
@@ -36,9 +103,70 @@ export class ScanningService {
     answerKey: AnswerChoice[],
     userId: string,
     isNullId: boolean = false,
-    choicePoints?: { [choice: string]: number }
-  ): Promise<{ success: boolean; data?: ScannedResult; error?: string }> {
+    choicePoints?: { [choice: string]: number },
+    forceOverride: boolean = false
+  ): Promise<{
+    success: boolean;
+    data?: ScannedResult;
+    error?: string;
+    is_duplicate?: boolean;
+    duplicate_match?: DuplicateScoreMatch;
+  }> {
     try {
+      // ── Input Validation ────────────────────────────────────────
+      const validationErrors = this.validateScannedInput(
+        examId, studentId, answers, answerKey, userId, isNullId
+      );
+      if (validationErrors.length > 0) {
+        const messages = validationErrors.map((e) => `${e.field}: ${e.message}`).join('; ');
+        return {
+          success: false,
+          error: `Validation failed — ${messages}`,
+        };
+      }
+
+      // Verify the exam actually exists
+      try {
+        const examExists = await getExamById(examId);
+        if (!examExists) {
+          return {
+            success: false,
+            error: `Exam ID "${examId}" does not exist. Cannot save scanned result.`,
+          };
+        }
+      } catch {
+        // If the check itself fails (e.g. network), log but don't block
+        console.warn(`[ScanningService] Exam existence check failed for ${examId} — proceeding`);
+      }
+      // ── End Input Validation ────────────────────────────────────
+
+      // ── Duplicate Score Detection ───────────────────────────────
+      if (!isNullId) {
+        const duplicateCheck =
+          await DuplicateScoreDetectionService.checkForDuplicateScannedResult(
+            studentId,
+            examId
+          );
+
+        if (duplicateCheck.isDuplicate && duplicateCheck.duplicateMatch) {
+          if (!forceOverride) {
+            return {
+              success: false,
+              error: DuplicateScoreDetectionService.formatDuplicateError(
+                duplicateCheck.duplicateMatch
+              ),
+              is_duplicate: true,
+              duplicate_match: duplicateCheck.duplicateMatch,
+            };
+          }
+          // Faculty chose to override – the old result stays in DB as history
+          console.log(
+            `[ScanningService] Duplicate override for student ${studentId} on exam ${examId}`
+          );
+        }
+      }
+      // ── End Duplicate Detection ─────────────────────────────────
+
       const score = this.calculateScore(answers, answerKey, choicePoints);
       const resultId = `result_${examId}_${studentId}_${Date.now()}`;
       const now = new Date().toISOString();
