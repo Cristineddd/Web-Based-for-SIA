@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, FileText, Eye, Archive } from "lucide-react";
+import { Plus, Search, FileText, Eye, Archive, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
+import { EditExamModal } from "@/components/modals/EditExamModal";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   createExam,
@@ -57,6 +58,7 @@ export default function Exams() {
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [duplicateExamData, setDuplicateExamData] = useState<ExamFormData | null>(null);
+  const [editingExam, setEditingExam] = useState<ExamWithStatus | null>(null);
 
   useEffect(() => {
     const title = searchParams.get("title");
@@ -398,6 +400,14 @@ export default function Exams() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+                        onClick={() => setEditingExam(exam)}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-primary"
                         onClick={() => setArchiveId(exam.id)}
                       >
@@ -418,6 +428,23 @@ export default function Exams() {
         onClose={() => setShowCreateModal(false)}
         onCreateExam={handleCreateExam}
       />
+
+      {/* Edit Exam Modal */}
+      {editingExam && (
+        <EditExamModal
+          isOpen={!!editingExam}
+          onClose={() => setEditingExam(null)}
+          exam={editingExam}
+          onExamUpdated={(updatedExam) => {
+            setExams((prev) =>
+              prev.map((e) =>
+                e.id === updatedExam.id ? { ...e, ...updatedExam } : e,
+              ),
+            );
+            setEditingExam(null);
+          }}
+        />
+      )}
 
       {/* Archive Dialog */}
       <AlertDialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>

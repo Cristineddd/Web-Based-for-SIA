@@ -22,6 +22,7 @@ import { db, auth } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
 import { toast } from "sonner";
 import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
+import { EditExamModal } from "@/components/modals/EditExamModal";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -45,6 +46,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   });
   const [hasTemplate, setHasTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     async function fetchExam() {
@@ -282,7 +284,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl sm:text-3xl font-bold text-foreground truncate">
             {exam.title}
           </h1>
@@ -290,6 +292,13 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             ID: {exam.id}
           </p>
         </div>
+        <button
+          onClick={() => setShowEditModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors text-sm"
+        >
+          <Edit2 className="w-4 h-4" />
+          Edit
+        </button>
       </div>
 
       {/* Exam Information */}
@@ -423,6 +432,16 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           })}
         </div>
       </div>
+
+      {/* Edit Exam Modal */}
+      {exam && (
+        <EditExamModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          exam={exam}
+          onExamUpdated={(updatedExam) => setExam(updatedExam)}
+        />
+      )}
     </div>
   );
 }
