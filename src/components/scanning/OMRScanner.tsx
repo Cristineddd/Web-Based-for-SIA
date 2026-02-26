@@ -25,6 +25,8 @@ import { ScanningService } from '@/services/scanningService';
 import { getClassById, getClasses, Class, Student } from '@/services/classService';
 import { toast } from 'sonner';
 import { AnswerChoice } from '@/types/scanning';
+import { DuplicateScoreMatch } from '@/services/duplicateScoreDetectionService';
+import { DuplicateScoreOverrideDialog } from '@/components/modals/DuplicateScoreOverrideDialog';
 
 interface OMRScannerProps {
   examId: string;
@@ -66,6 +68,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   const [multipleAnswerQuestions, setMultipleAnswerQuestions] = useState<number[]>([]);
   const [idDoubleShadeColumns, setIdDoubleShadeColumns] = useState<number[]>([]);
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    message: string;
+    match: DuplicateScoreMatch;
+  } | null>(null);
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
 
   // Load exam data
   useEffect(() => {
@@ -1526,6 +1533,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       if (result.success) {
         toast.success('Scan saved successfully!');
         setRecentScans(prev => [scanResult, ...prev.slice(0, 9)]);
+        setDuplicateWarning(null);
         
         // Reset for next scan
         setScanResult(null);
@@ -1538,6 +1546,14 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         setCapturedImage(null);
         setMode('camera');
         startCamera();
+      } else if (result.is_duplicate && result.duplicate_match) {
+        // Show duplicate override dialog with full match details
+        setDuplicateWarning({
+          message: result.error || 'Duplicate score detected.',
+          match: result.duplicate_match,
+        });
+        setShowOverrideDialog(true);
+        toast.error('Duplicate score detected – this student already has a score for this exam.');
       } else {
         toast.error(result.error || 'Failed to save scan');
       }
@@ -1547,6 +1563,61 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Override duplicate and save anyway (faculty action)
+  // Called from the DuplicateScoreOverrideDialog with a reason
+  const saveScanResultWithOverride = async (overrideReason: string) => {
+    if (!scanResult || !user || !exam) return;
+
+    console.log(`[OMRScanner] Faculty override by ${user.id}, reason: ${overrideReason}`);
+    setSaving(true);
+    try {
+      const isNullId = !detectedStudentId || detectedStudentId === '0000000000';
+
+      const result = await ScanningService.saveScannedResult(
+        examId,
+        detectedStudentId || `NULL_${Date.now()}`,
+        detectedAnswers as AnswerChoice[],
+        answerKey,
+        user.id,
+        isNullId,
+        exam.choicePoints,
+        true // forceOverride
+      );
+
+      if (result.success) {
+        toast.success('Duplicate overridden — new score saved successfully.');
+        setRecentScans((prev) => [scanResult, ...prev.slice(0, 9)]);
+        setShowOverrideDialog(false);
+        setDuplicateWarning(null);
+
+        // Reset for next scan
+        setScanResult(null);
+        setDetectedAnswers([]);
+        setDetectedStudentId('');
+        setMatchedStudent(null);
+        setStudentIdError(null);
+        setMultipleAnswerQuestions([]);
+        setIdDoubleShadeColumns([]);
+        setCapturedImage(null);
+        setMode('camera');
+        startCamera();
+      } else {
+        toast.error(result.error || 'Failed to save override');
+      }
+    } catch (error) {
+      console.error('Error overriding duplicate:', error);
+      toast.error('Failed to override duplicate scan');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Cancel duplicate override (dismiss dialog without saving)
+  const cancelDuplicateOverride = () => {
+    setShowOverrideDialog(false);
+    setDuplicateWarning(null);
   };
 
   // Edit detected answer
@@ -2021,7 +2092,56 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             </div>
           </Card>
 
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center gap-4 flex-wrap">
+
+            {/* Duplicate Warning Inline Banner (summary) */}
+            {duplicateWarning && (
+              <div className="w-full mb-2">
+                <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-amber-800">Duplicate Score Detected</p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        This student already has a recorded score for this exam:
+                        <span className="font-bold"> {duplicateWarning.match.existingScore}/{duplicateWarning.match.existingMaxScore} ({duplicateWarning.match.existingPercentage}%)</span>.
+                      </p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        You can override the existing score or discard this scan.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelDuplicateOverride}
+                    >
+                      Discard
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                      onClick={() => setShowOverrideDialog(true)}
+                    >
+                      Override Duplicate
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Duplicate Score Override Dialog (modal with reason input) */}
+            <DuplicateScoreOverrideDialog
+              open={showOverrideDialog}
+              duplicateMatch={duplicateWarning?.match ?? null}
+              newScore={scanResult?.score ?? 0}
+              newMaxScore={scanResult?.totalQuestions ?? 0}
+              onOverride={saveScanResultWithOverride}
+              onCancel={cancelDuplicateOverride}
+              isLoading={saving}
+            />
+
             <Button variant="outline" onClick={() => {
               setScanResult(null);
               setDetectedAnswers([]);

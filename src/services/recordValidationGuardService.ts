@@ -6,6 +6,8 @@
  */
 
 import { StudentService } from './studentService';
+import { getExamById } from './examService';
+import { getClassById } from './classService';
 
 export interface ValidationError {
   field: string;
@@ -19,6 +21,7 @@ export interface GradeRecord {
   exam_id: string;
   class_id: string;
   score: number;
+  max_score?: number;
   grade_letter?: string;
   recorded_by: string;
   recorded_at?: string;
@@ -96,20 +99,37 @@ export class RecordValidationGuardService {
         severity: 'error',
         value: record.score,
       });
-    } else if (typeof record.score !== 'number') {
+    } else if (typeof record.score !== 'number' || isNaN(record.score)) {
       errors.push({
         field: 'score',
-        message: 'Score must be a number',
+        message: 'Score must be a valid number',
         severity: 'error',
         value: record.score,
       });
-    } else if (record.score < 0 || record.score > 100) {
+    } else if (record.score < 0) {
       errors.push({
         field: 'score',
-        message: 'Score must be between 0 and 100',
+        message: 'Score cannot be negative',
         severity: 'error',
         value: record.score,
       });
+    } else if (record.max_score !== undefined && record.max_score !== null) {
+      // If max_score is provided, validate score does not exceed it
+      if (typeof record.max_score !== 'number' || isNaN(record.max_score) || record.max_score <= 0) {
+        errors.push({
+          field: 'max_score',
+          message: 'Max score must be a positive number',
+          severity: 'error',
+          value: record.max_score,
+        });
+      } else if (record.score > record.max_score) {
+        errors.push({
+          field: 'score',
+          message: `Score (${record.score}) cannot exceed max score (${record.max_score})`,
+          severity: 'error',
+          value: record.score,
+        });
+      }
     }
 
     if (!record.recorded_by || typeof record.recorded_by !== 'string') {
@@ -144,9 +164,16 @@ export class RecordValidationGuardService {
       }
 
       try {
-        // Assuming ExamService has a getExamById method
-        // Note: Exam existence check may emit warnings but not block saves
-        console.log(`[Validation] Exam ID ${record.exam_id} - verification skipped (cross-module dependency)`);
+        // Validate exam existence
+        const examExists = await getExamById(record.exam_id);
+        if (!examExists) {
+          errors.push({
+            field: 'exam_id',
+            message: `Exam ID "${record.exam_id}" does not exist in the system`,
+            severity: 'error',
+            value: record.exam_id,
+          });
+        }
       } catch (error) {
         warnings.push({
           field: 'exam_id',
@@ -157,9 +184,16 @@ export class RecordValidationGuardService {
       }
 
       try {
-        // Check if class exists
-        // Note: Class existence check may emit warnings but not block saves
-        console.log(`[Validation] Class ID ${record.class_id} - verification skipped (cross-module dependency)`);
+        // Validate class existence
+        const classExists = await getClassById(record.class_id);
+        if (!classExists) {
+          errors.push({
+            field: 'class_id',
+            message: `Class ID "${record.class_id}" does not exist in the system`,
+            severity: 'error',
+            value: record.class_id,
+          });
+        }
       } catch (error) {
         warnings.push({
           field: 'class_id',
@@ -294,9 +328,16 @@ export class RecordValidationGuardService {
       }
 
       try {
-        // Check if class exists
-        // Note: Class existence check may emit warnings but not block saves
-        console.log(`[Validation] Class ID ${record.class_id} - verification skipped (cross-module dependency)`);
+        // Validate class existence for attendance
+        const classExists = await getClassById(record.class_id);
+        if (!classExists) {
+          errors.push({
+            field: 'class_id',
+            message: `Class ID "${record.class_id}" does not exist in the system`,
+            severity: 'error',
+            value: record.class_id,
+          });
+        }
       } catch (error) {
         warnings.push({
           field: 'class_id',
@@ -429,13 +470,25 @@ export class RecordValidationGuardService {
             });
           }
         } else if (record.report_type === 'class') {
-          // Check if class exists
-          // Note: Class existence check may emit warnings but not block saves
-          console.log(`[Validation] Class ID ${record.entity_id} - verification skipped (cross-module dependency)`);
+          const classExists = await getClassById(record.entity_id);
+          if (!classExists) {
+            errors.push({
+              field: 'entity_id',
+              message: `Class ID "${record.entity_id}" does not exist in the system`,
+              severity: 'error',
+              value: record.entity_id,
+            });
+          }
         } else if (record.report_type === 'exam') {
-          // Check if exam exists
-          // Note: Exam existence check may emit warnings but not block saves
-          console.log(`[Validation] Exam ID ${record.entity_id} - verification skipped (cross-module dependency)`);
+          const examExists = await getExamById(record.entity_id);
+          if (!examExists) {
+            errors.push({
+              field: 'entity_id',
+              message: `Exam ID "${record.entity_id}" does not exist in the system`,
+              severity: 'error',
+              value: record.entity_id,
+            });
+          }
         }
       } catch (error) {
         warnings.push({
