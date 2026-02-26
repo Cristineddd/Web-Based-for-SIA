@@ -45,11 +45,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import ExamScoresTable from '@/components/pages/ExamScoresTable';
+import ExportFilterPanel, { ExportDataRow, ExportFormat } from '@/components/pages/ExportFilterPanel';
 import { exportClassResultsToExcel } from '@/services/excelExportService';
 import { generateClassResultsPdf, generateClassSummaryPdf, ExportMetadata } from '@/services/pdfReportService';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { batchExportExams, BatchExportFormat, BatchExportProgress } from '@/services/batchExportService';
+import { ReportHistoryService } from '@/services/reportHistoryService';
 
 // Types for our component
 interface ClassResult {
@@ -108,99 +110,45 @@ function getGradeColorClass(grade: string): string {
   }
 }
 
-// Confirmation Modal Component
-function ConfirmationModal({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  type,
-  className: _className 
-}: { 
-  isOpen: boolean; 
-  onClose: () => void; 
-  onConfirm: () => void; 
-  type: 'PDF' | 'Excel' | 'CSV';
-  className: string;
-}) {
-  if (!isOpen) return null;
-
-  const iconColors = {
-    PDF: 'text-red-500',
-    Excel: 'text-green-600',
-    CSV: 'text-green-700',
-  };
-
-  const buttonColors = {
-    PDF: 'bg-red-500 hover:bg-red-600',
-    Excel: 'bg-green-600 hover:bg-green-700',
-    CSV: 'bg-green-700 hover:bg-green-800',
-  };
-
-  const Icon = type === 'PDF' ? FileText : type === 'Excel' ? FileSpreadsheet : Table2;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-        <div className="flex items-start gap-4">
-          <div className={`p-3 rounded-lg bg-gray-100 ${iconColors[type]}`}>
-            <Icon className="w-6 h-6" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">Export to {type}</h3>
-            <p className="text-sm text-gray-500 mt-1">Confirm export action</p>
-          </div>
-        </div>
-        
-        <div className="mt-4">
-          <p className="text-gray-700">
-            You are about to export class results to <strong>{type}</strong> format.
-          </p>
-          <p className="text-gray-600 text-sm mt-2">
-            The file will be downloaded to your device. Do you want to continue?
-          </p>
-        </div>
-
-        <div className="flex gap-3 mt-6 justify-end">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="px-6"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={onConfirm}
-            className={`${buttonColors[type]} text-white px-6 flex items-center gap-2`}
-          >
-            <Download className="w-4 h-4" />
-            Export {type}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Send Results Panel Component
-function SendResultsPanel({
-  isOpen,
-  onClose,
-  className,
-  students,
-  onSend
-}: {
+interface SendResultsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   className: string;
   students: StudentResult[];
   onSend: () => void;
-}) {
+  examTitle?: string;
+  subject?: string;
+  passingThreshold: number;
+  instructorName?: string;
+  instructorEmail?: string;
+}
+
+interface DeliveryResult {
+  to: string;
+  success: boolean;
+  error?: string | null;
+}
+
+function SendResultsPanel({
+  isOpen,
+  onClose,
+  className,
+  students,
+  onSend,
+  examTitle,
+  subject,
+  passingThreshold,
+  instructorName,
+  instructorEmail,
+}: SendResultsPanelProps) {
   const [emails, setEmails] = useState<{ [studentId: string]: string }>({});
   const [isSending, setIsSending] = useState(false);
-  const [isSent, setIsSent] = useState(false);
+  const [sendProgress, setSendProgress] = useState<{ sent: number; failed: number; total: number } | null>(null);
+  const [deliveryResults, setDeliveryResults] = useState<DeliveryResult[] | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Pre-populate with default emails format
     const defaultEmails: { [studentId: string]: string } = {};
     students.forEach(student => {
       defaultEmails[student.studentId] = student.email || `${student.studentId}@gordoncollege.edu.ph`;
@@ -208,19 +156,73 @@ function SendResultsPanel({
     setEmails(defaultEmails);
   }, [students]);
 
+  // Reset state when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      setDeliveryResults(null);
+      setSendProgress(null);
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
+
   const handleSend = async () => {
     setIsSending(true);
-    // Simulate sending emails
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSending(false);
-    setIsSent(true);
-    setTimeout(() => {
-      onSend();
-      setIsSent(false);
-    }, 2000);
+    setErrorMessage(null);
+    setSendProgress({ sent: 0, failed: 0, total: students.length });
+
+    try {
+      const payload = {
+        className,
+        examTitle: examTitle || 'Exam',
+        passingThreshold,
+        subject,
+        instructorName,
+        instructorEmail,
+        students: students.map((s) => ({
+          studentId: s.studentId,
+          studentName: s.studentName,
+          email: emails[s.studentId] || `${s.studentId}@gordoncollege.edu.ph`,
+          score: s.score,
+          totalQuestions: s.totalQuestions,
+          percentage: s.percentage,
+          grade: s.grade,
+          date: s.date,
+        })),
+      };
+
+      const res = await fetch('/api/send-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.error || 'Failed to send emails.');
+        setIsSending(false);
+        return;
+      }
+
+      setSendProgress({ sent: data.sent, failed: data.failed, total: data.total });
+      setDeliveryResults(data.results || []);
+      setIsSending(false);
+
+      if (data.failed === 0) {
+        setTimeout(() => { onSend(); }, 3000);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Network error';
+      setErrorMessage(msg);
+      setIsSending(false);
+    }
   };
 
   if (!isOpen) return null;
+
+  const sentCount = sendProgress?.sent ?? 0;
+  const failedCount = sendProgress?.failed ?? 0;
+  const isDone = deliveryResults !== null;
 
   return (
     <div className="fixed inset-y-0 right-0 w-full max-w-md bg-[#1a472a] shadow-xl z-50 flex flex-col">
@@ -230,7 +232,7 @@ function SendResultsPanel({
           <Mail className="w-5 h-5" />
           <div>
             <h2 className="font-semibold">Send Results via Email</h2>
-            <p className="text-sm text-green-200">{className} Results</p>
+            <p className="text-sm text-green-200">{className} — {examTitle || 'Exam'}</p>
           </div>
         </div>
         <button onClick={onClose} className="text-white hover:text-green-200">
@@ -238,29 +240,102 @@ function SendResultsPanel({
         </button>
       </div>
 
-      {/* Content */} 
+      {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {isSent ? (
-          <div className="flex flex-col items-center justify-center h-full">
-            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-              <Check className="w-8 h-8 text-green-600" />
+        {/* Error banner */}
+        {errorMessage && (
+          <div className="bg-red-900/40 border border-red-700 rounded-lg p-3 mb-4">
+            <p className="text-sm text-red-200 font-medium">Failed to send</p>
+            <p className="text-xs text-red-300 mt-1">{errorMessage}</p>
+          </div>
+        )}
+
+        {isDone ? (
+          /* Delivery report */
+          <div className="space-y-4">
+            <div className="flex flex-col items-center text-center py-4">
+              {failedCount === 0 ? (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                    <Check className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">All Emails Sent!</h3>
+                  <p className="text-green-200 mt-1">
+                    Results delivered to {sentCount} student{sentCount !== 1 ? 's' : ''}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
+                    <Info className="w-8 h-8 text-yellow-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">Delivery Complete</h3>
+                  <p className="text-green-200 mt-1">
+                    {sentCount} sent &bull; {failedCount} failed
+                  </p>
+                </>
+              )}
             </div>
-            <h3 className="text-xl font-semibold text-white">Emails Sent!</h3>
-            <p className="text-green-200 mt-2">Results sent to {students.length} students</p>
+
+            {/* Per-student results */}
+            {deliveryResults && deliveryResults.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-green-300 font-medium">Delivery Details</p>
+                {deliveryResults.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2">
+                    <span className="text-sm text-white truncate mr-2">{r.to}</span>
+                    {r.success ? (
+                      <span className="text-xs text-green-300 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Sent
+                      </span>
+                    ) : (
+                      <span className="text-xs text-red-300 flex items-center gap-1" title={r.error || ''}>
+                        <X className="w-3 h-3" /> Failed
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              onClick={onClose}
+              className="w-full bg-white text-green-800 hover:bg-gray-100 font-semibold py-3 mt-4"
+            >
+              Close
+            </Button>
           </div>
         ) : (
+          /* Email form — each student gets their own score email */
           <>
             <div className="bg-blue-900/30 rounded-lg p-3 mb-4 flex items-start gap-2">
               <Info className="w-4 h-4 text-blue-300 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-blue-100">
-                Enter Gmail addresses for each student. Scores will be sent automatically to their inboxes.
+                Each student will receive a personalized email with their individual exam score and grade.
               </p>
             </div>
 
+            {/* Sending progress */}
+            {isSending && sendProgress && (
+              <div className="bg-white/10 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  <p className="text-sm text-white font-medium">Sending emails to students...</p>
+                </div>
+                <Progress
+                  value={((sentCount + failedCount) / (sendProgress.total || 1)) * 100}
+                  className="h-2"
+                />
+                <p className="text-xs text-green-200 mt-2">
+                  {sentCount + failedCount} of {sendProgress.total} processed
+                </p>
+              </div>
+            )}
+
             <div className="space-y-3">
               {students.map(student => (
-                <div 
-                  key={student.studentId} 
+                <div
+                  key={student.studentId}
                   className="bg-white rounded-lg p-3"
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -276,8 +351,9 @@ function SendResultsPanel({
                     type="email"
                     value={emails[student.studentId] || ''}
                     onChange={(e) => setEmails(prev => ({ ...prev, [student.studentId]: e.target.value }))}
-                    placeholder="Enter email address"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50"
+                    placeholder="Enter student email address"
+                    disabled={isSending}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 disabled:opacity-50"
                   />
                 </div>
               ))}
@@ -287,7 +363,7 @@ function SendResultsPanel({
       </div>
 
       {/* Footer */}
-      {!isSent && (
+      {!isDone && (
         <div className="p-4 border-t border-green-800">
           <Button
             onClick={handleSend}
@@ -297,7 +373,7 @@ function SendResultsPanel({
             {isSending ? (
               <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-green-800 border-t-transparent rounded-full animate-spin" />
-                Sending...
+                Sending to students...
               </span>
             ) : (
               <span className="flex items-center gap-2">
@@ -398,6 +474,18 @@ export default function Results() {
         },
         onProgress: (p) => setBatchProgress({ ...p }),
       });
+      // Log to report history
+      if (user?.instructorId) {
+        ReportHistoryService.logReport({
+          instructorId: user.instructorId,
+          reportType: 'batch-export',
+          format: 'Batch',
+          title: `Batch Export — ${selectedClass.className} (${selectedExams.length} exams)`,
+          className: selectedClass.className,
+          studentCount: fullClass.students?.length || 0,
+          description: `${format.toUpperCase()} batch export of ${selectedExams.length} exams`,
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('Batch export failed:', err);
     } finally {
@@ -764,24 +852,23 @@ export default function Results() {
     }
   }, [classes]);
 
-  // Export functions
-  const exportToPDF = async () => {
-    if (!selectedClass || studentResults.length === 0) return;
+  // ── Filtered export handler (SS4 3.1) ──────────────────────────────────
+  // Receives only the filtered rows from ExportFilterPanel and exports them.
+  const handleFilteredExport = useCallback(
+    async (filteredRows: ExportDataRow[], format: ExportFormat) => {
+      if (!selectedClass || filteredRows.length === 0) return;
 
-    const meta: ExportMetadata = {
-      instructorName: user?.displayName || undefined,
-      subject: selectedExam?.subject || undefined,
-      section: selectedClass?.schedule || undefined,
-      numItems: selectedExam?.num_items || undefined,
-      choicesPerItem: selectedExam?.choices_per_item || undefined,
-      examDate: selectedExam?.created_at || undefined,
-      examCode: selectedExam?.examCode || undefined,
-    };
+      const meta: ExportMetadata = {
+        instructorName: user?.displayName || undefined,
+        subject: selectedExam?.subject || undefined,
+        section: selectedClass?.schedule || undefined,
+        numItems: selectedExam?.num_items || undefined,
+        choicesPerItem: selectedExam?.choices_per_item || undefined,
+        examDate: selectedExam?.created_at || undefined,
+        examCode: selectedExam?.examCode || undefined,
+      };
 
-    await generateClassResultsPdf(
-      selectedClass.className,
-      selectedExam?.title || 'Exam',
-      studentResults.map((r) => ({
+      const rows = filteredRows.map((r) => ({
         studentId: r.studentId,
         studentName: r.studentName,
         score: r.score,
@@ -790,115 +877,152 @@ export default function Results() {
         grade: r.grade,
         date: r.date,
         email: r.email,
-      })),
-      passingThreshold,
-      meta,
-    );
-    setExportModalType(null);
-  };
+      }));
 
-  const exportToExcel = () => {
-    if (!selectedClass || studentResults.length === 0) return;
+      switch (format) {
+        case 'PDF':
+          await generateClassResultsPdf(
+            selectedClass.className,
+            selectedExam?.title || 'Exam',
+            rows,
+            passingThreshold,
+            meta,
+          );
+          // Log to report history
+          if (user?.instructorId) {
+            ReportHistoryService.logReport({
+              instructorId: user.instructorId,
+              reportType: 'class-results',
+              format: 'PDF',
+              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              className: selectedClass.className,
+              examTitle: selectedExam?.title,
+              studentCount: filteredRows.length,
+              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+            }).catch(() => {});
+          }
+          break;
 
-    const meta = {
-      instructorName: user?.displayName || undefined,
-      subject: selectedExam?.subject || undefined,
-      section: selectedClass?.schedule || undefined,
-      numItems: selectedExam?.num_items || undefined,
-      choicesPerItem: selectedExam?.choices_per_item || undefined,
-      examDate: selectedExam?.created_at || undefined,
-      examCode: selectedExam?.examCode || undefined,
-    };
+        case 'Excel':
+          exportClassResultsToExcel(
+            selectedClass.className,
+            rows,
+            passingThreshold,
+            meta,
+          );
+          // Log to report history
+          if (user?.instructorId) {
+            ReportHistoryService.logReport({
+              instructorId: user.instructorId,
+              reportType: 'class-results',
+              format: 'Excel',
+              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              className: selectedClass.className,
+              examTitle: selectedExam?.title,
+              studentCount: filteredRows.length,
+              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+            }).catch(() => {});
+          }
+          break;
 
-    exportClassResultsToExcel(
-      selectedClass.className,
-      studentResults.map((r) => ({
-        studentId: r.studentId,
-        studentName: r.studentName,
-        score: r.score,
-        totalQuestions: r.totalQuestions,
-        percentage: r.percentage,
-        grade: r.grade,
-        date: r.date,
-        email: r.email,
-      })),
-      passingThreshold,
-      meta,
-    );
-    setExportModalType(null);
-  };
+        case 'CSV': {
+          const percentages = filteredRows.map((r) => r.percentage);
+          const avg = Math.round(
+            percentages.reduce((a, b) => a + b, 0) / percentages.length,
+          );
+          const passCount = percentages.filter(
+            (p) => p >= passingThreshold,
+          ).length;
 
-  const exportToCSV = () => {
-    if (!selectedClass || studentResults.length === 0) return;
-    
-    // Calculate stats
-    const percentages = studentResults.map(r => r.percentage);
-    const avg = Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length);
-    const passCount = percentages.filter(p => p >= passingThreshold).length;
+          const headers = [
+            '#',
+            'Student ID',
+            'Student Name',
+            'Score',
+            'Total',
+            'Percentage',
+            'Grade',
+            'Date',
+          ];
+          const csvRows = filteredRows.map((result, index) => [
+            index + 1,
+            result.studentId,
+            `"${result.studentName}"`,
+            result.score,
+            result.totalQuestions,
+            `${result.percentage}%`,
+            result.grade,
+            result.date,
+          ]);
 
-    const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Total', 'Percentage', 'Grade', 'Date'];
-    const rows = studentResults.map((result, index) => [
-      index + 1,
-      result.studentId,
-      `"${result.studentName}"`,
-      result.score,
-      result.totalQuestions,
-      `${result.percentage}%`,
-      result.grade,
-      result.date
-    ]);
-    
-    // Metadata header rows
-    const metaLines: string[] = [];
-    if (user?.displayName) metaLines.push(`Instructor,${user.displayName}`);
-    if (selectedExam?.subject) metaLines.push(`Subject,${selectedExam.subject}`);
-    if (selectedClass?.schedule) metaLines.push(`Section,"${selectedClass.schedule}"`);
-    if (selectedExam?.num_items) metaLines.push(`No. of Items,${selectedExam.num_items}`);
-    if (selectedExam?.choices_per_item) metaLines.push(`Choices per Item,${selectedExam.choices_per_item}`);
-    if (selectedExam?.examCode) metaLines.push(`Exam Code,${selectedExam.examCode}`);
-    if (selectedExam?.created_at) metaLines.push(`Exam Date,${selectedExam.created_at}`);
+          const metaLines: string[] = [];
+          if (user?.displayName)
+            metaLines.push(`Instructor,${user.displayName}`);
+          if (selectedExam?.subject)
+            metaLines.push(`Subject,${selectedExam.subject}`);
+          if (selectedClass?.schedule)
+            metaLines.push(`Section,"${selectedClass.schedule}"`);
+          if (selectedExam?.num_items)
+            metaLines.push(`No. of Items,${selectedExam.num_items}`);
+          if (selectedExam?.choices_per_item)
+            metaLines.push(
+              `Choices per Item,${selectedExam.choices_per_item}`,
+            );
+          if (selectedExam?.examCode)
+            metaLines.push(`Exam Code,${selectedExam.examCode}`);
+          if (selectedExam?.created_at)
+            metaLines.push(`Exam Date,${selectedExam.created_at}`);
 
-    // Append statistics summary
-    const statsRows = [
-      [],
-      ['Statistics Summary'],
-      ['Class Average', `${avg}%`],
-      ['Highest Score', `${Math.max(...percentages)}%`],
-      ['Lowest Score', `${Math.min(...percentages)}%`],
-      [`Passed (\u2265${passingThreshold}%)`, passCount],
-      [`Failed (<${passingThreshold}%)`, percentages.length - passCount],
-    ];
+          const statsBlk = [
+            [],
+            ['Statistics Summary'],
+            ['Class Average', `${avg}%`],
+            ['Highest Score', `${Math.max(...percentages)}%`],
+            ['Lowest Score', `${Math.min(...percentages)}%`],
+            [`Passed (\u2265${passingThreshold}%)`, passCount],
+            [
+              `Failed (<${passingThreshold}%)`,
+              percentages.length - passCount,
+            ],
+          ];
 
-    const csvContent = [
-      ...metaLines,
-      '',
-      headers.join(','),
-      ...rows.map(r => r.join(',')),
-      ...statsRows.map(r => r.join(','))
-    ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedClass.className}_results.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setExportModalType(null);
-  };
+          const csvContent = [
+            ...metaLines,
+            '',
+            headers.join(','),
+            ...csvRows.map((r) => r.join(',')),
+            ...statsBlk.map((r) => r.join(',')),
+          ].join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${selectedClass.className}_results.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+          // Log to report history
+          if (user?.instructorId) {
+            ReportHistoryService.logReport({
+              instructorId: user.instructorId,
+              reportType: 'class-results',
+              format: 'CSV',
+              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              className: selectedClass.className,
+              examTitle: selectedExam?.title,
+              studentCount: filteredRows.length,
+              fileSizeBytes: blob.size,
+              fileName: `${selectedClass.className}_results.csv`,
+              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+            }).catch(() => {});
+          }
+          break;
+        }
+      }
 
-  const handleExportConfirm = () => {
-    switch (exportModalType) {
-      case 'PDF':
-        exportToPDF();
-        break;
-      case 'Excel':
-        exportToExcel();
-        break;
-      case 'CSV':
-        exportToCSV();
-        break;
-    }
-  };
+      setExportModalType(null);
+    },
+    [selectedClass, selectedExam, passingThreshold, user],
+  );
 
   // Render loading state
   if (loading) {
@@ -1286,13 +1410,16 @@ export default function Results() {
           }}
         />
 
-        {/* Export Modal */}
-        <ConfirmationModal
+        {/* Export Filter Panel (SS4 3.1) */}
+        <ExportFilterPanel
           isOpen={exportModalType !== null}
           onClose={() => setExportModalType(null)}
-          onConfirm={handleExportConfirm}
-          type={exportModalType || 'PDF'}
+          format={exportModalType}
+          data={studentResults}
+          passingThreshold={passingThreshold}
+          onExport={handleFilteredExport}
           className={selectedClass.className}
+          examTitle={selectedExam?.title}
         />
 
         {/* Send Results Panel */}
@@ -1301,7 +1428,26 @@ export default function Results() {
           onClose={() => setShowSendPanel(false)}
           className={selectedClass.className}
           students={studentResults}
-          onSend={() => setShowSendPanel(false)}
+          onSend={() => {
+            setShowSendPanel(false);
+            // Log email delivery to report history
+            if (user?.instructorId) {
+              ReportHistoryService.logReport({
+                instructorId: user.instructorId,
+                reportType: 'email-delivery',
+                format: 'Email',
+                title: `Email Delivery — ${selectedClass.className}`,
+                className: selectedClass.className,
+                examTitle: selectedExam?.title,
+                studentCount: studentResults.length,
+              }).catch(() => {});
+            }
+          }}
+          examTitle={selectedExam?.title}
+          subject={selectedExam?.subject}
+          passingThreshold={passingThreshold}
+          instructorName={user?.displayName || undefined}
+          instructorEmail={user?.email || undefined}
         />
       </div>
     );
@@ -1336,6 +1482,16 @@ export default function Results() {
                 undefined,
                 meta,
               );
+              // Log to report history
+              if (user?.instructorId) {
+                ReportHistoryService.logReport({
+                  instructorId: user.instructorId,
+                  reportType: 'class-summary',
+                  format: 'PDF',
+                  title: 'Class Summary Report',
+                  studentCount: classResults.reduce((sum, c) => sum + c.totalStudents, 0),
+                }).catch(() => {});
+              }
             }}
           >
             <FileText className="w-4 h-4 mr-1.5" />
