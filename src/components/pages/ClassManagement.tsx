@@ -286,6 +286,12 @@ export default function ClassManagement() {
       return;
     }
 
+    // Validate student ID format: exactly 9 digits
+    if (!/^\d{9}$/.test(newStudent.student_id.trim())) {
+      toast.error("Student ID Must follow YYYYXXXXX format (e.g. 202300001)");
+      return;
+    }
+
     // Check for duplicate student ID
     if (students.some(s => s.student_id === newStudent.student_id)) {
       toast.error(`Student ID "${newStudent.student_id}" already exists in this class`);
@@ -826,25 +832,35 @@ export default function ClassManagement() {
                       <span className="text-destructive">*</span>
                     </label>
                     <Input
-                      placeholder="Enter student ID"
+                      placeholder="e.g. 202300001"
                       value={newStudent.student_id}
+                      maxLength={9}
                       onChange={(e) =>
                         setNewStudent({
                           ...newStudent,
-                          student_id: e.target.value,
+                          student_id: e.target.value.replace(/\D/g, '').slice(0, 9),
                         })
                       }
                       className={`transition-all duration-200 ${
-                        newStudent.student_id.trim() 
-                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200' 
+                        /^\d{9}$/.test(newStudent.student_id.trim())
+                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200'
+                          : newStudent.student_id.trim()
+                          ? 'border-red-400 focus:border-red-400 focus:ring-red-200'
                           : 'focus:border-primary focus:ring-primary/20'
                       }`}
                     />
                     {newStudent.student_id.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        Valid student ID
-                      </div>
+                      /^\d{9}$/.test(newStudent.student_id.trim()) ? (
+                        <div className="flex items-center gap-1 text-xs text-green-600">
+                          <div className="w-2 h-2 bg-green-500 rounded-full" />
+                          Valid student ID
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-xs text-red-500">
+                          <div className="w-2 h-2 bg-red-400 rounded-full" />
+                          Must follow YYYYXXXXX format (e.g. 202300001)
+                        </div>
+                      )
                     )}
                   </div>
                   
@@ -1141,25 +1157,35 @@ export default function ClassManagement() {
                       <span className="text-destructive">*</span>
                     </label>
                     <Input
-                      placeholder="Enter student ID"
+                      placeholder="e.g. 202300001"
                       value={newStudent.student_id}
+                      maxLength={9}
                       onChange={(e) =>
                         setNewStudent({
                           ...newStudent,
-                          student_id: e.target.value,
+                          student_id: e.target.value.replace(/\D/g, '').slice(0, 9),
                         })
                       }
                       className={`transition-all duration-200 ${
-                        newStudent.student_id.trim() 
-                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200' 
+                        /^\d{9}$/.test(newStudent.student_id.trim())
+                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200'
+                          : newStudent.student_id.trim()
+                          ? 'border-red-400 focus:border-red-400 focus:ring-red-200'
                           : 'focus:border-primary focus:ring-primary/20'
                       }`}
                     />
                     {newStudent.student_id.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        Valid student ID
-                      </div>
+                      /^\d{9}$/.test(newStudent.student_id.trim()) ? (
+                        <div className="flex items-center gap-1 text-xs text-green-600">
+                          <div className="w-2 h-2 bg-green-500 rounded-full" />
+                          Valid student ID
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-xs text-red-500">
+                          <div className="w-2 h-2 bg-red-400 rounded-full" />
+                          Must follow YYYYXXXXX format (e.g. 202300001)
+                        </div>
+                      )
                     )}
                   </div>
                   

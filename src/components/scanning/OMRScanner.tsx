@@ -465,7 +465,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           // This lets us verify the grid is properly aligned with the ID bubbles
           const layout = getTemplateLayout(exam.num_items);
           for (let col = 0; col < 9; col++) {
-            for (let row = 0; row < 10; row++) {
+            for (let row = 0; row < 9; row++) {
               const nx = layout.id.firstColNX + col * layout.id.colSpacingNX;
               const ny = layout.id.firstRowNY + row * layout.id.rowSpacingNY;
               // Bilinear interpolation (same as mapToPixel)
