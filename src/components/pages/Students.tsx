@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { StudentService } from "@/services/studentService";
+import { exportStudentRosterToExcel } from '@/services/excelExportService';
 
 interface Student {
   id: string;
@@ -133,19 +134,27 @@ export default function Students() {
         return;
       }
 
-      const rows = records.map((record) => ({
-        student_id: record.student_id,
-        first_name: record.first_name,
-        last_name: record.last_name,
-        email: record.email || "",
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(rows);
       if (format === "xlsx") {
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Student IDs");
-        XLSX.writeFile(workbook, "student_id_list.xlsx");
+        // Use the formatted Excel export service
+        exportStudentRosterToExcel(
+          records.map((record) => ({
+            student_id: record.student_id,
+            first_name: record.first_name,
+            last_name: record.last_name,
+            email: record.email || "",
+            grade: record.grade || null,
+            section: record.section || null,
+          }))
+        );
       } else {
+        // CSV export
+        const rows = records.map((record) => ({
+          student_id: record.student_id,
+          first_name: record.first_name,
+          last_name: record.last_name,
+          email: record.email || "",
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(rows);
         const csv = XLSX.utils.sheet_to_csv(worksheet);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -158,7 +167,7 @@ export default function Students() {
         URL.revokeObjectURL(url);
       }
 
-      toast.success(`Exported ${rows.length} student ID records`);
+      toast.success(`Exported ${records.length} student ID records`);
     } catch (error) {
       console.error("Error exporting student IDs:", error);
       toast.error("Failed to export student IDs");

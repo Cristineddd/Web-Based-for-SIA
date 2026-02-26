@@ -40,7 +40,6 @@ import {
   TrendingDown,
   BarChart3,
   SlidersHorizontal,
-  FileDown,
   Filter,
   RotateCcw,
   CalendarDays,
@@ -462,40 +461,6 @@ export default function ExamScoresTable({
               <p className="text-2xl font-bold text-[#1a472a]">{stats.medianPercentage}%</p>
             </Card>
             )}
-          </div>
-
-          {/* Export statistics button */}
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-indigo-700 border-indigo-300 hover:bg-indigo-50"
-              onClick={() => {
-                const lines = [
-                  `Statistics Summary — ${examTitle}`,
-                  `Generated: ${new Date().toLocaleDateString()}`,
-                  '',
-                  `Total Students,${stats.total}`,
-                  `Passed,${stats.passCount} (${stats.passRate}%)`,
-                  `Failed,${stats.failCount} (${stats.failRate}%)`,
-                  `Class Average,${stats.avgPercentage}%`,
-                  `Highest Score,${stats.highestPercentage}%`,
-                  `Lowest Score,${stats.lowestPercentage}%`,
-                  `Median Score,${stats.medianPercentage}%`,
-                  `Passing Threshold,${passingThreshold}%`,
-                ];
-                const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${examTitle.replace(/\s+/g, '_')}_statistics.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-            >
-              <FileDown className="h-4 w-4 mr-1.5" />
-              Export Statistics
-            </Button>
           </div>
 
           {/* Pass/fail visual bar + threshold config toggle */}

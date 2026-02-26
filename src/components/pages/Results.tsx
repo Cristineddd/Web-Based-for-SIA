@@ -30,6 +30,8 @@ import {
   Search,
   Filter,
   RotateCcw,
+  Archive,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getClasses, Class } from '@/services/classService';
@@ -42,8 +44,12 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import jsPDF from 'jspdf';
 import ExamScoresTable from '@/components/pages/ExamScoresTable';
+import { exportClassResultsToExcel } from '@/services/excelExportService';
+import { generateClassResultsPdf, generateClassSummaryPdf, ExportMetadata } from '@/services/pdfReportService';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import { batchExportExams, BatchExportFormat, BatchExportProgress } from '@/services/batchExportService';
 
 // Types for our component
 interface ClassResult {
@@ -121,13 +127,13 @@ function ConfirmationModal({
   const iconColors = {
     PDF: 'text-red-500',
     Excel: 'text-green-600',
-    CSV: 'text-green-700'
+    CSV: 'text-green-700',
   };
 
   const buttonColors = {
     PDF: 'bg-red-500 hover:bg-red-600',
     Excel: 'bg-green-600 hover:bg-green-700',
-    CSV: 'bg-green-700 hover:bg-green-800'
+    CSV: 'bg-green-700 hover:bg-green-800',
   };
 
   const Icon = type === 'PDF' ? FileText : type === 'Excel' ? FileSpreadsheet : Table2;
@@ -339,6 +345,68 @@ export default function Results() {
   const [exportModalType, setExportModalType] = useState<'PDF' | 'Excel' | 'CSV' | null>(null);
   const [showSendPanel, setShowSendPanel] = useState(false);
 
+  // ── Batch export state (SS4 2.5) ────────────────────────────────────────
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set());
+  const [batchExporting, setBatchExporting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchExportProgress | null>(null);
+  const [batchFormatPicker, setBatchFormatPicker] = useState(false);
+
+  const toggleExamSelection = useCallback((examId: string) => {
+    setSelectedExamIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(examId)) next.delete(examId);
+      else next.add(examId);
+      return next;
+    });
+  }, []);
+
+  const toggleAllExams = useCallback(() => {
+    if (!classExamsList.length) return;
+    setSelectedExamIds((prev) => {
+      const allIds = classExamsList.map((e) => e.id);
+      const allSelected = allIds.every((id) => prev.has(id));
+      if (allSelected) {
+        return new Set<string>();
+      }
+      return new Set(allIds);
+    });
+  }, [classExamsList]);
+
+  const handleBatchExport = useCallback(async (format: BatchExportFormat) => {
+    if (!selectedClass || selectedExamIds.size === 0) return;
+    const fullClass = classes.find((c) => c.id === selectedClass.classId);
+    if (!fullClass) return;
+
+    const selectedExams = classExamsList.filter((e) => selectedExamIds.has(e.id));
+    if (selectedExams.length === 0) return;
+
+    setBatchExporting(true);
+    setBatchFormatPicker(false);
+    setBatchProgress({ total: selectedExams.length, completed: 0, currentExamTitle: '', step: 'Starting...', percent: 0 });
+
+    try {
+      await batchExportExams({
+        classId: selectedClass.classId,
+        className: selectedClass.className,
+        students: fullClass.students || [],
+        exams: selectedExams,
+        format,
+        passingThreshold,
+        metadata: {
+          instructorName: user?.displayName || undefined,
+          section: selectedClass.schedule || undefined,
+        },
+        onProgress: (p) => setBatchProgress({ ...p }),
+      });
+    } catch (err) {
+      console.error('Batch export failed:', err);
+    } finally {
+      setBatchExporting(false);
+      // Keep progress visible briefly so the user sees "Done!"
+      setTimeout(() => setBatchProgress(null), 1500);
+    }
+  }, [selectedClass, selectedExamIds, classExamsList, classes, passingThreshold, user?.displayName]);
+
   // ── Filter state ────────────────────────────────────────────────────────
   // Class list filters
   const [classSearch, setClassSearch] = useState(searchParams.get('cs') || '');
@@ -535,6 +603,7 @@ export default function Results() {
     setSelectedClass(classResult);
     setSelectedExam(null);
     setStudentResults([]);
+    setSelectedExamIds(new Set());
     setExamStats({});
 
     // Find exams linked to this class
@@ -696,135 +765,66 @@ export default function Results() {
   }, [classes]);
 
   // Export functions
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (!selectedClass || studentResults.length === 0) return;
-    
-    const doc = new jsPDF();
-    // Using doc dimensions internally
-    
-    // Title
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${selectedClass.className} - Results`, 14, 20);
-    
-    // Subtitle
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, 28);
-    doc.text(`Total Students: ${studentResults.length}`, 14, 34);
-    
-    // Table headers
-    const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Grade', 'Date'];
-    const columnWidths = [10, 30, 50, 25, 20, 35];
-    let startX = 14;
-    let y = 45;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    headers.forEach((header, i) => {
-      doc.text(header, startX, y);
-      startX += columnWidths[i];
-    });
-    
-    // Table rows
-    doc.setFont('helvetica', 'normal');
-    y += 8;
-    
-    studentResults.forEach((result, index) => {
-      if (y > 270) {
-        doc.addPage();
-        y = 20;
-      }
-      
-      startX = 14;
-      const row = [
-        (index + 1).toString(),
-        result.studentId,
-        result.studentName,
-        `${result.score}/${result.totalQuestions}`,
-        result.grade,
-        result.date
-      ];
-      
-      row.forEach((cell, i) => {
-        const text = cell.length > 20 ? cell.substring(0, 18) + '...' : cell;
-        doc.text(text, startX, y);
-        startX += columnWidths[i];
-      });
-      y += 7;
-    });
 
-    // ── Statistics Summary ──────────────────────────────────────────
-    y += 10;
-    if (y > 240) { doc.addPage(); y = 20; }
+    const meta: ExportMetadata = {
+      instructorName: user?.displayName || undefined,
+      subject: selectedExam?.subject || undefined,
+      section: selectedClass?.schedule || undefined,
+      numItems: selectedExam?.num_items || undefined,
+      choicesPerItem: selectedExam?.choices_per_item || undefined,
+      examDate: selectedExam?.created_at || undefined,
+      examCode: selectedExam?.examCode || undefined,
+    };
 
-    const percentages = studentResults.map(r => r.percentage);
-    const avg = percentages.length > 0 ? Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length) : 0;
-    const passCount = percentages.filter(p => p >= passingThreshold).length;
-    const failCount = percentages.length - passCount;
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Statistics Summary', 14, y);
-    y += 8;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    const statLines = [
-      `Class Average: ${avg}%`,
-      `Highest Score: ${Math.max(...percentages)}%`,
-      `Lowest Score: ${Math.min(...percentages)}%`,
-      `Passed (≥${passingThreshold}%): ${passCount}`,
-      `Failed (<${passingThreshold}%): ${failCount}`,
-    ];
-    statLines.forEach(line => {
-      doc.text(line, 14, y);
-      y += 6;
-    });
-    
-    doc.save(`${selectedClass.className}_results.pdf`);
+    await generateClassResultsPdf(
+      selectedClass.className,
+      selectedExam?.title || 'Exam',
+      studentResults.map((r) => ({
+        studentId: r.studentId,
+        studentName: r.studentName,
+        score: r.score,
+        totalQuestions: r.totalQuestions,
+        percentage: r.percentage,
+        grade: r.grade,
+        date: r.date,
+        email: r.email,
+      })),
+      passingThreshold,
+      meta,
+    );
     setExportModalType(null);
   };
 
   const exportToExcel = () => {
     if (!selectedClass || studentResults.length === 0) return;
-    
-    // Calculate stats
-    const percentages = studentResults.map(r => r.percentage);
-    const avg = Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length);
-    const passCount = percentages.filter(p => p >= passingThreshold).length;
 
-    // Create CSV content (Excel compatible)
-    const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Total', 'Percentage', 'Grade', 'Date'];
-    const rows = studentResults.map((result, index) => [
-      index + 1,
-      result.studentId,
-      `"${result.studentName}"`,
-      result.score,
-      result.totalQuestions,
-      `${result.percentage}%`,
-      result.grade,
-      result.date
-    ]);
-    
-    // Append statistics summary
-    const statsRows = [
-      [],
-      ['Statistics Summary'],
-      ['Class Average', `${avg}%`],
-      ['Highest Score', `${Math.max(...percentages)}%`],
-      ['Lowest Score', `${Math.min(...percentages)}%`],
-      [`Passed (≥${passingThreshold}%)`, passCount],
-      [`Failed (<${passingThreshold}%)`, percentages.length - passCount],
-    ];
+    const meta = {
+      instructorName: user?.displayName || undefined,
+      subject: selectedExam?.subject || undefined,
+      section: selectedClass?.schedule || undefined,
+      numItems: selectedExam?.num_items || undefined,
+      choicesPerItem: selectedExam?.choices_per_item || undefined,
+      examDate: selectedExam?.created_at || undefined,
+      examCode: selectedExam?.examCode || undefined,
+    };
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(',')), ...statsRows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedClass.className}_results.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportClassResultsToExcel(
+      selectedClass.className,
+      studentResults.map((r) => ({
+        studentId: r.studentId,
+        studentName: r.studentName,
+        score: r.score,
+        totalQuestions: r.totalQuestions,
+        percentage: r.percentage,
+        grade: r.grade,
+        date: r.date,
+        email: r.email,
+      })),
+      passingThreshold,
+      meta,
+    );
     setExportModalType(null);
   };
 
@@ -848,6 +848,16 @@ export default function Results() {
       result.date
     ]);
     
+    // Metadata header rows
+    const metaLines: string[] = [];
+    if (user?.displayName) metaLines.push(`Instructor,${user.displayName}`);
+    if (selectedExam?.subject) metaLines.push(`Subject,${selectedExam.subject}`);
+    if (selectedClass?.schedule) metaLines.push(`Section,"${selectedClass.schedule}"`);
+    if (selectedExam?.num_items) metaLines.push(`No. of Items,${selectedExam.num_items}`);
+    if (selectedExam?.choices_per_item) metaLines.push(`Choices per Item,${selectedExam.choices_per_item}`);
+    if (selectedExam?.examCode) metaLines.push(`Exam Code,${selectedExam.examCode}`);
+    if (selectedExam?.created_at) metaLines.push(`Exam Date,${selectedExam.created_at}`);
+
     // Append statistics summary
     const statsRows = [
       [],
@@ -855,11 +865,17 @@ export default function Results() {
       ['Class Average', `${avg}%`],
       ['Highest Score', `${Math.max(...percentages)}%`],
       ['Lowest Score', `${Math.min(...percentages)}%`],
-      [`Passed (≥${passingThreshold}%)`, passCount],
+      [`Passed (\u2265${passingThreshold}%)`, passCount],
       [`Failed (<${passingThreshold}%)`, percentages.length - passCount],
     ];
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(',')), ...statsRows.map(r => r.join(','))].join('\n');
+    const csvContent = [
+      ...metaLines,
+      '',
+      headers.join(','),
+      ...rows.map(r => r.join(',')),
+      ...statsRows.map(r => r.join(','))
+    ].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -904,9 +920,11 @@ export default function Results() {
     return (
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+            <p className="text-gray-600 mt-1">View and export grading results by class</p>
+          </div>
         </div>
 
         {/* Class Info Bar */}
@@ -915,18 +933,117 @@ export default function Results() {
             onClick={() => {
               setSelectedClass(null);
               setClassExamsList([]);
+              setSelectedExamIds(new Set());
             }}
             className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div>
+          <div className="flex-1">
             <h2 className="text-xl font-bold text-[#1a472a]">{selectedClass.className}</h2>
             <p className="text-gray-600 text-sm">
               {selectedClass.totalStudents} students • {selectedClass.schedule}
             </p>
           </div>
         </div>
+
+        {/* Batch Export Action Bar */}
+        {classExamsList.length > 0 && (
+          <div className="flex items-center justify-between bg-gray-50 border rounded-lg px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Checkbox
+                checked={classExamsList.length > 0 && classExamsList.every((e) => selectedExamIds.has(e.id))}
+                onCheckedChange={toggleAllExams}
+                aria-label="Select all exams"
+              />
+              <span className="text-sm text-gray-700">
+                {selectedExamIds.size > 0
+                  ? `${selectedExamIds.size} exam${selectedExamIds.size > 1 ? 's' : ''} selected`
+                  : 'Select exams for batch export'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 relative">
+              {selectedExamIds.size > 0 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedExamIds(new Set())}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-[#1a472a] hover:bg-[#2d6b47] text-white"
+                    onClick={() => setBatchFormatPicker((v) => !v)}
+                    disabled={batchExporting}
+                  >
+                    <Archive className="w-4 h-4 mr-2" />
+                    Export {selectedExamIds.size} Exam{selectedExamIds.size > 1 ? 's' : ''} as ZIP
+                  </Button>
+                  {/* Format picker dropdown */}
+                  {batchFormatPicker && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[180px]">
+                      <button
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => handleBatchExport('pdf')}
+                      >
+                        <FileText className="w-4 h-4 text-red-500" />
+                        PDF Reports
+                      </button>
+                      <button
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => handleBatchExport('excel')}
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                        Excel Spreadsheets
+                      </button>
+                      <button
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => handleBatchExport('both')}
+                      >
+                        <Download className="w-4 h-4 text-blue-600" />
+                        Both (PDF + Excel)
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Batch Export Progress Modal */}
+        {batchProgress && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <Card className="w-full max-w-md p-6 mx-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#1a472a] flex items-center justify-center">
+                  {batchProgress.percent < 100 ? (
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  ) : (
+                    <Check className="w-5 h-5 text-white" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-[#1a472a]">Batch Export</h3>
+                  <p className="text-sm text-gray-500">
+                    {batchProgress.completed} of {batchProgress.total} exams
+                  </p>
+                </div>
+              </div>
+              <Progress value={batchProgress.percent} className="h-3" />
+              <p className="text-sm text-gray-600 truncate">{batchProgress.step}</p>
+              {batchProgress.percent >= 100 && (
+                <p className="text-sm text-green-600 font-medium">
+                  Download complete!
+                </p>
+              )}
+            </Card>
+          </div>
+        )}
 
         {/* Exam Search & Filter Bar */}
         {classExamsList.length > 0 && (
@@ -1013,15 +1130,31 @@ export default function Results() {
               const avg = stats?.averageScore || 0;
               const total = selectedClass.totalStudents;
               const progressPercent = total > 0 ? Math.round((scanned / total) * 100) : 0;
+              const isSelected = selectedExamIds.has(exam.id);
 
               return (
                 <Card
                   key={exam.id}
-                  className="p-5 border hover:shadow-md transition-shadow cursor-pointer hover:border-[#1a472a]/30"
+                  className={`p-5 border hover:shadow-md transition-shadow cursor-pointer ${
+                    isSelected ? 'border-[#1a472a] bg-green-50/30 ring-1 ring-[#1a472a]/20' : 'hover:border-[#1a472a]/30'
+                  }`}
                   onClick={() => fetchStudentResults(selectedClass, exam)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
+                      {/* Checkbox for multi-select */}
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="flex items-center"
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleExamSelection(exam.id)}
+                          aria-label={`Select ${exam.title}`}
+                        />
+                      </div>
                       <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                         <FileText className="w-6 h-6 text-blue-600" />
                       </div>
@@ -1183,6 +1316,32 @@ export default function Results() {
           <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
           <p className="text-gray-600 mt-1">View and export grading results by class</p>
         </div>
+        {classResults.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-red-300 text-red-600 hover:bg-red-50"
+            onClick={async () => {
+              const meta: ExportMetadata = {
+                instructorName: user?.displayName || undefined,
+              };
+              await generateClassSummaryPdf(
+                classResults.map((c) => ({
+                  className: c.className,
+                  schedule: c.schedule,
+                  totalStudents: c.totalStudents,
+                  scannedCount: c.scannedCount,
+                  averageScore: c.averageScore,
+                })),
+                undefined,
+                meta,
+              );
+            }}
+          >
+            <FileText className="w-4 h-4 mr-1.5" />
+            PDF Summary
+          </Button>
+        )}
       </div>
 
       {/* Class Search & Filter Bar */}
