@@ -157,7 +157,7 @@ export function DuplicateReviewDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
-      <AlertDialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <AlertDialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[85vh] sm:max-h-[80vh] overflow-y-auto">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-xl">
             Duplicate Records Detected

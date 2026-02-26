@@ -25,7 +25,7 @@ const contactInfo = [
   {
     icon: MapPin,
     label: 'Address',
-    value: 'Manila, Philippines',
+    value: 'Olongapo City, Philippines',
     href: '#',
   },
 ];

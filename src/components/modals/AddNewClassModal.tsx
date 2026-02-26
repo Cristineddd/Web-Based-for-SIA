@@ -109,8 +109,8 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-background rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-green-200">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-background rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg w-full max-h-[90vh] overflow-y-auto border border-green-200">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-green-100 bg-gradient-to-r from-green-50 to-emerald-50">
           <div className="flex items-center gap-3">
