@@ -13,13 +13,14 @@ import {
   FilePlus,
   CheckCircle,
   Loader2,
+  Pencil,
 } from "lucide-react";
-import { getExamById, Exam } from "@/services/examService";
+import { getExamById, updateExam, Exam } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
 import { ScanningService } from "@/services/scanningService";
 import { useAuth } from "@/contexts/AuthContext";
 import { db, auth } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { toast } from "sonner";
 import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
 
@@ -37,6 +38,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [scannedPaperCount, setScannedPaperCount] = useState(0);
   const [answerKeyStatus, setAnswerKeyStatus] = useState<AnswerKeyStatus>({
     total: 0,
@@ -46,14 +48,35 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   const [hasTemplate, setHasTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
 
+  // Edit exam state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    subject: "",
+    num_items: 0,
+    choices_per_item: 4,
+    examType: "board" as "board" | "diagnostic",
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   useEffect(() => {
     async function fetchExam() {
       try {
         setLoading(true);
+        setError(null);
         const examData = await getExamById(params.id);
         setExam(examData);
 
         if (examData) {
+          // Pre-populate edit form with current exam data
+          setEditForm({
+            title: examData.title,
+            subject: examData.subject,
+            num_items: examData.num_items,
+            choices_per_item: examData.choices_per_item,
+            examType: examData.examType || "board",
+          });
+
           try {
             const result = await AnswerKeyService.getAnswerKeyByExamId(
               params.id,
@@ -100,6 +123,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         }
       } catch (error) {
         console.error("Error fetching exam:", error);
+        const msg = error instanceof Error ? error.message : "Failed to load exam";
+        setError(msg);
       } finally {
         setLoading(false);
       }
@@ -140,13 +165,71 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           </Link>
           <div>
             <h1 className="text-3xl font-bold text-foreground">
-              Exam not found
+              {error ? "Error loading exam" : "Exam not found"}
             </h1>
+            {error && (
+              <p className="text-sm text-destructive mt-1">{error}</p>
+            )}
           </div>
         </div>
       </div>
     );
   }
+
+  const handleSaveEdit = async () => {
+    if (!editForm.title.trim()) { toast.error("Exam name is required"); return; }
+    if (!editForm.subject.trim()) { toast.error("Subject is required"); return; }
+    if (!editForm.num_items || editForm.num_items < 1) { toast.error("Number of items must be at least 1"); return; }
+
+    try {
+      setIsSavingEdit(true);
+
+      await updateExam(params.id, {
+        title: editForm.title.trim(),
+        subject: editForm.subject.trim(),
+        num_items: editForm.num_items,
+        choices_per_item: editForm.choices_per_item,
+        examType: editForm.examType,
+      });
+
+      // Delete any existing template linked to this exam so a new one can be generated
+      const templateQuery = query(
+        collection(db, "templates"),
+        where("examId", "==", params.id)
+      );
+      const templateSnap = await getDocs(templateQuery);
+      if (!templateSnap.empty) {
+        await Promise.all(templateSnap.docs.map((d) => deleteDoc(d.ref)));
+        setHasTemplate(false);
+        toast.info("Existing template deleted — please generate a new one.");
+      }
+
+      // Update local exam state
+      setExam((prev) =>
+        prev
+          ? {
+              ...prev,
+              title: editForm.title.trim(),
+              subject: editForm.subject.trim(),
+              num_items: editForm.num_items,
+              choices_per_item: editForm.choices_per_item,
+              examType: editForm.examType,
+            }
+          : prev
+      );
+
+      // Update answer key status total to match new num_items
+      setAnswerKeyStatus((prev) => ({ ...prev, total: editForm.num_items }));
+
+      toast.success("Exam updated successfully");
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Error updating exam:", err);
+      toast.error("Failed to update exam");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const handleCreateTemplate = async () => {
     if (!user?.instructorId) {
@@ -185,20 +268,14 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         instructorId: user.instructorId,
         examId: params.id,
         examName: exam.title,
+        examCode: exam.examCode, // Use stored exam code for template validation
         createdAt: serverTimestamp(),
       };
 
       await addDoc(collection(db, 'templates'), templateData);
       
-      // Generate exam code
-      const classPrefix = exam.className 
-        ? exam.className.substring(0, 2).toUpperCase()
-        : 'XX';
-      const examSuffix = exam.title.length >= 2
-        ? exam.title.substring(exam.title.length - 2).toUpperCase().replace(/[^A-Z]/g, '')
-        : exam.title.substring(0, 2).toUpperCase().replace(/[^A-Z]/g, '');
-      const dayDigits = new Date().getDate().toString().padStart(2, '0');
-      const examCode = `${classPrefix}${examSuffix}${dayDigits}`;
+      // Use the exam's stored exam code (unique identifier for this exam)
+      const examCode = exam.examCode || params.id.substring(0, 8).toUpperCase();
       
       await generateTemplatePDF({
         name: exam.title,
@@ -282,7 +359,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl sm:text-3xl font-bold text-foreground truncate">
             {exam.title}
           </h1>
@@ -290,6 +367,14 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             ID: {exam.id}
           </p>
         </div>
+        <button
+          onClick={() => setIsEditing(true)}
+          className="flex items-center gap-2 px-3 py-2 border-2 border-primary text-primary rounded-md font-semibold text-sm hover:bg-primary hover:text-primary-foreground transition-colors flex-shrink-0"
+          title="Edit exam details"
+        >
+          <Pencil className="w-4 h-4" />
+          <span className="hidden sm:inline">Edit Exam</span>
+        </button>
       </div>
 
       {/* Exam Information */}
@@ -330,6 +415,19 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             {exam.subject}
           </p>
         </Card>
+        {exam.examCode && (
+          <Card className="p-3 sm:p-4 border bg-amber-50">
+            <p className="text-[10px] sm:text-xs font-semibold text-amber-700 uppercase mb-1">
+              Exam Code
+            </p>
+            <p className="text-lg sm:text-xl font-mono font-bold text-amber-900">
+              {exam.examCode}
+            </p>
+            <p className="text-[10px] text-amber-600 mt-1">
+              Printed on answer sheets
+            </p>
+          </Card>
+        )}
       </div>
 
       {/* Details Card */}
@@ -423,6 +521,136 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           })}
         </div>
       </div>
+
+      {/* Edit Exam Dialog */}
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="p-1 hover:bg-muted rounded-md"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Exam Name <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Exam name"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Subject / Folder <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editForm.subject}
+                  onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Subject"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Number of Items <span className="text-destructive">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[20, 50, 100].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setEditForm({ ...editForm, num_items: num })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.num_items === num
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Current: {exam.num_items} items
+                </p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Choices per Question</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "4 Choices (A–D)", value: 4 },
+                    { label: "5 Choices (A–E)", value: 5 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.choices_per_item === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Exam Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "Board Exam", value: "board" },
+                    { label: "Diagnostic Test", value: "diagnostic" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() =>
+                        setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })
+                      }
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.examType === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md p-2">
+                ⚠️ Editing this exam will delete any existing answer sheet template so you can generate a new one.
+              </p>
+            </div>
+            <div className="flex gap-3 p-6 border-t">
+              <button
+                onClick={() => setIsEditing(false)}
+                className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

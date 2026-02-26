@@ -1704,6 +1704,24 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
   return (
     <div className="space-y-6">
+      {/* Exam Code Warning Banner */}
+      {exam.examCode && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-amber-900">
+                Expected Exam Code: <span className="font-mono bg-amber-100 px-2 py-0.5 rounded">{exam.examCode}</span>
+              </p>
+              <p className="text-sm text-amber-700 mt-1">
+                Make sure the answer sheets you&apos;re scanning have this code printed on them. 
+                Scanning sheets from a different exam will result in incorrect scores.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

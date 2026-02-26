@@ -38,8 +38,8 @@ export interface ImportValidationResult {
 export class StudentIDValidationService {
   private static readonly MIN_ID_LENGTH = 1;
   private static readonly MAX_ID_LENGTH = 50;
-  private static readonly STUDENT_ID_PATTERN = /^\d{4}-\d{5}$/;
-  private static readonly STUDENT_ID_PATTERN_NO_HYPHEN = /^\d{9}$/; // Accept 9 digits without hyphen
+  private static readonly STUDENT_ID_PATTERN = /^\d{9}$/; // 9 digits without hyphen (e.g., 202311070)
+  private static readonly STUDENT_ID_PATTERN_WITH_HYPHEN = /^\d{4}-\d{5}$/; // Accept YYYY-XXXXX format for input, will normalize
   private static readonly VALIDATION_LOG: Array<{
     timestamp: string;
     action: string;
@@ -49,22 +49,20 @@ export class StudentIDValidationService {
   }> = [];
 
   /**
-   * Format student ID to YYYY-XXXXX format
-   * Accepts both "XXXXXXXXX" (9 digits) and "YYYY-XXXXX" formats
+   * Format student ID to 9-digit format (no dash)
+   * Accepts both "XXXXXXXXX" (9 digits) and "YYYY-XXXXX" formats, normalizes to 9 digits
    */
   static formatStudentId(student_id: string): string {
     const trimmed = student_id.trim();
     
-    // If already in correct format, return as is
+    // If already in correct format (9 digits, no hyphen), return as is
     if (this.STUDENT_ID_PATTERN.test(trimmed)) {
       return trimmed;
     }
     
-    // If 9 digits without hyphen, format to YYYY-XXXXX
-    if (this.STUDENT_ID_PATTERN_NO_HYPHEN.test(trimmed)) {
-      const year = trimmed.substring(0, 4);
-      const sequence = trimmed.substring(4, 9);
-      return `${year}-${sequence}`;
+    // If in YYYY-XXXXX format with hyphen, remove the hyphen to normalize
+    if (this.STUDENT_ID_PATTERN_WITH_HYPHEN.test(trimmed)) {
+      return trimmed.replace('-', '');
     }
     
     // Return as is if format is not recognized
@@ -114,14 +112,14 @@ export class StudentIDValidationService {
     // Accept both formats: YYYY-XXXXX or XXXXXXXXX (9 digits)
     const formattedId = this.formatStudentId(trimmedId);
     
-    // Enforce strict format after formatting: YYYY-XXXXX
+    // Enforce strict format after formatting: 9 digits (no hyphen)
     if (!this.STUDENT_ID_PATTERN.test(formattedId)) {
-      result.error = 'Student ID must be 9 digits (e.g., 202312264) or YYYY-XXXXX format (e.g., 2023-12264)';
+      result.error = 'Student ID must be 9 digits (e.g., 202312264)';
       this.logValidation('validate_format', student_id, 'FAILED', result.error);
       return result;
     }
 
-    const sequenceNumber = Number(formattedId.split('-')[1]);
+    const sequenceNumber = Number(formattedId.substring(4, 9));
     if (sequenceNumber < 1) {
       result.error = 'Student ID sequence must be between 00001 and 99999';
       this.logValidation('validate_format', student_id, 'FAILED', result.error);

@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if the request is from an authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: check if user owns the document (by createdBy field)
+    function isOwner(resource) {
+      return resource.data.createdBy == request.auth.uid;
+    }
+
+    // Exams collection
+    match /exams/{examId} {
+      // Any authenticated user can read any exam (needed for exam panel to load by ID)
+      allow read: if isAuthenticated();
+      // Only creator can write/update/delete
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && isOwner(resource);
+    }
+
+    // Templates collection
+    match /templates/{templateId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && isOwner(resource);
+    }
+
+    // Answer keys collection
+    match /answerKeys/{keyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && isOwner(resource);
+    }
+
+    // Scanned results collection
+    match /scannedResults/{resultId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && isOwner(resource);
+    }
+
+    // Null ID alerts collection
+    match /nullIdAlerts/{alertId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Classes collection
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && isOwner(resource);
+    }
+
+    // Students collection
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && isOwner(resource);
+    }
+
+    // Student grades collection
+    match /studentGrades/{gradeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && isOwner(resource);
+    }
+
+    // Users / instructor profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    match /instructors/{instructorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Audit logs — write-only for authenticated users, read for owner
+    match /auditLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // immutable
+    }
+
+    // Catch-all: deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
