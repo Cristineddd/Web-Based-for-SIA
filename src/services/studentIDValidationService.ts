@@ -36,9 +36,9 @@ export interface ImportValidationResult {
 }
 
 export class StudentIDValidationService {
-  private static readonly MIN_ID_LENGTH = 1;
-  private static readonly MAX_ID_LENGTH = 50;
-  private static readonly STUDENT_ID_PATTERN = /^\d{4}-\d{4}$/;
+  private static readonly MIN_ID_LENGTH = 9;
+  private static readonly MAX_ID_LENGTH = 9;
+  private static readonly STUDENT_ID_PATTERN = /^\d{4}\d{5}$/; // YYYYXXXXX (4-digit year + 5-digit number)
   private static readonly VALIDATION_LOG: Array<{
     timestamp: string;
     action: string;
@@ -87,16 +87,22 @@ export class StudentIDValidationService {
       return result;
     }
 
-    // Enforce strict format: YYYY-XXXX (e.g., 2026-0001)
+    // Enforce strict format: YYYYXXXXX (4-digit year + 5-digit number, e.g., 202300001)
     if (!this.STUDENT_ID_PATTERN.test(trimmedId)) {
-      result.error = 'Student ID must follow YYYY-XXXX format (e.g., 2026-0001)';
+      result.error = 'Student ID must follow YYYYXXXXX format (e.g., 202300001)';
       this.logValidation('validate_format', student_id, 'FAILED', result.error);
       return result;
     }
 
-    const sequenceNumber = Number(trimmedId.split('-')[1]);
-    if (sequenceNumber < 1) {
-      result.error = 'Student ID sequence must be between 0001 and 9999';
+    const year = Number(trimmedId.slice(0, 4));
+    const sequence = Number(trimmedId.slice(4));
+    if (year < 1900 || year > 2100) {
+      result.error = 'Student ID must start with a valid year (e.g., 2023)';
+      this.logValidation('validate_format', student_id, 'FAILED', result.error);
+      return result;
+    }
+    if (sequence < 1) {
+      result.error = 'Student ID sequence number must be at least 00001';
       this.logValidation('validate_format', student_id, 'FAILED', result.error);
       return result;
     }
