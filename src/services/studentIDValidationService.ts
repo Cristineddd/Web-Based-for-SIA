@@ -40,6 +40,8 @@ export class StudentIDValidationService {
   private static readonly MAX_ID_LENGTH = 50;
   private static readonly STUDENT_ID_PATTERN = /^\d{9}$/; // 9 digits without hyphen (e.g., 202311070)
   private static readonly STUDENT_ID_PATTERN_WITH_HYPHEN = /^\d{4}-\d{5}$/; // Accept YYYY-XXXXX format for input, will normalize
+  // Strict email regex: username@domain.tld (minimum 2 char TLD)
+  private static readonly EMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   private static readonly VALIDATION_LOG: Array<{
     timestamp: string;
     action: string;
@@ -47,6 +49,57 @@ export class StudentIDValidationService {
     result: string;
     details?: string;
   }> = [];
+
+  /**
+   * Validate email format - strict validation
+   * Returns true if email is valid, false otherwise
+   */
+  static validateEmail(email: string | null | undefined): { isValid: boolean; error?: string } {
+    if (!email || typeof email !== 'string') {
+      return { isValid: true }; // Email is optional
+    }
+    
+    const trimmed = email.trim();
+    if (trimmed.length === 0) {
+      return { isValid: true }; // Empty email is OK (optional)
+    }
+    
+    // Check basic format
+    if (!this.EMAIL_PATTERN.test(trimmed)) {
+      return { 
+        isValid: false, 
+        error: 'Invalid email format. Must be like: student@gmail.com' 
+      };
+    }
+    
+    // Check for consecutive dots
+    if (trimmed.includes('..')) {
+      return { 
+        isValid: false, 
+        error: 'Email cannot contain consecutive dots' 
+      };
+    }
+    
+    // Check local part doesn't start/end with dot
+    const localPart = trimmed.split('@')[0];
+    if (localPart.startsWith('.') || localPart.endsWith('.')) {
+      return { 
+        isValid: false, 
+        error: 'Email username cannot start or end with a dot' 
+      };
+    }
+    
+    // Check domain part
+    const domainPart = trimmed.split('@')[1];
+    if (domainPart.startsWith('.') || domainPart.startsWith('-') || domainPart.endsWith('-')) {
+      return { 
+        isValid: false, 
+        error: 'Email domain format is invalid' 
+      };
+    }
+    
+    return { isValid: true };
+  }
 
   /**
    * Format student ID to 9-digit format (no dash)
@@ -114,11 +167,28 @@ export class StudentIDValidationService {
     
     // Enforce strict format after formatting: 9 digits (no hyphen)
     if (!this.STUDENT_ID_PATTERN.test(formattedId)) {
-      result.error = 'Student ID must be 9 digits (e.g., 202312264)';
+      result.error = 'Student ID must be exactly 9 digits (e.g., 202312264). No letters allowed.';
       this.logValidation('validate_format', student_id, 'FAILED', result.error);
       return result;
     }
 
+    // Validate year part (first 4 digits must be a valid year starting with 20)
+    const yearPart = formattedId.substring(0, 4);
+    const yearNumber = parseInt(yearPart, 10);
+    
+    if (!yearPart.startsWith('20')) {
+      result.error = 'Student ID must start with 20 (year format, e.g., 2023)';
+      this.logValidation('validate_format', student_id, 'FAILED', result.error);
+      return result;
+    }
+    
+    if (yearNumber < 2000 || yearNumber > 2099) {
+      result.error = 'Student ID year must be between 2000 and 2099';
+      this.logValidation('validate_format', student_id, 'FAILED', result.error);
+      return result;
+    }
+
+    // Validate sequence part (last 5 digits must be between 00001 and 99999)
     const sequenceNumber = Number(formattedId.substring(4, 9));
     if (sequenceNumber < 1) {
       result.error = 'Student ID sequence must be between 00001 and 99999';
@@ -338,10 +408,34 @@ export class StudentIDValidationService {
       // Validate names
       if (!record.first_name || !record.first_name.trim()) {
         recordErrors.push(`Row ${i + 1}: First name is required`);
+      } else {
+        const firstName = record.first_name.trim();
+        if (!/^[a-zA-Z\s]+$/.test(firstName)) {
+          recordErrors.push(`Row ${i + 1}: First name must contain letters only`);
+        } else if (firstName.length < 2) {
+          recordErrors.push(`Row ${i + 1}: First name must be at least 2 characters`);
+        }
       }
+      
       if (!record.last_name || !record.last_name.trim()) {
         recordErrors.push(`Row ${i + 1}: Last name is required`);
+      } else {
+        const lastName = record.last_name.trim();
+        if (!/^[a-zA-Z\s]+$/.test(lastName)) {
+          recordErrors.push(`Row ${i + 1}: Last name must contain letters only`);
+        } else if (lastName.length < 2) {
+          recordErrors.push(`Row ${i + 1}: Last name must be at least 2 characters`);
+        }
       }
+      
+      // Validate email format (optional but must be valid if provided)
+      if (record.email && record.email.trim()) {
+        const emailValidation = this.validateEmail(record.email);
+        if (!emailValidation.isValid) {
+          recordErrors.push(`Row ${i + 1}: ${emailValidation.error}`);
+        }
+      }
+      
       const sectionValue = (record as any).section;
       const gradeValue = (record as any).grade ?? (record as any).year;
       if (!gradeValue || !String(gradeValue).trim()) {

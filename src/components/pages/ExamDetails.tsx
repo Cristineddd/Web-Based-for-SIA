@@ -364,7 +364,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             {exam.title}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground truncate">
-            ID: {exam.id}
+            {exam.examCode || "No exam code"}
           </p>
         </div>
         <button
@@ -525,59 +525,74 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
       {/* Edit Exam Dialog */}
       {isEditing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
+          <div className="bg-white dark:bg-background rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <div>
+                <h2 className="text-xl font-bold text-primary">Edit Exam</h2>
+                <p className="text-sm text-muted-foreground">Update exam information and settings</p>
+              </div>
               <button
                 onClick={() => setIsEditing(false)}
-                className="p-1 hover:bg-muted rounded-md"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-muted rounded-lg transition-colors"
+                aria-label="Close"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Exam Name <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={editForm.title}
-                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Exam name"
-                />
+
+            {/* Content */}
+            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+              {/* Two Column Layout */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Exam Name */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 dark:text-foreground">
+                    Exam Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-muted rounded-lg bg-white dark:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    placeholder="Enter exam name"
+                  />
+                </div>
+
+                {/* Subject / Folder */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 dark:text-foreground">
+                    Subject / Folder <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.subject}
+                    onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-muted rounded-lg bg-white dark:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    placeholder="Enter subject or folder name"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Subject / Folder <span className="text-destructive">*</span>
+
+              {/* Number of Items */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700 dark:text-foreground">
+                  Number of Items <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={editForm.subject}
-                  onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Subject"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Number of Items <span className="text-destructive">*</span>
-                </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-3">
                   {[20, 50, 100].map((num) => (
                     <button
                       key={num}
                       onClick={() => setEditForm({ ...editForm, num_items: num })}
-                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                      className={`py-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
                         editForm.num_items === num
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-muted hover:border-primary"
+                          ? "bg-primary text-white border-primary"
+                          : "bg-white dark:bg-background border-gray-200 dark:border-muted text-gray-700 dark:text-foreground hover:border-primary hover:bg-primary/5"
                       }`}
                     >
-                      {num}
+                      {num} Items
                     </button>
                   ))}
                 </div>
@@ -585,67 +600,88 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   Current: {exam.num_items} items
                 </p>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Choices per Question</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "4 Choices (A–D)", value: 4 },
-                    { label: "5 Choices (A–E)", value: 5 },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
-                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
-                        editForm.choices_per_item === opt.value
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-muted hover:border-primary"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+
+              {/* Two Column for Choices and Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Choices per Question */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-gray-700 dark:text-foreground">Choices per Question</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: "4 (A–D)", value: 4 },
+                      { label: "5 (A–E)", value: 5 },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                        className={`py-2.5 px-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
+                          editForm.choices_per_item === opt.value
+                            ? "bg-primary text-white border-primary"
+                            : "bg-white dark:bg-background border-gray-200 dark:border-muted text-gray-700 dark:text-foreground hover:border-primary hover:bg-primary/5"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Exam Type */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-gray-700 dark:text-foreground">Exam Type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: "Board", value: "board" },
+                      { label: "Diagnostic", value: "diagnostic" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() =>
+                          setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })
+                        }
+                        className={`py-2.5 px-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
+                          editForm.examType === opt.value
+                            ? "bg-primary text-white border-primary"
+                            : "bg-white dark:bg-background border-gray-200 dark:border-muted text-gray-700 dark:text-foreground hover:border-primary hover:bg-primary/5"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Exam Type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "Board Exam", value: "board" },
-                    { label: "Diagnostic Test", value: "diagnostic" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() =>
-                        setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })
-                      }
-                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
-                        editForm.examType === opt.value
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-muted hover:border-primary"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+
+              {/* Warning Message */}
+              <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <span className="text-amber-500 text-lg flex-shrink-0">⚠️</span>
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  Editing this exam will delete any existing answer sheet template so you can generate a new one.
+                </p>
               </div>
-              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md p-2">
-                ⚠️ Editing this exam will delete any existing answer sheet template so you can generate a new one.
-              </p>
             </div>
-            <div className="flex gap-3 p-6 border-t">
+
+            {/* Footer Actions */}
+            <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 dark:bg-muted/30">
               <button
                 onClick={() => setIsEditing(false)}
-                className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
+                className="px-6 py-2.5 border border-gray-200 dark:border-muted rounded-lg font-medium text-gray-700 dark:text-foreground hover:bg-gray-100 dark:hover:bg-muted transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit}
-                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {isSavingEdit ? "Saving..." : "Save Changes"}
+                {isSavingEdit ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
               </button>
             </div>
           </div>

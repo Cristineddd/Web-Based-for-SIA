@@ -41,6 +41,8 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorModalTitle, setErrorModalTitle] = useState('Error');
   const [errorModalMessage, setErrorModalMessage] = useState('');
+  const [errorModalItems, setErrorModalItems] = useState<string[]>([]);
+  const [errorModalFooter, setErrorModalFooter] = useState('');
 
   // Load exam and answer key on mount
   useEffect(() => {
@@ -66,9 +68,11 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
     }
   };
 
-  const showErrorDialog = (title: string, message: string) => {
+  const showErrorDialog = (title: string, message: string, items: string[] = [], footer: string = '') => {
     setErrorModalTitle(title);
     setErrorModalMessage(message);
+    setErrorModalItems(items);
+    setErrorModalFooter(footer);
     setShowErrorModal(true);
   };
 
@@ -273,12 +277,12 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
           const answer = String(row[1]).trim().toUpperCase();
 
           if (!questionNum || questionNum < 1 || questionNum > exam.num_items) {
-            errors.push(`Row ${i + 1}: Invalid question number ${row[0]}`);
+            errors.push(`Question ${row[0]}: Invalid question number`);
             continue;
           }
 
           if (!validChoices.includes(answer)) {
-            errors.push(`Row ${i + 1}: Invalid answer "${row[1]}". Must be ${validChoices.join(', ')}`);
+            errors.push(`Question ${questionNum}: Invalid answer "${row[1]}". Must be ${validChoices.join(', ')}`);
             continue;
           }
 
@@ -286,11 +290,11 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
         }
 
         if (errors.length > 0) {
-          const errorList = errors.slice(0, 10).join('\n'); // Show first 10 errors
-          const moreErrors = errors.length > 10 ? `\n... and ${errors.length - 10} more errors` : '';
           showErrorDialog(
             'File Upload Errors',
-            `Found ${errors.length} error(s) in the uploaded file:\n\n${errorList}${moreErrors}\n\nPlease correct these errors and try again.`
+            `Found ${errors.length} error(s) in the uploaded file:`,
+            errors, // Show all errors
+            'Please correct these errors and try again.'
           );
           toast.error(`Found ${errors.length} error(s) in uploaded file`);
           return;
@@ -510,17 +514,33 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
 
       {/* Error Modal */}
       <Dialog open={showErrorModal} onOpenChange={setShowErrorModal}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="text-red-600 flex items-center gap-2">
               <span className="text-2xl">⚠️</span>
               {errorModalTitle}
             </DialogTitle>
-            <DialogDescription className="text-base whitespace-pre-wrap pt-4">
-              {errorModalMessage}
-            </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <div className="flex-1 overflow-hidden">
+            <p className="text-sm text-muted-foreground mb-4">{errorModalMessage}</p>
+            {errorModalItems.length > 0 && (
+              <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-2">
+                {errorModalItems.map((item, index) => (
+                  <div 
+                    key={index} 
+                    className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-3"
+                  >
+                    <span className="text-red-500 text-lg flex-shrink-0">•</span>
+                    <p className="text-sm text-red-700 dark:text-red-400">{item}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {errorModalFooter && (
+              <p className="text-sm text-muted-foreground mt-4 whitespace-pre-wrap">{errorModalFooter}</p>
+            )}
+          </div>
+          <DialogFooter className="mt-4">
             <Button onClick={() => setShowErrorModal(false)} className="w-full sm:w-auto">
               Close
             </Button>
