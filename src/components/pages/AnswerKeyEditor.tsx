@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +29,7 @@ interface AnswerKeyEditorProps {
 
 export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [exam, setExam] = useState<Exam | null>(null);
   const [answers, setAnswers] = useState<{ [key: number]: AnswerChoice }>({});
   const [saved, setSaved] = useState(false);
@@ -180,7 +182,11 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
       if (result.success) {
         setSaved(true);
         toast.success('Answer key saved successfully');
-        setTimeout(() => setSaved(false), 2000);
+        
+        // Navigate back to exam page after a short delay
+        setTimeout(() => {
+          router.push(`/exams/${params.id}`);
+        }, 1000);
       } else {
         setError(result.error || 'Failed to save answer key');
         showErrorDialog('Save Failed', result.error || 'Failed to save answer key. Please try again.');

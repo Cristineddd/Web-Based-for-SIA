@@ -72,27 +72,27 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
 
   if (needsVerification) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#FEF9E7' }}>
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#ffffff' }}>
         <div className="w-full max-w-md">
           <div className="rounded-2xl p-8" style={{ 
             backgroundColor: '#FFFFFF', 
-            borderColor: '#F0E6D2', 
+            borderColor: '#e5e7eb', 
             borderWidth: '1px',
             boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.15)'
           }}>
-            <div className="w-16 h-16 rounded-full bg-[#B38B00]/10 flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-8 h-8" style={{ color: '#B38B00' }} />
+            <div className="w-16 h-16 rounded-full bg-[gray-600]/10 flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8" className="text-gray-600" />
             </div>
             <h2 className="text-2xl font-bold mb-2 text-center" style={{ color: '#166534' }}>Verify Your Email</h2>
-            <p className="text-center mb-6" style={{ color: '#B38B00' }}>
+            <p className="text-center mb-6" className="text-gray-600">
               We've sent a verification link to <strong style={{ color: '#166534' }}>{email}</strong>
             </p>
 
-            <div className="bg-[#B38B00]/5 border-2 border-[#B38B00]/20 rounded-lg p-4 mb-6">
+            <div className="bg-[gray-600]/5 border-2 border-[gray-600]/20 rounded-lg p-4 mb-6">
               <p className="text-sm mb-2" style={{ color: '#166534' }}>
                 <strong>📧 Check these places:</strong>
               </p>
-              <ul className="text-sm space-y-1 ml-4" style={{ color: '#B38B00' }}>
+              <ul className="text-sm space-y-1 ml-4" className="text-gray-600">
                 <li>• Your <strong>Inbox</strong></li>
                 <li>• Your <strong>Spam</strong> or <strong>Junk</strong> folder</li>
                 <li>• Your <strong>Promotions</strong> tab (Gmail)</li>
@@ -101,13 +101,13 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             </div>
 
             {error && (
-              <Alert className="mb-4" style={{ backgroundColor: '#B38B00}/10', borderColor: '#166534' }}>
+              <Alert className="mb-4" style={{ backgroundColor: 'gray-600}/10', borderColor: '#166534' }}>
                 <AlertDescription style={{ color: '#166534' }}>{error}</AlertDescription>
               </Alert>
             )}
 
             <div className="space-y-3">
-              <p className="text-sm text-center" style={{ color: '#B38B00' }}>
+              <p className="text-sm text-center" className="text-gray-600">
                 Didn't receive the email?
               </p>
               <button
@@ -149,11 +149,11 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#FEF9E7' }}>
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#ffffff' }}>
         <div className="w-full max-w-md">
           <div className="rounded-2xl p-12 text-center" style={{ 
             backgroundColor: '#FFFFFF', 
-            borderColor: '#F0E6D2', 
+            borderColor: '#e5e7eb', 
             borderWidth: '1px',
             boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.15)'
           }}>
@@ -161,10 +161,10 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               <CheckCircle className="w-8 h-8" style={{ color: '#166534' }} />
             </div>
             <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Account Created</h2>
-            <p className="mb-6" style={{ color: '#B38B00' }}>
+            <p className="mb-6" className="text-gray-600">
               Welcome to SIA, <strong style={{ color: '#166534' }}>{fullName}</strong>!
             </p>
-            <p className="text-sm flex items-center justify-center gap-2" style={{ color: '#B38B00' }}>
+            <p className="text-sm flex items-center justify-center gap-2" className="text-gray-600">
               <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#166534' }} />
               Redirecting to dashboard...
             </p>
@@ -175,37 +175,22 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#FEF9E7' }}>
-      <div className="w-full max-w-md">
-        {/* Back to Home Button */}
-        <button
-          onClick={() => router.push('/')}
-          className="mb-6 flex items-center gap-2 text-sm font-medium hover:underline transition-all group"
-          style={{ color: '#166534' }}
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" style={{ color: '#B38B00' }} />
-          Back to Home
-        </button>
-
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-12 h-12 flex items-center justify-center rounded-lg" style={{ backgroundColor: '#166534' }}>
-              <span className="text-2xl font-bold text-white">S</span>
-            </div>
-            <h1 className="text-5xl font-bold tracking-tight" style={{ color: '#166534' }}>SIA</h1>
+    <div className="w-full">
+      {/* Logo */}
+      <div className="text-center mb-8">
+        <div className="flex items-center justify-center gap-3">
+          <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-[#166534]">
+            <span className="text-2xl font-bold text-white">S</span>
           </div>
+          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900">SIA</h1>
         </div>
+      </div>
 
-        <div className="rounded-2xl p-8" style={{ 
-          backgroundColor: '#FFFFFF', 
-          borderColor: '#F0E6D2', 
-          borderWidth: '1px',
-          boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.15)'
-        }}>
-          <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Create account</h2>
-          <p className="text-sm mb-8" style={{ color: '#B38B00' }}>
-            to get started with SIA
-          </p>
+      <div>
+        <h2 className="text-2xl font-bold mb-2 text-gray-900">Create account</h2>
+        <p className="text-sm mb-8 text-gray-600">
+          to get started with SIA
+        </p>
 
           {error && (
             <Alert variant="destructive" className="mb-6">
@@ -213,69 +198,50 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5" style={{ color: '#B38B00' }} />
-              <Input
-                type="text"
-                placeholder="Full name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="h-14 text-base rounded-xl pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0"
-                style={{ 
-                  borderColor: '#F0E6D2',
-                  color: '#166534',
-                  backgroundColor: '#FEF9E7'
-                }}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="relative">
+            <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Full name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
                 required
                 autoFocus
               />
             </div>
 
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5" style={{ color: '#B38B00' }} />
-              <Input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-14 text-base rounded-xl pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0"
-                style={{ 
-                  borderColor: '#F0E6D2',
-                  color: '#166534',
-                  backgroundColor: '#FEF9E7'
-                }}
+          <div className="relative">
+            <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
                 required
               />
             </div>
 
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5" style={{ color: '#B38B00' }} />
-              <Input
-                type="password"
-                placeholder="Password (at least 6 characters)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-14 text-base rounded-xl pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0"
-                style={{ 
-                  borderColor: '#F0E6D2',
-                  color: '#166534',
-                  backgroundColor: '#FEF9E7'
-                }}
+          <div className="relative">
+            <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Input
+              type="password"
+              placeholder="Password (at least 6 characters)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
                 required
                 minLength={6}
               />
             </div>
 
-            <button 
-              type="submit" 
-              disabled={loading} 
-              className="w-full h-14 px-4 py-2 text-white hover:opacity-90 rounded-xl font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50 transform hover:scale-[1.02] active:scale-[0.98]"
-              style={{ 
-                backgroundColor: '#166534',
-                boxShadow: '0 8px 16px -4px rgba(22, 101, 52, 0.3)'
-              }}
-            >
+          <button 
+            type="submit" 
+            disabled={loading} 
+            className="w-full h-12 sm:h-14 px-4 py-2 bg-[#166534] hover:bg-[#1a7a3e] text-white rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
+          >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -287,35 +253,30 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px" style={{ backgroundColor: '#F0E6D2' }} />
-            <span className="text-sm font-medium" style={{ color: '#B38B00' }}>or</span>
-            <div className="flex-1 h-px" style={{ backgroundColor: '#F0E6D2' }} />
-          </div>
+        {/* Divider */}
+        <div className="flex items-center gap-4 my-6">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-sm font-medium text-gray-600">or</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
 
-          {/* Google Sign-In Button */}
-          <button
-            type="button"
-            onClick={async () => {
-              setLoading(true);
-              setError(null);
-              const { error } = await signInWithGoogle();
-              if (error) {
-                setError(error.message);
-                setLoading(false);
-              } else {
-                setSuccess(true);
-              }
-            }}
-            disabled={loading}
-            className="w-full h-14 px-4 py-2 bg-white border-2 hover:bg-gray-50 rounded-xl font-semibold transition-all duration-200 inline-flex items-center justify-center gap-3 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-            style={{ 
-              borderColor: '#F0E6D2',
-              color: '#166534',
-              boxShadow: '0 4px 8px -2px rgba(22, 101, 52, 0.1)'
-            }}
-          >
+        {/* Google Sign-In Button */}
+        <button
+          type="button"
+          onClick={async () => {
+            setLoading(true);
+            setError(null);
+            const { error } = await signInWithGoogle();
+            if (error) {
+              setError(error.message);
+              setLoading(false);
+            } else {
+              setSuccess(true);
+            }
+          }}
+          disabled={loading}
+          className="w-full h-12 sm:h-14 px-4 py-2 bg-white border-2 border-gray-200 hover:bg-gray-50 rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center gap-3 disabled:opacity-50"
+        >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
@@ -331,23 +292,21 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             )}
           </button>
 
-          <div className="text-center mt-6">
-            <button
-              type="button"
-              onClick={onToggleMode}
-              className="text-sm font-medium hover:underline transition-all"
-              style={{ color: '#B38B00' }}
-            >
-              Already have an account? Sign in
-            </button>
-          </div>
+        <div className="text-center mt-6">
+          <button
+            type="button"
+            onClick={onToggleMode}
+            className="text-sm font-medium hover:underline transition-all text-gray-600"
+          >
+            Already have an account? Sign in
+          </button>
         </div>
+      </div>
 
-        <div className="mt-8 text-center text-sm">
-          <a href="#" className="hover:underline transition-all" style={{ color: '#B38B00' }}>Terms of use</a>
-          <span style={{ color: '#B38B00' }}> · </span>
-          <a href="#" className="hover:underline transition-all" style={{ color: '#B38B00' }}>Privacy policy</a>
-        </div>
+      <div className="mt-8 text-center text-sm text-gray-600">
+        <a href="#" className="hover:underline transition-all">Terms of use</a>
+        <span> · </span>
+        <a href="#" className="hover:underline transition-all">Privacy policy</a>
       </div>
     </div>
   );

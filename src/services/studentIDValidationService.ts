@@ -36,9 +36,10 @@ export interface ImportValidationResult {
 }
 
 export class StudentIDValidationService {
-  private static readonly MIN_ID_LENGTH = 9;
-  private static readonly MAX_ID_LENGTH = 9;
-  private static readonly STUDENT_ID_PATTERN = /^\d{4}\d{5}$/; // YYYYXXXXX (4-digit year + 5-digit number)
+  private static readonly MIN_ID_LENGTH = 1;
+  private static readonly MAX_ID_LENGTH = 50;
+  private static readonly STUDENT_ID_PATTERN = /^\d{4}-\d{5}$/;
+  private static readonly STUDENT_ID_PATTERN_NO_HYPHEN = /^\d{9}$/; // Accept 9 digits without hyphen
   private static readonly VALIDATION_LOG: Array<{
     timestamp: string;
     action: string;
@@ -46,6 +47,29 @@ export class StudentIDValidationService {
     result: string;
     details?: string;
   }> = [];
+
+  /**
+   * Format student ID to YYYY-XXXXX format
+   * Accepts both "XXXXXXXXX" (9 digits) and "YYYY-XXXXX" formats
+   */
+  static formatStudentId(student_id: string): string {
+    const trimmed = student_id.trim();
+    
+    // If already in correct format, return as is
+    if (this.STUDENT_ID_PATTERN.test(trimmed)) {
+      return trimmed;
+    }
+    
+    // If 9 digits without hyphen, format to YYYY-XXXXX
+    if (this.STUDENT_ID_PATTERN_NO_HYPHEN.test(trimmed)) {
+      const year = trimmed.substring(0, 4);
+      const sequence = trimmed.substring(4, 9);
+      return `${year}-${sequence}`;
+    }
+    
+    // Return as is if format is not recognized
+    return trimmed;
+  }
 
   /**
    * Validate student ID format only (without duplicate checks)
@@ -87,29 +111,26 @@ export class StudentIDValidationService {
       return result;
     }
 
-    // Enforce strict format: YYYYXXXXX (4-digit year + 5-digit number, e.g., 202300001)
-    if (!this.STUDENT_ID_PATTERN.test(trimmedId)) {
-      result.error = 'Student ID must follow YYYYXXXXX format (e.g., 202300001)';
+    // Accept both formats: YYYY-XXXXX or XXXXXXXXX (9 digits)
+    const formattedId = this.formatStudentId(trimmedId);
+    
+    // Enforce strict format after formatting: YYYY-XXXXX
+    if (!this.STUDENT_ID_PATTERN.test(formattedId)) {
+      result.error = 'Student ID must be 9 digits (e.g., 202312264) or YYYY-XXXXX format (e.g., 2023-12264)';
       this.logValidation('validate_format', student_id, 'FAILED', result.error);
       return result;
     }
 
-    const year = Number(trimmedId.slice(0, 4));
-    const sequence = Number(trimmedId.slice(4));
-    if (year < 1900 || year > 2100) {
-      result.error = 'Student ID must start with a valid year (e.g., 2023)';
-      this.logValidation('validate_format', student_id, 'FAILED', result.error);
-      return result;
-    }
-    if (sequence < 1) {
-      result.error = 'Student ID sequence number must be at least 00001';
+    const sequenceNumber = Number(formattedId.split('-')[1]);
+    if (sequenceNumber < 1) {
+      result.error = 'Student ID sequence must be between 00001 and 99999';
       this.logValidation('validate_format', student_id, 'FAILED', result.error);
       return result;
     }
 
     result.isValid = true;
-    result.student_id = trimmedId;
-    this.logValidation('validate_format', student_id, 'PASSED', 'Student ID format is valid');
+    result.student_id = formattedId; // Return formatted ID
+    this.logValidation('validate_format', student_id, 'PASSED', `Student ID format is valid (formatted: ${formattedId})`);
     return result;
   }
 

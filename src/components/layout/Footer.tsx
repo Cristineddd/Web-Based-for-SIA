@@ -59,7 +59,7 @@ export function Footer() {
       {/* Main Footer Content */}
       <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Brand Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+        <div className="grid grid-cols-1 gap-8 mb-12">
           {/* Brand Info */}
           <div className="space-y-4">
             <div>
@@ -92,29 +92,6 @@ export function Footer() {
                 );
               })}
             </div>
-          </div>
-
-          {/* Contact Info */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-sidebar-foreground mb-4">Contact Information</h4>
-            {contactInfo.map((info) => {
-              const Icon = info.icon;
-              return (
-                <a
-                  key={info.label}
-                  href={info.href}
-                  className="flex items-center gap-3 text-sm text-sidebar-foreground/70 hover:text-sidebar-primary transition-colors group"
-                >
-                  <div className="w-5 h-5 flex-shrink-0 text-sidebar-primary group-hover:scale-110 transition-transform">
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-sidebar-foreground/50">{info.label}</div>
-                    <div className="font-medium text-sidebar-foreground">{info.value}</div>
-                  </div>
-                </a>
-              );
-            })}
           </div>
         </div>
 
