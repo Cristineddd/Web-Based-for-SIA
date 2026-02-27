@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
+import Fuse from 'fuse.js';
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import StudentSearchCombobox, { type SearchableStudent } from '@/components/ui/StudentSearchCombobox';
+import { useDebounce } from '@/hooks/useDebounce';
 import {
   Table,
   TableBody,
@@ -41,7 +41,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import {
   Upload,
-  Search,
   Users,
   Plus,
   Trash2,
@@ -52,6 +51,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { StudentService } from "@/services/studentService";
+import { exportStudentRosterToExcel } from '@/services/excelExportService';
 
 interface Student {
   id: string;
@@ -134,19 +134,27 @@ export default function Students() {
         return;
       }
 
-      const rows = records.map((record) => ({
-        student_id: record.student_id,
-        first_name: record.first_name,
-        last_name: record.last_name,
-        email: record.email || "",
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(rows);
       if (format === "xlsx") {
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Student IDs");
-        XLSX.writeFile(workbook, "student_id_list.xlsx");
+        // Use the formatted Excel export service
+        exportStudentRosterToExcel(
+          records.map((record) => ({
+            student_id: record.student_id,
+            first_name: record.first_name,
+            last_name: record.last_name,
+            email: record.email || "",
+            grade: record.grade || null,
+            section: record.section || null,
+          }))
+        );
       } else {
+        // CSV export
+        const rows = records.map((record) => ({
+          student_id: record.student_id,
+          first_name: record.first_name,
+          last_name: record.last_name,
+          email: record.email || "",
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(rows);
         const csv = XLSX.utils.sheet_to_csv(worksheet);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -159,7 +167,7 @@ export default function Students() {
         URL.revokeObjectURL(url);
       }
 
-      toast.success(`Exported ${rows.length} student ID records`);
+      toast.success(`Exported ${records.length} student ID records`);
     } catch (error) {
       console.error("Error exporting student IDs:", error);
       toast.error("Failed to export student IDs");
@@ -422,13 +430,42 @@ export default function Students() {
     XLSX.writeFile(wb, "student_import_template.xlsx");
   };
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.student_id.toLowerCase().includes(search.toLowerCase()) ||
-      student.first_name.toLowerCase().includes(search.toLowerCase()) ||
-      student.last_name.toLowerCase().includes(search.toLowerCase()) ||
-      student.section?.toLowerCase().includes(search.toLowerCase()),
+  // Convert to searchable format for the combobox
+  const searchableStudents: SearchableStudent[] = useMemo(() =>
+    students.map((s) => ({
+      studentId: s.student_id,
+      studentName: `${s.last_name}, ${s.first_name}`,
+      section: s.section,
+      email: s.email,
+      _originalId: s.id,
+    })),
+    [students],
   );
+
+  // Fuse instance for table filtering (separate from combobox suggestions)
+  const fuse = useMemo(
+    () =>
+      new Fuse(students, {
+        keys: [
+          { name: 'student_id', weight: 0.35 },
+          { name: 'first_name', weight: 0.25 },
+          { name: 'last_name', weight: 0.25 },
+          { name: 'section', weight: 0.1 },
+          { name: 'email', weight: 0.05 },
+        ],
+        threshold: 0.35,
+        distance: 100,
+        minMatchCharLength: 1,
+      }),
+    [students],
+  );
+
+  const debouncedSearch = useDebounce(search, 200);
+
+  const filteredStudents = useMemo(() => {
+    if (!debouncedSearch.trim()) return students;
+    return fuse.search(debouncedSearch).map((r) => r.item);
+  }, [fuse, debouncedSearch, students]);
 
   return (
     <div className="page-container">
@@ -472,15 +509,15 @@ export default function Students() {
       <Card className="mb-6">
         <CardContent className="py-4">
           <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by ID, name, or block..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+            <StudentSearchCombobox
+              students={searchableStudents}
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by ID, name, or block…"
+              showResultCount
+              filteredCount={filteredStudents.length}
+              className="flex-1"
+            />
             <Button variant="outline" onClick={downloadTemplate}>
               <Download className="w-4 h-4 mr-2" />
               Download Template

@@ -49,6 +49,8 @@ export function CreateExamModal({
   const [classes, setClasses] = useState<Class[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [questionsPicked, setQuestionsPicked] = useState(false);
+  const [examTypePicked, setExamTypePicked] = useState(false);
 
   useEffect(() => {
     const fetchClassesData = async () => {
@@ -114,13 +116,13 @@ export function CreateExamModal({
     setIsSubmitting(true);
 
     try {
-      // Create exam in background - don't wait
-      onCreateExam(formData).catch((error) => {
-        console.error("Error creating exam:", error);
-        toast.error("Failed to save exam to database");
-      });
+      // Wait for onCreateExam to complete - it may show duplicate dialog instead
+      await onCreateExam(formData);
       
-      // Close modal immediately for better UX
+      // Note: Success toast is now shown in the parent component (Exams.tsx)
+      // This allows the duplicate detection flow to work properly
+      
+      // Reset form and close modal
       setFormData({
         name: "",
         totalQuestions: 50,
@@ -133,8 +135,9 @@ export function CreateExamModal({
         choicePoints: {},
       });
       setStep(1);
-      onClose();
-      toast.success("Exam created successfully");
+      setQuestionsPicked(false);
+      setExamTypePicked(false);
+      // Don't close modal here - let the parent handle it via onClose or duplicate detection
     } catch (error) {
       console.error("Error creating exam:", error);
       toast.error("Failed to create exam");
@@ -187,9 +190,12 @@ export function CreateExamModal({
                   {[20, 50, 100].map((num) => (
                     <button
                       key={num}
-                      onClick={() => handleInputChange("totalQuestions", num)}
+                      onClick={() => {
+                        handleInputChange("totalQuestions", num);
+                        setQuestionsPicked(true);
+                      }}
                       className={`py-3 px-2 rounded-md font-semibold text-sm transition-all ${
-                        formData.totalQuestions === num
+                        formData.totalQuestions === num && questionsPicked
                           ? "bg-primary text-primary-foreground border-2 border-primary"
                           : "border-2 border-muted hover:border-primary"
                       }`}
@@ -198,6 +204,9 @@ export function CreateExamModal({
                     </button>
                   ))}
                 </div>
+                {!questionsPicked && (
+                  <p className="text-xs text-red-500 mt-2">Please select a number of questions to continue</p>
+                )}
               </label>
             </div>
           )}
@@ -208,8 +217,27 @@ export function CreateExamModal({
                 <span className="text-sm font-semibold text-foreground mb-3 block">
                   Number of Choices per Question
                 </span>
-                <div className="w-full py-3 px-6 rounded-md font-semibold text-sm border-2 border-primary bg-primary text-primary-foreground text-center">
-                  5 Choices (A-E)
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleInputChange("choicesPerItem", 4)}
+                    className={`py-3 px-4 rounded-md font-semibold text-sm transition-all border-2 ${
+                      formData.choicesPerItem === 4
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-muted hover:border-primary"
+                    }`}
+                  >
+                    4 Choices (A–D)
+                  </button>
+                  <button
+                    onClick={() => handleInputChange("choicesPerItem", 5)}
+                    className={`py-3 px-4 rounded-md font-semibold text-sm transition-all border-2 ${
+                      formData.choicesPerItem === 5
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-muted hover:border-primary"
+                    }`}
+                  >
+                    5 Choices (A–E)
+                  </button>
                 </div>
               </label>
             </div>
@@ -287,9 +315,12 @@ export function CreateExamModal({
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
-                    onClick={() => handleInputChange("examType", "board")}
+                    onClick={() => {
+                      handleInputChange("examType", "board");
+                      setExamTypePicked(true);
+                    }}
                     className={`p-4 rounded-md border-2 transition-all text-left ${
-                      formData.examType === "board"
+                      formData.examType === "board" && examTypePicked
                         ? "border-primary bg-primary/10"
                         : "border-muted hover:border-primary"
                     }`}
@@ -300,9 +331,12 @@ export function CreateExamModal({
                     </div>
                   </button>
                   <button
-                    onClick={() => handleInputChange("examType", "diagnostic")}
+                    onClick={() => {
+                      handleInputChange("examType", "diagnostic");
+                      setExamTypePicked(true);
+                    }}
                     className={`p-4 rounded-md border-2 transition-all text-left ${
-                      formData.examType === "diagnostic"
+                      formData.examType === "diagnostic" && examTypePicked
                         ? "border-primary bg-primary/10"
                         : "border-muted hover:border-primary"
                     }`}
@@ -313,6 +347,9 @@ export function CreateExamModal({
                     </div>
                   </button>
                 </div>
+                {!examTypePicked && (
+                  <p className="text-xs text-red-500 mt-2">Please select an exam type to continue</p>
+                )}
               </label>
             </div>
           )}
@@ -368,15 +405,31 @@ export function CreateExamModal({
           {step < 6 ? (
             <button
               onClick={() => {
+                if (step === 1 && !formData.name.trim()) {
+                  toast.error("Please enter an exam name");
+                  return;
+                }
+                if (step === 2 && !questionsPicked) {
+                  toast.error("Please select a number of questions");
+                  return;
+                }
                 if (step === 4 && !formData.className) {
                   toast.error("Please select a class before continuing");
                   return;
                 }
-
+                if (step === 5 && !examTypePicked) {
+                  toast.error("Please select an exam type");
+                  return;
+                }
                 setStep(step + 1);
               }}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors"
-              disabled={step === 4 && classes.length === 0}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={
+                (step === 1 && !formData.name.trim()) ||
+                (step === 2 && !questionsPicked) ||
+                (step === 4 && classes.length === 0) ||
+                (step === 5 && !examTypePicked)
+              }
             >
               Next
             </button>

@@ -471,8 +471,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           // Draw ID bubble sample positions as blue dots with column/row annotations
           // This lets us verify the grid is properly aligned with the ID bubbles
           const layout = getTemplateLayout(exam.num_items);
-          for (let col = 0; col < 9; col++) {
-            for (let row = 0; row < 9; row++) {
+          for (let col = 0; col < 10; col++) {
+            for (let row = 0; row < 10; row++) {
               const nx = layout.id.firstColNX + col * layout.id.colSpacingNX;
               const ny = layout.id.firstRowNY + row * layout.id.rowSpacingNY;
               // Bilinear interpolation (same as mapToPixel)
@@ -1314,10 +1314,10 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     console.log(`[ID] First bubble px=(${Math.round(firstIdPx.px)},${Math.round(firstIdPx.py)}), Last bubble px=(${Math.round(lastIdPx.px)},${Math.round(lastIdPx.py)})`);
     console.log(`[ID] Frame: TL=(${Math.round(markers.topLeft.x)},${Math.round(markers.topLeft.y)}) BR=(${Math.round(markers.bottomRight.x)},${Math.round(markers.bottomRight.y)}) size=${Math.round(frameW)}x${Math.round(frameH)}`);
 
-    for (let col = 0; col < 10; col++) {
+    for (let col = 0; col < 9; col++) {
       const fills: number[] = []; // raw brightness values (lower = darker)
 
-      for (let row = 0; row < 10; row++) {
+      for (let row = 0; row < 9; row++) {
         const nx = id.firstColNX + col * id.colSpacingNX;
         const ny = id.firstRowNY + row * id.rowSpacingNY;
         const { px, py } = mapToPixel(markers, nx, ny);
@@ -1704,6 +1704,24 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
   return (
     <div className="space-y-6">
+      {/* Exam Code Warning Banner */}
+      {exam.examCode && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-amber-900">
+                Expected Exam Code: <span className="font-mono bg-amber-100 px-2 py-0.5 rounded">{exam.examCode}</span>
+              </p>
+              <p className="text-sm text-amber-700 mt-1">
+                Make sure the answer sheets you&apos;re scanning have this code printed on them. 
+                Scanning sheets from a different exam will result in incorrect scores.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

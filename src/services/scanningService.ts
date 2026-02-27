@@ -26,6 +26,7 @@ import {
   DuplicateScoreMatch,
 } from './duplicateScoreDetectionService';
 import { getExamById } from './examService';
+import { GradeAuditService } from './gradeAuditService';
 
 const SCANNED_RESULTS_COLLECTION = 'scannedResults';
 const NULL_ID_ALERTS_COLLECTION = 'nullIdAlerts';
@@ -193,6 +194,34 @@ export class ScanningService {
       if (isNullId) {
         await this.createNullIdAlert(examId, resultId, studentId);
       }
+
+      // ── Audit Trail ─────────────────────────────────────────────
+      const auditCtx = {
+        userId,
+        userEmail: userId,
+        gradeId: '',
+        studentId,
+        examId,
+        classId: '',
+        resultId,
+      };
+      const afterSnap = GradeAuditService.buildSnapshot({
+        score,
+        max_score: answerKey.length,
+        percentage: answerKey.length > 0 ? Math.round((score / answerKey.length) * 100) : 0,
+      });
+
+      if (forceOverride) {
+        await GradeAuditService.logScoreOverride(
+          auditCtx,
+          { score: undefined }, // previous score unknown at scan level
+          afterSnap,
+          'Faculty override on duplicate scan'
+        );
+      } else {
+        await GradeAuditService.logScoreSubmitted(auditCtx, afterSnap);
+      }
+      // ── End Audit Trail ─────────────────────────────────────────
 
       return { success: true, data: resultData };
     } catch (error) {
