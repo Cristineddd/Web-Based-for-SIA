@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, FileText, Eye, Archive } from "lucide-react";
+import { Plus, Search, FileText, Eye, Archive, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
+import { EditExamModal } from "@/components/modals/EditExamModal";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   createExam,
@@ -485,6 +486,14 @@ export default function Exams() {
                           <Eye className="w-4 h-4" />
                         </Button>
                       </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+                        onClick={() => setEditingExam(exam)}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

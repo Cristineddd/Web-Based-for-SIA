@@ -23,6 +23,7 @@ import { db, auth } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { toast } from "sonner";
 import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
+import { EditExamModal } from "@/components/modals/EditExamModal";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -47,6 +48,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   });
   const [hasTemplate, setHasTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Edit exam state
   const [isEditing, setIsEditing] = useState(false);
