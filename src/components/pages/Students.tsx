@@ -4,9 +4,6 @@ import { useEffect, useState, useRef } from "react";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +74,7 @@ export default function Students() {
   const [importPreview, setImportPreview] = useState<Partial<Student>[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // New state to hold file upload
+  const [duplicateIds, setDuplicateIds] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
 
   const [newStudent, setNewStudent] = useState({
@@ -213,7 +211,12 @@ export default function Students() {
       });
     } catch (error) {
       console.error("Error adding student:", error);
-      toast.error("Failed to add student");
+      const errorMessage = (error as Error).message || "Failed to add student";
+      if (errorMessage.includes('already exists')) {
+        toast.error(errorMessage);
+      } else {
+        toast.error("Failed to add student: " + errorMessage);
+      }
     }
   };
 
@@ -292,6 +295,30 @@ export default function Students() {
             return;
           }
 
+          // Check for duplicates against existing students in the system
+          const existingIds = new Set(students.map((s) => s.student_id));
+          const fileIdCounts = new Map<string, number>();
+          parsedStudents.forEach((s) => {
+            fileIdCounts.set(s.student_id, (fileIdCounts.get(s.student_id) || 0) + 1);
+          });
+
+          const dupes = new Set<string>();
+          parsedStudents.forEach((s) => {
+            if (existingIds.has(s.student_id)) dupes.add(s.student_id);
+            if ((fileIdCounts.get(s.student_id) || 0) > 1) dupes.add(s.student_id);
+          });
+          setDuplicateIds(dupes);
+
+          if (dupes.size > 0 && dupes.size === parsedStudents.length) {
+            toast.warning(`All ${parsedStudents.length} students already exist in the system. Nothing new to import.`);
+            setImporting(false);
+            return;
+          }
+
+          if (dupes.size > 0) {
+            toast.warning(`${dupes.size} out of ${parsedStudents.length} students already exist and will be skipped.`);
+          }
+
           setImportPreview(parsedStudents);
           setShowImportDialog(true);
         } catch (err) {
@@ -323,6 +350,7 @@ export default function Students() {
         return;
       }
 
+      // Filter out duplicates before importing
       const studentsToInsert = importPreview
         .filter(
           (
@@ -334,7 +362,7 @@ export default function Students() {
             grade: string;
             email: string | null;
             section: string | null;
-          } => Boolean(s.student_id && s.first_name && s.last_name && s.grade && s.section),
+          } => Boolean(s.student_id && s.first_name && s.last_name && s.grade && s.section && !duplicateIds.has(s.student_id)),
         )
         .map((s) => ({
           student_id: s.student_id,
@@ -345,18 +373,38 @@ export default function Students() {
           section: s.section || undefined,
         }));
 
+      if (studentsToInsert.length === 0) {
+        toast.error("All students in this file already exist in the system. Nothing to import.");
+        setShowImportDialog(false);
+        setImportPreview([]);
+        setDuplicateIds(new Set());
+        setImporting(false);
+        return;
+      }
+
       const result = await StudentService.bulkCreateStudents(
         studentsToInsert,
         user.id,
       );
       await fetchStudents();
 
-      if (result.created.length > 0) {
+      const skippedCount = importPreview.length - studentsToInsert.length;
+      const duplicateErrors = result.errors.filter(e => e.includes('already exists'));
+      const otherErrors = result.errors.filter(e => !e.includes('already exists'));
+      const totalSkipped = skippedCount + duplicateErrors.length;
+
+      if (result.created.length > 0 && totalSkipped === 0) {
         toast.success(`Successfully imported ${result.created.length} students`);
+      } else if (result.created.length > 0 && totalSkipped > 0) {
+        toast.success(`Imported ${result.created.length} new students`);
+        toast.warning(`${totalSkipped} duplicate student(s) were skipped`);
+      } else if (result.created.length === 0 && totalSkipped > 0) {
+        toast.warning(`No new students imported — all ${totalSkipped} student(s) already exist in the system.`);
       }
-      if (result.errors.length > 0) {
+
+      if (otherErrors.length > 0) {
         toast.error(
-          `Failed to import ${result.errors.length} student(s). Check duplicates/format.`,
+          `Failed to import ${otherErrors.length} student(s): ${otherErrors.slice(0, 3).join('; ')}`,
         );
       }
 
@@ -386,6 +434,7 @@ export default function Students() {
 
       setShowImportDialog(false);
       setImportPreview([]);
+      setDuplicateIds(new Set());
       setSelectedFile(null); // Clear selected file after upload
     } catch (error) {
       console.error("Error importing students:", error);
@@ -706,10 +755,15 @@ export default function Students() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {importPreview.slice(0, 10).map((student, index) => (
-                  <TableRow key={index}>
+                {importPreview.slice(0, 10).map((student, index) => {
+                  const isDuplicate = duplicateIds.has(student.student_id || '');
+                  return (
+                  <TableRow key={index} className={isDuplicate ? 'bg-red-50 dark:bg-red-950/30' : ''}>
                     <TableCell className="font-mono">
                       {student.student_id}
+                      {isDuplicate && (
+                        <span className="ml-2 text-xs text-red-600 font-semibold">DUPLICATE</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {student.last_name}, {student.first_name}
@@ -720,7 +774,8 @@ export default function Students() {
                     </TableCell>
                     <TableCell>{student.section || "—"}</TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -729,22 +784,24 @@ export default function Students() {
               ...and {importPreview.length - 10} more records
             </p>
           )}
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
-            <AlertCircle className="w-4 h-4 text-warning mt-0.5" />
-            <p className="text-sm text-warning">
-              Existing students with matching IDs will be updated.
-            </p>
-          </div>
+          {duplicateIds.size > 0 && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+              <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
+              <p className="text-sm text-red-600">
+                <strong>{duplicateIds.size} duplicate(s) found</strong> — these students already exist and will be <strong>skipped</strong> during import.
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowImportDialog(false)}
+              onClick={() => { setShowImportDialog(false); setDuplicateIds(new Set()); }}
             >
               Cancel
             </Button>
             <Button
               onClick={confirmImport}
-              disabled={importing}
+              disabled={importing || (importPreview.length - duplicateIds.size) === 0}
               className="gradient-primary"
             >
               {importing ? (
@@ -753,7 +810,7 @@ export default function Students() {
                   Importing...
                 </>
               ) : (
-                `Import ${importPreview.length} Students`
+                `Import ${importPreview.length - duplicateIds.size} Student${(importPreview.length - duplicateIds.size) !== 1 ? 's' : ''}`
               )}
             </Button>
           </DialogFooter>

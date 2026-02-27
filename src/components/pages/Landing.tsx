@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Footer } from '@/components/layout/Footer';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, X } from 'lucide-react';
 import { PageLoadingSkeleton } from '@/components/LoadingSkeleton';
@@ -71,9 +72,7 @@ export default function Landing() {
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#166534] flex items-center justify-center">
-                <span className="text-2xl font-bold text-white">S</span>
-              </div>
+              <Image src="/Sia.png" alt="SIA Logo" width={40} height={40} className="w-10 h-10" priority />
               <div>
                 <h1 className="text-lg font-bold text-[#166534]">SIA</h1>
                 <p className="text-xs text-gray-600">Smart Exam Checking</p>

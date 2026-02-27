@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -36,6 +37,15 @@ export function Sidebar() {
   const { signOut, user } = useAuth();
   const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebarContext();
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const prevPathRef = useRef(pathname);
+
+  // Close mobile sidebar when route changes
+  useEffect(() => {
+    if (pathname !== prevPathRef.current) {
+      setMobileOpen(false);
+      prevPathRef.current = pathname;
+    }
+  }, [pathname, setMobileOpen]);
 
   const handleSignOut = () => {
     signOut();
@@ -45,7 +55,7 @@ export function Sidebar() {
   };
 
   const handleNavClick = () => {
-    setMobileOpen(false);
+    // Don't auto-close sidebar on nav click — user must toggle it manually
   };
 
   const getEmailInitial = () => {
@@ -57,20 +67,20 @@ export function Sidebar() {
 
   return (
     <>
-      <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-[#166534] border-b z-50 flex items-center px-3">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-[#166534] border-b z-50 flex items-center px-3 gap-2">
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
           className="p-1.5 hover:bg-[#1a7a3e] rounded-md text-white transition-colors"
         >
           {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </button>
-        <h1 className="ml-2 font-bold text-white text-sm">SIA</h1>
+        <Image src="/Sia.png" alt="SIA Logo" width={28} height={28} className="w-7 h-7 object-contain aspect-square flex-shrink-0" />
+        <h1 className="font-bold text-white text-sm">SIA</h1>
       </div>
 
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setMobileOpen(false)}
+          className="md:hidden fixed inset-0 bg-black/30 z-30 pointer-events-none"
         />
       )}
 
@@ -84,12 +94,17 @@ export function Sidebar() {
       >
 
         <div className="p-5 border-b border-[#F0E6D2]">
-          {!collapsed && (
+          {!collapsed ? (
             <div className="overflow-hidden flex items-center gap-3">
+              <Image src="/Sia.png" alt="SIA Logo" width={40} height={40} className="w-10 h-10 object-contain aspect-square flex-shrink-0" />
               <div>
                 <h1 className="font-bold text-white text-sm">SIA</h1>
                 <p className="text-xs text-white/60 truncate">Exam & Quiz Builder</p>
               </div>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <Image src="/Sia.png" alt="SIA Logo" width={32} height={32} className="w-8 h-8 object-contain aspect-square flex-shrink-0" />
             </div>
           )}
         </div>

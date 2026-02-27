@@ -145,9 +145,17 @@ export class StudentService {
         );
       }
     } catch (error) {
+      const errMsg = (error as Error).message || '';
       // Re-throw if it's our custom duplicate error
-      if ((error as Error).message.includes('already exists')) {
+      if (errMsg.includes('already exists')) {
         throw error;
+      }
+      // Re-throw permission errors - don't silently create duplicates
+      if (errMsg.includes('permission') || errMsg.includes('Permission')) {
+        throw new Error(
+          `Unable to verify if Student ID "${normalizedStudentId}" already exists (permission error). ` +
+          `Please try again or contact your administrator.`
+        );
       }
       // Log other errors but continue
       console.error('Error checking for existing student:', error);

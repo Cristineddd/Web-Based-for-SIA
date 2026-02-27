@@ -41,12 +41,12 @@ import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { StudentIDService } from '@/services/studentIDService';
 import { useAuth } from '@/contexts/AuthContext';
-import { createClass, deleteClass, updateClass } from '@/services/classService';
+import { createClass, deleteClass, updateClass, getClasses } from '@/services/classService';
 import { OfficialRecordService } from '@/services/officialRecordService';
 import { IDChangeLogger } from '@/services/idChangeLogger';
 import { StudentFieldValidationService } from '@/services/studentFieldValidationService';
 import { DataQualityService } from '@/services/dataQualityService';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { 
   Search, 
@@ -135,33 +135,12 @@ export default function StudentClasses() {
     }
 
     try {
-      const snapshot = await getDocs(collection(db, 'classes'));
-      const fetchedClasses: Class[] = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data() as Record<string, any>;
-        const createdAtValue = data.created_at ?? data.createdAt;
+      const fetchedClasses = await getClasses(user.id);
+      
+      // Filter out archived classes
+      const activeClasses = fetchedClasses.filter(classItem => !(classItem as any).isArchived);
 
-        return {
-          id: docSnap.id,
-          class_name: data.class_name ?? '',
-          course_subject: data.course_subject ?? '',
-          section_block: data.section_block ?? '',
-          room: data.room ?? '',
-          students: Array.isArray(data.students) ? data.students : [],
-          created_at:
-            typeof createdAtValue?.toDate === 'function'
-              ? createdAtValue.toDate().toISOString()
-              : typeof createdAtValue === 'string'
-                ? createdAtValue
-                : new Date().toISOString(),
-          schedule_day: data.schedule_day,
-          schedule_time: data.schedule_time,
-          semester: data.semester,
-          school_year: data.school_year,
-          isArchived: data.isArchived || false,
-        };
-      }).filter(classItem => !classItem.isArchived); // Filter out archived classes
-
-      setClasses(fetchedClasses);
+      setClasses(activeClasses);
     } catch (error) {
       console.error('Error fetching classes:', error);
       toast.error('Failed to load classes');

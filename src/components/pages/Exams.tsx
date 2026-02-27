@@ -32,11 +32,12 @@ import {
   createExam,
   getExams,
   archiveExam,
+  updateExam,
   type Exam,
   type ExamFormData,
 } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 interface ExamWithStatus extends Exam {
@@ -57,6 +58,9 @@ export default function Exams() {
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [duplicateExamData, setDuplicateExamData] = useState<ExamFormData | null>(null);
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", subject: "", num_items: 0, choices_per_item: 4, examType: "board" as "board" | "diagnostic" });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     const title = searchParams.get("title");
@@ -66,6 +70,7 @@ export default function Exams() {
     const choices = searchParams.get("choices");
 
     if (title && subject && items && date) {
+      // Check for EXACT match (same title, subject, items)
       const examExists = exams.some(
         (exam) =>
           exam.title === title &&
@@ -73,7 +78,19 @@ export default function Exams() {
           exam.num_items === parseInt(items),
       );
 
+      // Also check for duplicate title only (case-insensitive)
+      const hasDuplicateTitle = exams.some(
+        (exam) => exam.title.toLowerCase().trim() === title.toLowerCase().trim()
+      );
+
       if (!examExists) {
+        if (hasDuplicateTitle) {
+          // Show warning but still allow creation from URL params
+          toast.warning(`⚠️ An exam with title "${title}" already exists. Creating a new one...`, {
+            duration: 5000,
+          });
+        }
+        
         const newExam: Exam = {
           id: `exam_${Date.now()}`,
           title: title,
@@ -165,15 +182,20 @@ export default function Exams() {
     fetchExams();
   }, [user]);
 
-  const handleCreateExam = async (formData: ExamFormData) => {
-    // Check for duplicates first
-    const isDuplicate = exams.some(
+  const handleCreateExam = async (formData: ExamFormData, forceCreate: boolean = false) => {
+    // Check for duplicates first (unless forceCreate is true - user clicked "Proceed Anyway")
+    const duplicateExam = exams.find(
       (e) => e.title.toLowerCase().trim() === formData.name.toLowerCase().trim()
     );
 
-    if (isDuplicate && !duplicateExamData) {
+    if (duplicateExam && !forceCreate) {
+      // Show duplicate warning dialog and toast notification
       setDuplicateExamData(formData);
       setShowCreateModal(false);
+      toast.warning(`⚠️ Duplicate detected: An exam named "${formData.name}" already exists!`, {
+        duration: 5000,
+        description: 'Review the warning dialog to proceed or cancel.',
+      });
       return;
     }
 
@@ -235,6 +257,74 @@ export default function Exams() {
     }
   };
 
+  const handleEditExam = (exam: Exam) => {
+    setEditingExam(exam);
+    setEditForm({
+      title: exam.title,
+      subject: exam.subject,
+      num_items: exam.num_items,
+      choices_per_item: exam.choices_per_item,
+      examType: exam.examType || "board",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingExam) return;
+    if (!editForm.title.trim()) { toast.error("Exam name is required"); return; }
+    if (!editForm.subject.trim()) { toast.error("Subject is required"); return; }
+    if (!editForm.num_items || editForm.num_items < 1) { toast.error("Number of items must be at least 1"); return; }
+
+    try {
+      setIsSavingEdit(true);
+
+      // Update exam fields in Firestore
+      await updateExam(editingExam.id, {
+        title: editForm.title.trim(),
+        subject: editForm.subject.trim(),
+        num_items: editForm.num_items,
+        choices_per_item: editForm.choices_per_item,
+        examType: editForm.examType,
+      });
+
+      // Delete any existing template linked to this exam so a new one can be generated
+      const templateQuery = query(
+        collection(db, "templates"),
+        where("examId", "==", editingExam.id)
+      );
+      const templateSnap = await getDocs(templateQuery);
+      if (!templateSnap.empty) {
+        await Promise.all(templateSnap.docs.map((d) => deleteDoc(d.ref)));
+        toast.info("Existing template deleted — please generate a new one.");
+      }
+
+      // Update local state
+      setExams((prev) =>
+        prev.map((e) =>
+          e.id === editingExam.id
+            ? {
+                ...e,
+                title: editForm.title.trim(),
+                subject: editForm.subject.trim(),
+                num_items: editForm.num_items,
+                choices_per_item: editForm.choices_per_item,
+                examType: editForm.examType,
+                updatedAt: new Date().toISOString(),
+                hasTemplate: false, // template was just deleted
+              }
+            : e
+        )
+      );
+
+      toast.success("Exam updated successfully");
+      setEditingExam(null);
+    } catch (error) {
+      console.error("Error updating exam:", error);
+      toast.error("Failed to update exam");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const handleArchive = async () => {
     if (!archiveId) return;
 
@@ -291,126 +381,177 @@ export default function Exams() {
         </CardContent>
       </Card>
 
-      {/* Table */}
-      <Card className="table-container overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-table-header hover:bg-table-header">
-              <TableHead>Title</TableHead>
-              <TableHead className="hidden sm:table-cell">Subject</TableHead>
-              <TableHead className="hidden lg:table-cell">Class</TableHead>
-              <TableHead className="text-center">Items</TableHead>
-              <TableHead className="text-center hidden md:table-cell">
-                Choices
-              </TableHead>
-              <TableHead className="text-center hidden sm:table-cell">
-                Answer Key
-              </TableHead>
-              <TableHead className="text-center hidden lg:table-cell">
-                Template
-              </TableHead>
-              <TableHead className="text-center">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                    Loading exams...
+      {/* Loading / Empty State */}
+      {loading ? (
+        <Card className="py-12">
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            Loading exams...
+          </div>
+        </Card>
+      ) : filteredExams.length === 0 ? (
+        <Card className="py-12">
+          <div className="text-center">
+            <FileText className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
+            <p className="text-muted-foreground">
+              {search
+                ? "No exams found matching your search"
+                : "No exams created yet"}
+            </p>
+            {!search && (
+              <Button
+                variant="link"
+                className="mt-2"
+                onClick={() => setShowCreateModal(true)}
+              >
+                Create your first exam
+              </Button>
+            )}
+          </div>
+        </Card>
+      ) : (
+        <>
+          {/* Mobile Cards */}
+          <div className="space-y-3 md:hidden">
+            {filteredExams.map((exam) => (
+              <Card key={exam.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-sm truncate">{exam.title}</h3>
+                    <p className="text-xs text-muted-foreground truncate">{exam.subject}</p>
+                    {exam.className && (
+                      <p className="text-xs text-muted-foreground truncate">Class: {exam.className}</p>
+                    )}
                   </div>
-                </TableCell>
-              </TableRow>
-            ) : filteredExams.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
-                  <FileText className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
-                  <p className="text-muted-foreground">
-                    {search
-                      ? "No exams found matching your search"
-                      : "No exams created yet"}
-                  </p>
-                  {!search && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Link href={`/exams/${exam.id}`}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </Link>
                     <Button
-                      variant="link"
-                      className="mt-2"
-                      onClick={() => setShowCreateModal(true)}
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                      onClick={() => setArchiveId(exam.id)}
                     >
-                      Create your first exam
+                      <Archive className="w-4 h-4" />
                     </Button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-3 text-xs">
+                  <span className="bg-muted px-2 py-0.5 rounded-full">{exam.num_items} items</span>
+                  <span className="bg-muted px-2 py-0.5 rounded-full">{exam.choices_per_item} choices</span>
+                  {exam.answerKeyStatus?.hasAnswerKey ? (
+                    exam.answerKeyStatus.completed === exam.answerKeyStatus.total ? (
+                      <span className="px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
+                        Key: Complete
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-warning/10 text-warning font-medium">
+                        Key: {exam.answerKeyStatus.completed}/{exam.answerKeyStatus.total}
+                      </span>
+                    )
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
+                      Key: Not started
+                    </span>
                   )}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredExams.map((exam) => (
-                <TableRow key={exam.id} className="hover:bg-table-row-hover">
-                  <TableCell className="font-medium">{exam.title}</TableCell>
-                  <TableCell className="text-muted-foreground hidden sm:table-cell">
-                    {exam.subject}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden lg:table-cell">
-                    {exam.className || "—"}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {exam.num_items}
-                  </TableCell>
-                  <TableCell className="text-center hidden md:table-cell">
-                    {exam.choices_per_item}
-                  </TableCell>
-                  <TableCell className="text-center hidden sm:table-cell">
-                    {exam.answerKeyStatus?.hasAnswerKey ? (
-                      exam.answerKeyStatus.completed ===
-                      exam.answerKeyStatus.total ? (
+                  {exam.hasTemplate && (
+                    <span className="px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
+                      Template
+                    </span>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop Table */}
+          <Card className="table-container overflow-x-auto hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-table-header hover:bg-table-header">
+                  <TableHead>Title</TableHead>
+                  <TableHead>Subject</TableHead>
+                  <TableHead className="hidden lg:table-cell">Class</TableHead>
+                  <TableHead className="text-center">Items</TableHead>
+                  <TableHead className="text-center">Choices</TableHead>
+                  <TableHead className="text-center">Answer Key</TableHead>
+                  <TableHead className="text-center hidden lg:table-cell">Template</TableHead>
+                  <TableHead className="text-center">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredExams.map((exam) => (
+                  <TableRow key={exam.id} className="hover:bg-table-row-hover">
+                    <TableCell className="font-medium">{exam.title}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {exam.subject}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground hidden lg:table-cell">
+                      {exam.className || "—"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {exam.num_items}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {exam.choices_per_item}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {exam.answerKeyStatus?.hasAnswerKey ? (
+                        exam.answerKeyStatus.completed ===
+                        exam.answerKeyStatus.total ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+                            Complete
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
+                            {exam.answerKeyStatus.completed}/
+                            {exam.answerKeyStatus.total}
+                          </span>
+                        )
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
+                          Not started
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center hidden lg:table-cell">
+                      {exam.hasTemplate ? (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
-                          Complete
+                          Yes
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
-                          {exam.answerKeyStatus.completed}/
-                          {exam.answerKeyStatus.total}
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
+                          No
                         </span>
-                      )
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
-                        Not started
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center hidden lg:table-cell">
-                    {exam.hasTemplate ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
-                        Yes
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
-                        No
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center gap-1">
-                      <Link href={`/exams/${exam.id}`}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Eye className="w-4 h-4" />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-1">
+                        <Link href={`/exams/${exam.id}`}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => setArchiveId(exam.id)}
+                        >
+                          <Archive className="w-4 h-4" />
                         </Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => setArchiveId(exam.id)}
-                      >
-                        <Archive className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </>
+      )}
 
       {/* Create Exam Modal */}
       <CreateExamModal
@@ -418,6 +559,104 @@ export default function Exams() {
         onClose={() => setShowCreateModal(false)}
         onCreateExam={handleCreateExam}
       />
+
+      {/* Edit Exam Dialog */}
+      {editingExam && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
+              <button onClick={() => setEditingExam(null)} className="p-1 hover:bg-muted rounded-md">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Exam Name <span className="text-destructive">*</span></label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Exam name"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Subject / Folder <span className="text-destructive">*</span></label>
+                <input
+                  type="text"
+                  value={editForm.subject}
+                  onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Subject"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Number of Items <span className="text-destructive">*</span></label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[20, 50, 100].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setEditForm({ ...editForm, num_items: num })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.num_items === num
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Choices per Question</label>
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    onClick={() => setEditForm({ ...editForm, choices_per_item: 5 })}
+                    className="py-2 rounded-md font-semibold text-sm border-2 transition-all bg-primary text-primary-foreground border-primary cursor-default"
+                  >
+                    5 Choices (A–E)
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Exam Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{ label: "Board Exam", value: "board" }, { label: "Diagnostic Test", value: "diagnostic" }].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.examType === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t">
+              <button
+                onClick={() => setEditingExam(null)}
+                className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Archive Dialog */}
       <AlertDialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>
@@ -464,8 +703,10 @@ export default function Exams() {
             <AlertDialogAction
               onClick={() => {
                 if (duplicateExamData) {
-                  handleCreateExam(duplicateExamData);
+                  // Pass forceCreate=true to bypass duplicate check
+                  handleCreateExam(duplicateExamData, true);
                   setDuplicateExamData(null);
+                  toast.info('Creating duplicate exam as requested...');
                 }
               }}
               className="bg-warning text-warning-foreground hover:bg-warning/90"

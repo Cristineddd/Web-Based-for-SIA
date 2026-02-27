@@ -458,14 +458,35 @@ export default function ClassManagement() {
             return;
           }
 
-          // Show success message with valid count
-          if (invalidStudents.length > 0) {
-            toast.success(`${validStudents.length} valid student(s) ready to import. ${invalidStudents.length} invalid student(s) were logged and skipped.`);
-          } else {
-            toast.success(`All ${validStudents.length} student(s) validated successfully.`);
+          // Check for duplicates against current class roster
+          const existingIds = new Set(students.map((s) => s.student_id));
+          const duplicates = validStudents.filter((s) => existingIds.has(s.student_id));
+          const newStudents = validStudents.filter((s) => !existingIds.has(s.student_id));
+
+          // Also check for duplicates within the file itself
+          const seenIds = new Set<string>();
+          const uniqueNewStudents: Student[] = [];
+          for (const s of newStudents) {
+            if (!seenIds.has(s.student_id)) {
+              seenIds.add(s.student_id);
+              uniqueNewStudents.push(s);
+            }
           }
 
-          setImportPreview(validStudents);
+          if (uniqueNewStudents.length === 0) {
+            toast.warning(`All ${validStudents.length} student(s) already exist in this class. Nothing to import.`);
+            return;
+          }
+
+          if (duplicates.length > 0) {
+            toast.warning(`${duplicates.length} student(s) already in this class and will be skipped.`);
+          }
+
+          if (invalidStudents.length > 0) {
+            toast.info(`${uniqueNewStudents.length} new student(s) ready to import. ${invalidStudents.length} invalid and ${duplicates.length} duplicate(s) skipped.`);
+          }
+
+          setImportPreview(uniqueNewStudents);
           setShowImportDialog(true);
 
           if (fileInputRef.current) {
@@ -484,10 +505,27 @@ export default function ClassManagement() {
   };
 
   const confirmImport = () => {
-    setStudents((prev) => [...prev, ...importPreview]);
+    // Final duplicate check before adding
+    const existingIds = new Set(students.map((s) => s.student_id));
+    const newOnly = importPreview.filter((s) => !existingIds.has(s.student_id));
+
+    if (newOnly.length === 0) {
+      toast.warning('All students already exist in this class. Nothing to import.');
+      setImportPreview([]);
+      setShowImportDialog(false);
+      return;
+    }
+
+    const skipped = importPreview.length - newOnly.length;
+    setStudents((prev) => [...prev, ...newOnly]);
     setImportPreview([]);
     setShowImportDialog(false);
-    toast.success(`Imported ${importPreview.length} students`);
+
+    if (skipped > 0) {
+      toast.success(`Imported ${newOnly.length} students. ${skipped} duplicate(s) skipped.`);
+    } else {
+      toast.success(`Imported ${newOnly.length} students`);
+    }
 
     // If we're not currently adding or editing a class, assume this is a new class creation
     // triggered from the main page upload button.
@@ -675,7 +713,7 @@ export default function ClassManagement() {
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">
                       Total Students
@@ -683,6 +721,22 @@ export default function ClassManagement() {
                     <p className="text-sm font-medium flex items-center gap-1">
                       <GraduationCap className="w-4 h-4 text-yellow-600" />
                       {classItem.students.length}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-1">Created</p>
+                    <p className="text-xs text-muted-foreground">
+                      {classItem.created_at
+                        ? new Date(classItem.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          }) + ' • ' + new Date(classItem.created_at).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
+                        : '—'}
                     </p>
                   </div>
                 </div>

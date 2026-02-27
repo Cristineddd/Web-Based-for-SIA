@@ -202,7 +202,7 @@ function SendResultsPanel({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full max-w-md bg-[#1a472a] shadow-xl z-50 flex flex-col">
+    <div className="fixed inset-y-0 right-0 w-full md:max-w-md bg-[#1a472a] shadow-xl z-50 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-green-800 flex items-center justify-between">
         <div className="flex items-center gap-3 text-white">
@@ -697,12 +697,12 @@ export default function Results() {
   // Render loading state
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1">View and export grading results by class</p>
         </div>
-        <div className="flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-12 md:py-20">
           <div className="w-8 h-8 border-4 border-[#1a472a] border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
@@ -715,12 +715,12 @@ export default function Results() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1">View and export grading results by class</p>
         </div>
 
         {/* Class Info Bar */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 md:gap-4">
           <button 
             onClick={() => {
               setSelectedClass(null);
@@ -730,9 +730,9 @@ export default function Results() {
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div>
-            <h2 className="text-xl font-bold text-[#1a472a]">{selectedClass.className}</h2>
-            <p className="text-gray-600 text-sm">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg md:text-xl font-bold text-[#1a472a] truncate">{selectedClass.className}</h2>
+            <p className="text-gray-600 text-xs md:text-sm truncate">
               {selectedClass.totalStudents} students • {selectedClass.schedule}
             </p>
           </div>
@@ -757,40 +757,40 @@ export default function Results() {
               return (
                 <Card
                   key={exam.id}
-                  className="p-5 border hover:shadow-md transition-shadow cursor-pointer hover:border-[#1a472a]/30"
+                  className="p-4 md:p-5 border hover:shadow-md transition-shadow cursor-pointer hover:border-[#1a472a]/30"
                   onClick={() => fetchStudentResults(selectedClass, exam)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-blue-600" />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
                       </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-[#1a472a]">{exam.title}</h3>
-                        <p className="text-sm text-gray-600">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base md:text-lg font-bold text-[#1a472a] truncate">{exam.title}</h3>
+                        <p className="text-xs md:text-sm text-gray-600 truncate">
                           {exam.num_items} items • {exam.choices_per_item} choices • {exam.subject}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                    <ChevronRight className="w-4 h-4 md:w-5 md:h-5 text-gray-400 flex-shrink-0" />
                   </div>
 
-                  <div className="mt-4 grid grid-cols-3 gap-4">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Scanned</p>
-                      <p className="text-lg font-bold text-[#1a472a]">
+                  <div className="mt-3 md:mt-4 grid grid-cols-3 gap-2 md:gap-4">
+                    <div className="bg-gray-50 rounded-lg p-2 md:p-3">
+                      <p className="text-[10px] md:text-xs text-gray-500">Scanned</p>
+                      <p className="text-sm md:text-lg font-bold text-[#1a472a]">
                         {scanned} / {total}
                       </p>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Average Score</p>
-                      <p className="text-lg font-bold text-[#1a472a]">
+                    <div className="bg-gray-50 rounded-lg p-2 md:p-3">
+                      <p className="text-[10px] md:text-xs text-gray-500">Average Score</p>
+                      <p className="text-sm md:text-lg font-bold text-[#1a472a]">
                         {avg}%
                       </p>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Completion</p>
-                      <p className="text-lg font-bold text-[#1a472a]">
+                    <div className="bg-gray-50 rounded-lg p-2 md:p-3">
+                      <p className="text-[10px] md:text-xs text-gray-500">Completion</p>
+                      <p className="text-sm md:text-lg font-bold text-[#1a472a]">
                         {progressPercent}%
                       </p>
                     </div>
@@ -816,132 +816,163 @@ export default function Results() {
   // Render student results for selected exam
   if (selectedClass && selectedExam) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-            <p className="text-gray-600 mt-1">View and export grading results by class</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1">View and export grading results by class</p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-gray-600 text-sm">Export as:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-gray-600 text-xs md:text-sm hidden md:inline">Export as:</span>
             <Button
               variant="outline"
               onClick={() => setExportModalType('PDF')}
-              className="border-red-300 text-red-600 hover:bg-red-50"
+              className="border-red-300 text-red-600 hover:bg-red-50 text-xs md:text-sm"
+              size="sm"
             >
-              <FileText className="w-4 h-4 mr-2" />
+              <FileText className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
               PDF
             </Button>
             <Button
               variant="outline"
               onClick={() => setExportModalType('Excel')}
-              className="border-green-300 text-green-600 hover:bg-green-50"
+              className="border-green-300 text-green-600 hover:bg-green-50 text-xs md:text-sm"
+              size="sm"
             >
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              <FileSpreadsheet className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
               Excel
             </Button>
             <Button
               variant="outline"
               onClick={() => setExportModalType('CSV')}
-              className="border-green-400 text-green-700 hover:bg-green-50"
+              className="border-green-400 text-green-700 hover:bg-green-50 text-xs md:text-sm"
+              size="sm"
             >
-              <Table2 className="w-4 h-4 mr-2" />
+              <Table2 className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
               CSV
             </Button>
           </div>
         </div>
 
         {/* Class / Exam Info Bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
             <button 
               onClick={() => {
                 setSelectedExam(null);
                 setStudentResults([]);
               }}
-              className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors"
+              className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors flex-shrink-0"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <div>
-              <h2 className="text-xl font-bold text-[#1a472a]">{selectedExam.title}</h2>
-              <p className="text-gray-600 text-sm">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg md:text-xl font-bold text-[#1a472a] truncate">{selectedExam.title}</h2>
+              <p className="text-gray-600 text-xs md:text-sm truncate">
                 {selectedClass.className} • {selectedExam.num_items} items • {selectedExam.subject}
               </p>
             </div>
           </div>
           <Button
             onClick={() => setShowSendPanel(true)}
-            className="bg-[#1a472a] hover:bg-[#2d6b47] text-white"
+            className="bg-[#1a472a] hover:bg-[#2d6b47] text-white text-sm w-full md:w-auto"
+            size="sm"
           >
             <Mail className="w-4 h-4 mr-2" />
             Send Results
           </Button>
         </div>
 
-        {/* Results Table */}
-        <Card className="border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-[#fffde7]">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">#</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Student ID</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Student Name</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Score</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Grade</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingStudents ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
-                      <div className="w-6 h-6 border-2 border-[#1a472a] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                      Loading results...
-                    </td>
-                  </tr>
-                ) : studentResults.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
-                      <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p>No results found for this class yet.</p>
-                      <p className="text-sm">Scan answer sheets to generate grades.</p>
-                    </td>
-                  </tr>
-                ) : (
-                  studentResults.map((result, index) => (
-                    <tr 
-                      key={result.studentId} 
-                      className="border-b hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-4 py-4 text-gray-600">{index + 1}</td>
-                      <td className="px-4 py-4 text-gray-900">{result.studentId}</td>
-                      <td className="px-4 py-4 font-medium text-[#1a472a]">{result.studentName}</td>
-                      <td className="px-4 py-4 font-semibold text-gray-900">
-                        {result.score} / {result.totalQuestions}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getGradeColorClass(result.grade)}`}>
-                          {result.grade}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-gray-600">{result.date}</td>
-                      <td className="px-4 py-4">
-                        <Button variant="outline" size="sm" className="text-gray-600">
-                          <Download className="w-4 h-4 mr-1" />
-                          View
-                        </Button>
-                      </td>
+        {/* Results — Mobile Cards + Desktop Table */}
+        {loadingStudents ? (
+          <Card className="border p-8 md:p-12">
+            <div className="flex flex-col items-center justify-center text-gray-500">
+              <div className="w-6 h-6 border-2 border-[#1a472a] border-t-transparent rounded-full animate-spin mb-2" />
+              <p className="text-sm">Loading results...</p>
+            </div>
+          </Card>
+        ) : studentResults.length === 0 ? (
+          <Card className="border p-8 md:p-12 text-center text-gray-500">
+            <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p className="text-sm md:text-base">No results found for this class yet.</p>
+            <p className="text-xs md:text-sm">Scan answer sheets to generate grades.</p>
+          </Card>
+        ) : (
+          <>
+            {/* Mobile Cards */}
+            <div className="space-y-2.5 md:hidden">
+              {studentResults.map((result, index) => (
+                <Card key={result.studentId} className="p-3 border">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-xs text-gray-400 w-5">{index + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[#1a472a] truncate">{result.studentName}</p>
+                        <p className="text-[11px] text-gray-500">{result.studentId}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-gray-900">{result.score}/{result.totalQuestions}</p>
+                        <p className="text-[10px] text-gray-400">{result.date}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getGradeColorClass(result.grade)}`}>
+                        {result.grade}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            {/* Desktop Table */}
+            <Card className="border overflow-hidden hidden md:block">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-[#fffde7]">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">#</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Student ID</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Student Name</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Score</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Grade</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Date</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Actions</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {studentResults.map((result, index) => (
+                      <tr 
+                        key={result.studentId} 
+                        className="border-b hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-4 py-4 text-sm text-gray-600">{index + 1}</td>
+                        <td className="px-4 py-4 text-sm text-gray-900">{result.studentId}</td>
+                        <td className="px-4 py-4 text-sm font-medium text-[#1a472a]">{result.studentName}</td>
+                        <td className="px-4 py-4 text-sm font-semibold text-gray-900">
+                          {result.score} / {result.totalQuestions}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getGradeColorClass(result.grade)}`}>
+                            {result.grade}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">{result.date}</td>
+                        <td className="px-4 py-4">
+                          <Button variant="outline" size="sm" className="text-gray-600 text-sm">
+                            <Download className="w-4 h-4 mr-1" />
+                            View
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        )}
 
         {/* Export Modal */}
         <ConfirmationModal
@@ -966,11 +997,11 @@ export default function Results() {
 
   // Render class list view
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-        <p className="text-gray-600 mt-1">View and export grading results by class</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+        <p className="text-sm md:text-base text-gray-600 mt-1">View and export grading results by class</p>
       </div>
 
       {/* Class Cards */}
@@ -981,39 +1012,44 @@ export default function Results() {
           <p className="text-gray-500 mt-2">Create a class and add students to start grading exams.</p>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {classResults.map((classResult) => {
             return (
               <Card
                 key={classResult.classId}
-                className="p-6 border hover:shadow-md transition-shadow cursor-pointer"
+                className="p-3 md:p-5 border hover:shadow-md transition-shadow cursor-pointer hover:border-[#1a472a]/30"
                 onClick={() => handleClassClick(classResult)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                      <Folder className="w-6 h-6 text-amber-600" />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 md:gap-3 flex-1 min-w-0">
+                    <div className="w-9 h-9 md:w-11 md:h-11 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Folder className="w-4 h-4 md:w-5 md:h-5 text-amber-600" />
                     </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-[#1a472a]">{classResult.className}</h3>
-                      <p className="text-sm text-gray-600 flex items-center gap-1">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm md:text-base font-bold text-[#1a472a] truncate">{classResult.className}</h3>
+                      <p className="text-[11px] md:text-xs text-gray-500 truncate">
                         📅 {classResult.schedule}
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                  <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 </div>
 
-                <div className="mt-4">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Total Students</p>
-                    <p className="text-lg font-bold text-[#1a472a] flex items-center gap-1">
-                      <Users className="w-4 h-4" />
+                <div className="mt-2.5 md:mt-3 grid grid-cols-2 gap-2">
+                  <div className="bg-gray-50 rounded-lg p-2 md:p-2.5">
+                    <p className="text-[10px] md:text-xs text-gray-500">Students</p>
+                    <p className="text-sm md:text-base font-bold text-[#1a472a] flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5" />
                       {classResult.totalStudents}
                     </p>
                   </div>
+                  <div className="bg-gray-50 rounded-lg p-2 md:p-2.5">
+                    <p className="text-[10px] md:text-xs text-gray-500">Scanned</p>
+                    <p className="text-sm md:text-base font-bold text-[#1a472a]">
+                      {classResult.scannedCount}
+                    </p>
+                  </div>
                 </div>
-
               </Card>
             );
           })}
