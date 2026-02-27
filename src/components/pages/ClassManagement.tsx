@@ -510,9 +510,9 @@ export default function ClassManagement() {
     ];
     const sampleData = [
       headers,
-      ["2024-00001", "Juan", "Dela Cruz", "juan.delacruz@email.com"],
-      ["2024-00002", "Maria", "Santos", "maria.santos@email.com"],
-      ["2024-00003", "Jose", "Rizal", ""],
+      ["202400001", "Juan", "Dela Cruz", "juan.delacruz@email.com"],
+      ["202400002", "Maria", "Santos", "maria.santos@email.com"],
+      ["202400003", "Jose", "Rizal", ""],
     ];
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(sampleData);

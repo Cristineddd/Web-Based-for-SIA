@@ -36,8 +36,8 @@ export interface ImportValidationResult {
 }
 
 export class StudentIDValidationService {
-  private static readonly MIN_ID_LENGTH = 1;
-  private static readonly MAX_ID_LENGTH = 50;
+  private static readonly MIN_ID_LENGTH = 9;
+  private static readonly MAX_ID_LENGTH = 9;
   private static readonly STUDENT_ID_PATTERN = /^\d{9}$/; // 9 digits without hyphen (e.g., 202311070)
   private static readonly STUDENT_ID_PATTERN_WITH_HYPHEN = /^\d{4}-\d{5}$/; // Accept YYYY-XXXXX format for input, will normalize
   // Strict email regex: username@domain.tld (minimum 2 char TLD)
