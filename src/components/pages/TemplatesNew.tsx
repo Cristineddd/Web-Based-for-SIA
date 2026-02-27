@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,10 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { FileText, Download, Plus, Eye, Trash2 } from 'lucide-react';
+import { FileText, Download, Eye, Trash2, Search, Filter, Archive, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { collection, getDocs, addDoc, deleteDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, serverTimestamp, query, where, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { generateTemplatePDF } from '@/lib/templatePdfGenerator';
 
@@ -43,6 +43,11 @@ interface Template {
   examId?: string;
   examName?: string;
   createdAt: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  isArchived?: boolean;
+  archivedAt?: string;
+  archivedBy?: string;
 }
 
 interface Class {
@@ -55,29 +60,66 @@ interface Exam {
   title: string;
 }
 
+// Pagination constants
+const ITEMS_PER_PAGE = 9; // 3x3 grid
+
+// Helper function to format dates (handles Firestore Timestamps and strings)
+const formatDate = (dateValue: unknown): string => {
+  if (!dateValue) return 'N/A';
+  
+  try {
+    // Handle Firestore Timestamp objects
+    if (typeof dateValue === 'object' && dateValue !== null && 'toDate' in dateValue) {
+      return (dateValue as { toDate: () => Date }).toDate().toLocaleDateString();
+    }
+    
+    // Handle string dates
+    if (typeof dateValue === 'string') {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleDateString();
+    }
+    
+    // Handle Date objects
+    if (dateValue instanceof Date) {
+      return dateValue.toLocaleDateString();
+    }
+    
+    // Handle seconds (Firestore timestamp as plain object)
+    if (typeof dateValue === 'object' && 'seconds' in (dateValue as Record<string, unknown>)) {
+      const seconds = (dateValue as { seconds: number }).seconds;
+      return new Date(seconds * 1000).toLocaleDateString();
+    }
+    
+    return 'N/A';
+  } catch {
+    return 'N/A';
+  }
+};
+
 export default function Templates() {
   const { user } = useAuth();
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [templateToArchive, setTemplateToArchive] = useState<Template | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [newTemplate, setNewTemplate] = useState({
-    name: '',
-    description: '',
-    numQuestions: 50,
-    choicesPerQuestion: 4,
-    layout: 'single' as 'single' | 'double' | 'quad',
-    includeStudentId: true,
-    studentIdLength: 10,
-    classId: '',
-    examId: '',
-  });
+  // Search and Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterClass, setFilterClass] = useState<string>('all');
+  const [filterExam, setFilterExam] = useState<string>('all');
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch classes and exams on mount
   useEffect(() => {
@@ -88,17 +130,30 @@ export default function Templates() {
   }, [user?.id]);
 
   const fetchClassesAndExams = async () => {
+    if (!user?.instructorId) {
+      console.log('No instructorId found, skipping class/exam fetch');
+      return;
+    }
+
     try {
-      // Fetch classes
-      const classesSnapshot = await getDocs(collection(db, 'classes'));
+      // Fetch classes for current instructor only
+      const classesQuery = query(
+        collection(db, 'classes'),
+        where('instructorId', '==', user.instructorId)
+      );
+      const classesSnapshot = await getDocs(classesQuery);
       const fetchedClasses = classesSnapshot.docs.map(doc => ({
         id: doc.id,
         class_name: doc.data().class_name || 'Unnamed Class',
       }));
       setClasses(fetchedClasses);
 
-      // Fetch exams
-      const examsSnapshot = await getDocs(collection(db, 'exams'));
+      // Fetch exams for current instructor only
+      const examsQuery = query(
+        collection(db, 'exams'),
+        where('instructorId', '==', user.instructorId)
+      );
+      const examsSnapshot = await getDocs(examsQuery);
       const fetchedExams = examsSnapshot.docs.map(doc => ({
         id: doc.id,
         title: doc.data().title || 'Unnamed Exam',
@@ -136,74 +191,75 @@ export default function Templates() {
     }
   };
 
-  const handleCreateTemplate = async () => {
-    if (!user?.instructorId) {
-      toast.error('⚠️ Instructor ID not found. Please log out and log back in.');
-      return;
+  // Filter and search logic
+  const filteredTemplates = useMemo(() => {
+    let result = templates;
+    
+    // Filter archived/active
+    result = result.filter(t => showArchived ? t.isArchived : !t.isArchived);
+    
+    // Search by name or description
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(t => 
+        t.name.toLowerCase().includes(query) ||
+        t.description?.toLowerCase().includes(query) ||
+        t.className?.toLowerCase().includes(query) ||
+        t.examName?.toLowerCase().includes(query)
+      );
     }
-
-    if (!newTemplate.name.trim()) {
-      toast.error('Please enter a template name');
-      return;
+    
+    // Filter by class
+    if (filterClass && filterClass !== 'all') {
+      result = result.filter(t => t.classId === filterClass);
     }
-
-    console.log('📝 Creating template...');
-    console.log('  - Template data:', newTemplate);
-    console.log('  - InstructorId:', user.instructorId);
-
-    try {
-      // Get class and exam names if IDs are provided
-      const selectedClass = classes.find(c => c.id === newTemplate.classId);
-      const selectedExam = exams.find(e => e.id === newTemplate.examId);
-
-      const templateData = {
-        name: newTemplate.name,
-        description: newTemplate.description,
-        numQuestions: newTemplate.numQuestions,
-        choicesPerQuestion: newTemplate.choicesPerQuestion,
-        layout: newTemplate.layout,
-        includeStudentId: newTemplate.includeStudentId,
-        studentIdLength: newTemplate.studentIdLength,
-        createdBy: user.id,
-        instructorId: user.instructorId,
-        ...(newTemplate.classId && newTemplate.classId !== 'none' && {
-          classId: newTemplate.classId,
-          className: selectedClass?.class_name,
-        }),
-        ...(newTemplate.examId && newTemplate.examId !== 'none' && {
-          examId: newTemplate.examId,
-          examName: selectedExam?.title,
-        }),
-        createdAt: serverTimestamp(),
-      };
-
-      // Save to Firestore
-      const docRef = await addDoc(collection(db, 'templates'), templateData);
-      console.log('✅ Template created with ID:', docRef.id);
-
-      // Refresh templates list
-      await fetchTemplates();
-      
-      setShowCreateDialog(false);
-      toast.success('Template created successfully!');
-      
-      // Reset form
-      setNewTemplate({
-        name: '',
-        description: '',
-        numQuestions: 50,
-        choicesPerQuestion: 4,
-        layout: 'single',
-        includeStudentId: true,
-        studentIdLength: 10,
-        classId: '',
-        examId: '',
+    
+    // Filter by exam
+    if (filterExam && filterExam !== 'all') {
+      result = result.filter(t => t.examId === filterExam);
+    }
+    
+    // Filter by date (created from)
+    if (filterDateFrom) {
+      const fromDate = new Date(filterDateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      result = result.filter(t => {
+        const createdAt = t.createdAt ? new Date(t.createdAt) : null;
+        return createdAt && createdAt >= fromDate;
       });
-    } catch (error) {
-      console.error('❌ Error creating template:', error);
-      toast.error('Failed to create template');
     }
+    
+    // Sort by createdAt descending (newest first)
+    result.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+    
+    return result;
+  }, [templates, searchQuery, filterClass, filterExam, filterDateFrom, showArchived]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredTemplates.length / ITEMS_PER_PAGE);
+  const paginatedTemplates = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTemplates.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredTemplates, currentPage]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterClass, filterExam, filterDateFrom, showArchived]);
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setFilterClass('all');
+    setFilterExam('all');
+    setFilterDateFrom('');
+    setCurrentPage(1);
   };
+
+  const hasActiveFilters = searchQuery || filterClass !== 'all' || filterExam !== 'all' || filterDateFrom;
 
   const handlePreview = (template: Template) => {
     setPreviewTemplate(template);
@@ -249,170 +305,131 @@ export default function Templates() {
     }
   };
 
+  // Archive functions
+  const confirmArchive = (template: Template) => {
+    setTemplateToArchive(template);
+    setShowArchiveDialog(true);
+  };
+
+  const handleArchive = async () => {
+    if (!templateToArchive || !user?.id) return;
+
+    try {
+      await updateDoc(doc(db, 'templates', templateToArchive.id), {
+        isArchived: true,
+        archivedAt: serverTimestamp(),
+        archivedBy: user.id,
+      });
+      
+      // Update local state
+      setTemplates((prev) => prev.map((t) => 
+        t.id === templateToArchive.id 
+          ? { ...t, isArchived: true, archivedAt: new Date().toISOString(), archivedBy: user.id }
+          : t
+      ));
+      
+      toast.success(`"${templateToArchive.name}" archived successfully`);
+    } catch (error) {
+      console.error('Error archiving template:', error);
+      toast.error('Failed to archive template');
+    } finally {
+      setShowArchiveDialog(false);
+      setTemplateToArchive(null);
+    }
+  };
+
+  const handleRestore = async (template: Template) => {
+    if (!user?.id) return;
+
+    try {
+      await updateDoc(doc(db, 'templates', template.id), {
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null,
+      });
+      
+      // Update local state
+      setTemplates((prev) => prev.map((t) => 
+        t.id === template.id 
+          ? { ...t, isArchived: false, archivedAt: undefined, archivedBy: undefined }
+          : t
+      ));
+      
+      toast.success(`"${template.name}" restored successfully`);
+    } catch (error) {
+      console.error('Error restoring template:', error);
+      toast.error('Failed to restore template');
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Answer Sheet Templates</h1>
-        <p className="text-muted-foreground mt-1">Create ZipGrade-inspired answer sheet templates for optical scanning.</p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Answer Sheet Templates</h1>
+          <p className="text-muted-foreground mt-1">View and manage templates generated from exams. Templates are created automatically when you create an exam.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={showArchived ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            <Archive className="w-4 h-4 mr-2" />
+            {showArchived ? 'Viewing Archived' : 'View Archived'}
+          </Button>
+        </div>
       </div>
 
-      {/* Loading State */}
-      {loading ? (
-        <Card className="p-8 border text-center">
-          <p className="text-muted-foreground">Loading templates...</p>
-        </Card>
-      ) : templates.length === 0 ? (
-        <Card className="p-8 border text-center">
-          <div className="max-w-md mx-auto">
-            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-blue-600" />
-            </div>
-            <h3 className="font-semibold text-lg mb-2">No templates created yet</h3>
-            <p className="text-muted-foreground mb-4">
-              Create your first answer sheet template with customizable questions, choices, and layout options.
-            </p>
-            <Button onClick={() => setShowCreateDialog(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Create Template
-            </Button>
+      {/* Search and Filter Bar */}
+      <Card className="p-4 border">
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Search Input */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, description, class, or exam..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
           </div>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {templates.map((template) => (
-            <Card key={template.id} className="p-6 border hover:shadow-md hover:border-primary/30 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-6 h-6 text-blue-600" />
-                </div>
-                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
-                  {template.numQuestions} Questions
-                </span>
-              </div>
-              
-              <h3 className="font-semibold text-foreground mb-2">{template.name}</h3>
-              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                {template.description || 'No description'}
-              </p>
-              
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-4">
-                <div className="flex items-center gap-1">
-                  <span className="font-medium">Choices:</span>
-                  <span>A-{String.fromCharCode(64 + template.choicesPerQuestion)}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-medium">Items:</span>
-                  <span>{template.numQuestions}</span>
-                </div>
-              </div>
-
-              {/* Show linked class/exam */}
-              {(template.className || template.examName) && (
-                <div className="mb-4 p-2 bg-blue-50 rounded text-xs space-y-1">
-                  {template.className && (
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium text-blue-700">Class:</span>
-                      <span className="text-blue-600">{template.className}</span>
-                    </div>
-                  )}
-                  {template.examName && (
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium text-blue-700">Exam:</span>
-                      <span className="text-blue-600">{template.examName}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => handlePreview(template)}
-                >
-                  <Eye className="w-4 h-4 mr-1" />
-                  Preview
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => handleDownload(template)}
-                >
-                  <Download className="w-4 h-4 mr-1" />
-                  Download
-                </Button>
-              </div>
-            </Card>
-          ))}
+          
+          {/* Filter Toggle Button */}
+          <Button
+            variant={showFilters ? "default" : "outline"}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter className="w-4 h-4 mr-2" />
+            Filters
+            {hasActiveFilters && (
+              <span className="ml-2 px-1.5 py-0.5 bg-primary-foreground text-primary rounded-full text-xs">
+                Active
+              </span>
+            )}
+          </Button>
+          
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="w-4 h-4 mr-1" />
+              Clear
+            </Button>
+          )}
         </div>
-      )}
-
-      {/* Create Template Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create Answer Sheet Template</DialogTitle>
-            <DialogDescription>
-              Create a ZipGrade-inspired answer sheet template with customizable options.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {/* Template Name */}
+        
+        {/* Expanded Filters */}
+        {showFilters && (
+          <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Filter by Class */}
             <div className="space-y-2">
-              <Label htmlFor="name">Template Name *</Label>
-              <Input
-                id="name"
-                placeholder="e.g., 50-Question Multiple Choice"
-                value={newTemplate.name}
-                onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })}
-              />
-            </div>
-
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Input
-                id="description"
-                placeholder="Brief description of the template"
-                value={newTemplate.description}
-                onChange={(e) => setNewTemplate({ ...newTemplate, description: e.target.value })}
-              />
-            </div>
-
-            {/* Number of Questions */}
-            <div className="space-y-2">
-              <Label htmlFor="numQuestions">Number of Questions *</Label>
-              <Select
-                value={newTemplate.numQuestions.toString()}
-                onValueChange={(value) => setNewTemplate({ ...newTemplate, numQuestions: parseInt(value) })}
-              >
+              <Label className="text-xs text-muted-foreground">Filter by Class</Label>
+              <Select value={filterClass} onValueChange={setFilterClass}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="All Classes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="20">20 Questions</SelectItem>
-                  <SelectItem value="50">50 Questions</SelectItem>
-                  <SelectItem value="100">100 Questions</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Link to Class */}
-            <div className="space-y-2">
-              <Label htmlFor="classId">Link to Class (Optional)</Label>
-              <Select
-                value={newTemplate.classId}
-                onValueChange={(value) => setNewTemplate({ ...newTemplate, classId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a class" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="all">All Classes</SelectItem>
                   {classes.map((cls) => (
                     <SelectItem key={cls.id} value={cls.id}>
                       {cls.class_name}
@@ -421,19 +438,16 @@ export default function Templates() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Link to Exam */}
+            
+            {/* Filter by Exam */}
             <div className="space-y-2">
-              <Label htmlFor="examId">Link to Exam (Optional)</Label>
-              <Select
-                value={newTemplate.examId}
-                onValueChange={(value) => setNewTemplate({ ...newTemplate, examId: value })}
-              >
+              <Label className="text-xs text-muted-foreground">Filter by Exam</Label>
+              <Select value={filterExam} onValueChange={setFilterExam}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select an exam" />
+                  <SelectValue placeholder="All Exams" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="all">All Exams</SelectItem>
                   {exams.map((exam) => (
                     <SelectItem key={exam.id} value={exam.id}>
                       {exam.title}
@@ -442,88 +456,243 @@ export default function Templates() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Choices Per Question */}
+            
+            {/* Date From */}
             <div className="space-y-2">
-              <Label htmlFor="choices">Choices Per Question *</Label>
-              <Select
-                value={newTemplate.choicesPerQuestion.toString()}
-                onValueChange={(value) => setNewTemplate({ ...newTemplate, choicesPerQuestion: parseInt(value) })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="3">3 Choices (A, B, C)</SelectItem>
-                  <SelectItem value="4">4 Choices (A, B, C, D)</SelectItem>
-                  <SelectItem value="5">5 Choices (A, B, C, D, E)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs text-muted-foreground">Created On/After</Label>
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+              />
             </div>
+          </div>
+        )}
+      </Card>
 
-            {/* Layout */}
-            <div className="space-y-2">
-              <Label htmlFor="layout">Page Layout *</Label>
-              <Select
-                value={newTemplate.layout}
-                onValueChange={(value: 'single' | 'double' | 'quad') => setNewTemplate({ ...newTemplate, layout: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="single">Single Column (1-100)</SelectItem>
-                  <SelectItem value="double">Double Column (1-50, 51-100)</SelectItem>
-                  <SelectItem value="quad">Quad Layout (ZipGrade style)</SelectItem>
-                </SelectContent>
-              </Select>
+      {/* Results Summary */}
+      {!loading && templates.length > 0 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {paginatedTemplates.length} of {filteredTemplates.length} templates
+            {hasActiveFilters && ` (filtered from ${templates.filter(t => showArchived ? t.isArchived : !t.isArchived).length} total)`}
+            {showArchived && ' (archived)'}
+          </span>
+          {totalPages > 1 && (
+            <span>Page {currentPage} of {totalPages}</span>
+          )}
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading ? (
+        <Card className="p-8 border text-center">
+          <p className="text-muted-foreground">Loading templates...</p>
+        </Card>
+      ) : filteredTemplates.length === 0 ? (
+        <Card className="p-8 border text-center">
+          <div className="max-w-md mx-auto">
+            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-8 h-8 text-blue-600" />
             </div>
-
-            {/* Student ID Options */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="includeStudentId">Include Student ID Section</Label>
-                <input
-                  type="checkbox"
-                  id="includeStudentId"
-                  className="h-4 w-4"
-                  checked={newTemplate.includeStudentId}
-                  onChange={(e) => setNewTemplate({ ...newTemplate, includeStudentId: e.target.checked })}
-                />
-              </div>
-            </div>
-
-            {newTemplate.includeStudentId && (
-              <div className="space-y-2 pl-4 border-l-2">
-                <Label htmlFor="studentIdLength">Student ID Length</Label>
-                <Select
-                  value={newTemplate.studentIdLength.toString()}
-                  onValueChange={(value) => setNewTemplate({ ...newTemplate, studentIdLength: parseInt(value) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="6">6 digits</SelectItem>
-                    <SelectItem value="8">8 digits</SelectItem>
-                    <SelectItem value="10">10 digits</SelectItem>
-                    <SelectItem value="12">12 digits</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {templates.length === 0 ? (
+              <>
+                <h3 className="font-semibold text-lg mb-2">No templates generated yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Templates are automatically created when you create an exam. Go to the Exams page to create your first exam.
+                </p>
+              </>
+            ) : hasActiveFilters ? (
+              <>
+                <h3 className="font-semibold text-lg mb-2">No templates match your filters</h3>
+                <p className="text-muted-foreground mb-4">
+                  Try adjusting your search or filter criteria.
+                </p>
+                <Button variant="outline" onClick={clearFilters}>
+                  <X className="w-4 h-4 mr-2" />
+                  Clear Filters
+                </Button>
+              </>
+            ) : (
+              <>
+                <h3 className="font-semibold text-lg mb-2">
+                  {showArchived ? 'No archived templates' : 'No active templates'}
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  {showArchived 
+                    ? 'Archived templates will appear here.' 
+                    : 'Templates are automatically generated when exams are created.'}
+                </p>
+              </>
             )}
           </div>
+        </Card>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {paginatedTemplates.map((template) => (
+              <Card key={template.id} className={`p-6 border hover:shadow-md hover:border-primary/30 transition-all ${template.isArchived ? 'opacity-75 bg-muted/30' : ''}`}>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {template.isArchived && (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">
+                        Archived
+                      </span>
+                    )}
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                      {template.numQuestions} Questions
+                    </span>
+                  </div>
+                </div>
+                
+                <h3 className="font-semibold text-foreground mb-2">{template.name}</h3>
+                <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                  {template.description || 'No description'}
+                </p>
+                
+                {/* Created/Updated info */}
+                <div className="text-xs text-muted-foreground mb-4">
+                  {template.createdAt && (
+                    <span>Created: {formatDate(template.createdAt)}</span>
+                  )}
+                  {template.updatedAt && (
+                    <span className="ml-2">• Updated: {formatDate(template.updatedAt)}</span>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-4">
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium">Choices:</span>
+                    <span>A-{String.fromCharCode(64 + template.choicesPerQuestion)}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium">Items:</span>
+                    <span>{template.numQuestions}</span>
+                  </div>
+                </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateTemplate}>
-              Create Template
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                {/* Show linked class/exam */}
+                {(template.className || template.examName) && (
+                  <div className="mb-4 p-2 bg-blue-50 rounded text-xs space-y-1">
+                    {template.className && (
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium text-blue-700">Class:</span>
+                        <span className="text-blue-600">{template.className}</span>
+                      </div>
+                    )}
+                    {template.examName && (
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium text-blue-700">Exam:</span>
+                        <span className="text-blue-600">{template.examName}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => handlePreview(template)}
+                  >
+                    <Eye className="w-4 h-4 mr-1" />
+                    Preview
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => handleDownload(template)}
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    Download
+                  </Button>
+                </div>
+                
+                {/* Archive/Restore Buttons */}
+                <div className="flex gap-2">
+                  {!template.isArchived ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                      onClick={() => confirmArchive(template)}
+                    >
+                      <Archive className="w-4 h-4 mr-1" />
+                      Archive
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={() => handleRestore(template)}
+                      >
+                        <Archive className="w-4 h-4 mr-1" />
+                        Restore
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => confirmDelete(template)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Previous
+              </Button>
+              
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    className="w-8 h-8 p-0"
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </Button>
+                ))}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
@@ -765,6 +934,31 @@ export default function Templates() {
         </DialogContent>
       </Dialog>
 
+      {/* Archive Confirmation Dialog */}
+      <Dialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-amber-600">Archive Template</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to archive <strong>&quot;{templateToArchive?.name}&quot;</strong>? 
+              You can restore it later from the archived templates view.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowArchiveDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleArchive}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              <Archive className="w-4 h-4 mr-2" />
+              Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Guidelines Card */}
       <Card className="p-6 border bg-blue-50/50">
         <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -772,6 +966,10 @@ export default function Templates() {
           Template Guidelines
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
+          <li className="flex gap-3">
+            <span className="text-blue-600 font-bold">•</span>
+            <span>Templates are automatically created when you create an exam in the Exams page</span>
+          </li>
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
             <span>Templates include alignment markers (black squares) for optical scanning accuracy</span>
@@ -790,7 +988,7 @@ export default function Templates() {
           </li>
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
-            <span>Test templates before large-scale use to ensure scanner compatibility</span>
+            <span>Archived templates are preserved for audit purposes and log integrity</span>
           </li>
         </ul>
       </Card>

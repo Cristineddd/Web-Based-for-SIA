@@ -1,5 +1,5 @@
 /**
- * Audit Log Types - For tracking all upload and administrative activities
+ * Audit Log Types - For tracking all upload, administrative, and grade activities
  */
 
 export type ActivityType = 
@@ -11,7 +11,25 @@ export type ActivityType =
   | 'exam_created'
   | 'exam_deleted'
   | 'admin_action'
-  | 'settings_changed';
+  | 'settings_changed'
+  // Grade modification activity types
+  | 'grade_created'
+  | 'grade_updated'
+  | 'grade_deleted'
+  | 'grade_override'
+  | 'score_submitted'
+  | 'score_override';
+
+/** Snapshot of grade field values — used for before/after diff tracking */
+export interface GradeSnapshot {
+  score?: number;
+  max_score?: number;
+  percentage?: number;
+  letter_grade?: string;
+  status?: string;
+  is_final?: boolean;
+  comments?: string;
+}
 
 export interface AuditLog {
   id: string;
@@ -38,6 +56,10 @@ export interface AuditLog {
   status: 'success' | 'failed' | 'pending';
   errorMessage?: string;
   metadata?: Record<string, unknown>;
+
+  // Grade modification change tracking
+  beforeValues?: GradeSnapshot;
+  afterValues?: GradeSnapshot;
   
   // Indexing fields
   createdAt: string;

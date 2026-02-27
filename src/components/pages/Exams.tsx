@@ -33,11 +33,12 @@ import {
   createExam,
   getExams,
   archiveExam,
+  updateExam,
   type Exam,
   type ExamFormData,
 } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 interface ExamWithStatus extends Exam {
@@ -58,7 +59,9 @@ export default function Exams() {
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [duplicateExamData, setDuplicateExamData] = useState<ExamFormData | null>(null);
-  const [editingExam, setEditingExam] = useState<ExamWithStatus | null>(null);
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", subject: "", num_items: 0, choices_per_item: 4, examType: "board" as "board" | "diagnostic" });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     const title = searchParams.get("title");
@@ -68,6 +71,7 @@ export default function Exams() {
     const choices = searchParams.get("choices");
 
     if (title && subject && items && date) {
+      // Check for EXACT match (same title, subject, items)
       const examExists = exams.some(
         (exam) =>
           exam.title === title &&
@@ -75,7 +79,19 @@ export default function Exams() {
           exam.num_items === parseInt(items),
       );
 
+      // Also check for duplicate title only (case-insensitive)
+      const hasDuplicateTitle = exams.some(
+        (exam) => exam.title.toLowerCase().trim() === title.toLowerCase().trim()
+      );
+
       if (!examExists) {
+        if (hasDuplicateTitle) {
+          // Show warning but still allow creation from URL params
+          toast.warning(`⚠️ An exam with title "${title}" already exists. Creating a new one...`, {
+            duration: 5000,
+          });
+        }
+        
         const newExam: Exam = {
           id: `exam_${Date.now()}`,
           title: title,
@@ -167,15 +183,20 @@ export default function Exams() {
     fetchExams();
   }, [user]);
 
-  const handleCreateExam = async (formData: ExamFormData) => {
-    // Check for duplicates first
-    const isDuplicate = exams.some(
+  const handleCreateExam = async (formData: ExamFormData, forceCreate: boolean = false) => {
+    // Check for duplicates first (unless forceCreate is true - user clicked "Proceed Anyway")
+    const duplicateExam = exams.find(
       (e) => e.title.toLowerCase().trim() === formData.name.toLowerCase().trim()
     );
 
-    if (isDuplicate && !duplicateExamData) {
+    if (duplicateExam && !forceCreate) {
+      // Show duplicate warning dialog and toast notification
       setDuplicateExamData(formData);
       setShowCreateModal(false);
+      toast.warning(`⚠️ Duplicate detected: An exam named "${formData.name}" already exists!`, {
+        duration: 5000,
+        description: 'Review the warning dialog to proceed or cancel.',
+      });
       return;
     }
 
@@ -234,6 +255,74 @@ export default function Exams() {
     } catch (error) {
       console.error("Error creating exam:", error);
       toast.error("Failed to create exam");
+    }
+  };
+
+  const handleEditExam = (exam: Exam) => {
+    setEditingExam(exam);
+    setEditForm({
+      title: exam.title,
+      subject: exam.subject,
+      num_items: exam.num_items,
+      choices_per_item: exam.choices_per_item,
+      examType: exam.examType || "board",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingExam) return;
+    if (!editForm.title.trim()) { toast.error("Exam name is required"); return; }
+    if (!editForm.subject.trim()) { toast.error("Subject is required"); return; }
+    if (!editForm.num_items || editForm.num_items < 1) { toast.error("Number of items must be at least 1"); return; }
+
+    try {
+      setIsSavingEdit(true);
+
+      // Update exam fields in Firestore
+      await updateExam(editingExam.id, {
+        title: editForm.title.trim(),
+        subject: editForm.subject.trim(),
+        num_items: editForm.num_items,
+        choices_per_item: editForm.choices_per_item,
+        examType: editForm.examType,
+      });
+
+      // Delete any existing template linked to this exam so a new one can be generated
+      const templateQuery = query(
+        collection(db, "templates"),
+        where("examId", "==", editingExam.id)
+      );
+      const templateSnap = await getDocs(templateQuery);
+      if (!templateSnap.empty) {
+        await Promise.all(templateSnap.docs.map((d) => deleteDoc(d.ref)));
+        toast.info("Existing template deleted — please generate a new one.");
+      }
+
+      // Update local state
+      setExams((prev) =>
+        prev.map((e) =>
+          e.id === editingExam.id
+            ? {
+                ...e,
+                title: editForm.title.trim(),
+                subject: editForm.subject.trim(),
+                num_items: editForm.num_items,
+                choices_per_item: editForm.choices_per_item,
+                examType: editForm.examType,
+                updatedAt: new Date().toISOString(),
+                hasTemplate: false, // template was just deleted
+              }
+            : e
+        )
+      );
+
+      toast.success("Exam updated successfully");
+      setEditingExam(null);
+    } catch (error) {
+      console.error("Error updating exam:", error);
+      toast.error("Failed to update exam");
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -429,21 +518,109 @@ export default function Exams() {
         onCreateExam={handleCreateExam}
       />
 
-      {/* Edit Exam Modal */}
+      {/* Edit Exam Dialog */}
       {editingExam && (
-        <EditExamModal
-          isOpen={!!editingExam}
-          onClose={() => setEditingExam(null)}
-          exam={editingExam}
-          onExamUpdated={(updatedExam) => {
-            setExams((prev) =>
-              prev.map((e) =>
-                e.id === updatedExam.id ? { ...e, ...updatedExam } : e,
-              ),
-            );
-            setEditingExam(null);
-          }}
-        />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
+              <button onClick={() => setEditingExam(null)} className="p-1 hover:bg-muted rounded-md">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Exam Name <span className="text-destructive">*</span></label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Exam name"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Subject / Folder <span className="text-destructive">*</span></label>
+                <input
+                  type="text"
+                  value={editForm.subject}
+                  onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Subject"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Number of Items <span className="text-destructive">*</span></label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[20, 50, 100].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setEditForm({ ...editForm, num_items: num })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.num_items === num
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Choices per Question</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{ label: "4 Choices (A–D)", value: 4 }, { label: "5 Choices (A–E)", value: 5 }].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.choices_per_item === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Exam Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{ label: "Board Exam", value: "board" }, { label: "Diagnostic Test", value: "diagnostic" }].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.examType === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t">
+              <button
+                onClick={() => setEditingExam(null)}
+                className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Archive Dialog */}
@@ -491,8 +668,10 @@ export default function Exams() {
             <AlertDialogAction
               onClick={() => {
                 if (duplicateExamData) {
-                  handleCreateExam(duplicateExamData);
+                  // Pass forceCreate=true to bypass duplicate check
+                  handleCreateExam(duplicateExamData, true);
                   setDuplicateExamData(null);
+                  toast.info('Creating duplicate exam as requested...');
                 }
               }}
               className="bg-warning text-warning-foreground hover:bg-warning/90"

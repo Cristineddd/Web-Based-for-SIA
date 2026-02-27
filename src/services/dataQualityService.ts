@@ -448,11 +448,41 @@ export class DataQualityService {
   }
 
   /**
-   * Check email format
+   * Check email format - strict validation
+   * Requires proper format: username@domain.extension
    */
   private static isValidEmailFormat(email: string): boolean {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    // Strict email regex that requires:
+    // - Local part: letters, numbers, dots, underscores, hyphens (at least 1 char)
+    // - @ symbol
+    // - Domain: letters, numbers, hyphens (at least 1 char)
+    // - Dot
+    // - TLD: at least 2 letters
+    const strictEmailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    
+    if (!strictEmailRegex.test(email)) {
+      return false;
+    }
+    
+    // No consecutive dots
+    if (email.includes('..')) {
+      return false;
+    }
+    
+    // Local part shouldn't start or end with a dot
+    const localPart = email.split('@')[0];
+    if (localPart.startsWith('.') || localPart.endsWith('.')) {
+      return false;
+    }
+    
+    // Domain part shouldn't start or end with a hyphen or dot
+    const domainPart = email.split('@')[1];
+    if (domainPart.startsWith('.') || domainPart.startsWith('-') || 
+        domainPart.endsWith('-')) {
+      return false;
+    }
+    
+    return true;
   }
 
   /**
