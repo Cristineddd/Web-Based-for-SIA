@@ -52,33 +52,6 @@ export interface GeneratedSheet {
   created_at: string;
 }
 
-// ── Exam Edit Business Rules ──────────────────────────────────────────────────
-
-/**
- * Message shown to users when editing is blocked.
- */
-export const EDIT_RESTRICTION_MESSAGE =
-  "Editing is not allowed once the exam date has been reached.";
-
-/**
- * Determines whether an exam can still be edited.
- *
- * Business rule:
- *   Exams are editable only **before** their scheduled date (`created_at`).
- *   Once today's date is equal to or past the exam date, all edits are blocked.
- *
- * @param exam - The exam (or any object with a `created_at` date string).
- * @returns `true` if the exam can be edited; `false` if the exam date has been
- *          reached and editing should be prevented.
- */
-export function canEditExam(exam: Pick<Exam, "created_at">): boolean {
-  const examDate = new Date(exam.created_at);
-  examDate.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today < examDate;
-}
-
 export interface ExamFormData {
   name: string;
   totalQuestions: number;
@@ -356,15 +329,6 @@ export async function updateExam(
   updates: Partial<Exam>,
 ): Promise<void> {
   try {
-    // Fetch the current exam to enforce edit restriction
-    const examSnap = await getDoc(doc(db, "exams", examId));
-    if (examSnap.exists()) {
-      const examData = examSnap.data() as Exam;
-      if (!canEditExam(examData)) {
-        throw new Error(EDIT_RESTRICTION_MESSAGE);
-      }
-    }
-
     const docRef = doc(db, "exams", examId);
     await updateDoc(docRef, {
       ...updates,
@@ -372,9 +336,6 @@ export async function updateExam(
     });
   } catch (error) {
     console.error("Error updating exam:", error);
-    if (error instanceof Error && error.message === EDIT_RESTRICTION_MESSAGE) {
-      throw error;
-    }
     throw new Error("Failed to update exam");
   }
 }
