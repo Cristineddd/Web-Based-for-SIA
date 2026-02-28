@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Users, 
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import {
+  LayoutDashboard,
+  FileText,
+  Users,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -14,34 +14,37 @@ import {
   Archive,
   Menu,
   X,
-  AlertTriangle
-} from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useSidebarContext } from '@/contexts/SidebarContext';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+  AlertTriangle,
+  History,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSidebarContext } from "@/contexts/SidebarContext";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/exams', label: 'Exams', icon: FileText },
-  { path: '/classes', label: 'Classes', icon: Users },
-  { path: '/results', label: 'Results', icon: BarChart3 },
-  { path: '/templates', label: 'Templates', icon: FileText },
-  { path: '/archive', label: 'Archive', icon: Archive },
+  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/exams", label: "Exams", icon: FileText },
+  { path: "/classes", label: "Classes", icon: Users },
+  { path: "/results", label: "Results", icon: BarChart3 },
+  { path: "/templates", label: "Templates", icon: FileText },
+  { path: "/archive", label: "Archive", icon: Archive },
+  { path: "/audit-logs", label: "Audit Logs", icon: History },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { signOut, user } = useAuth();
-  const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebarContext();
+  const { collapsed, setCollapsed, mobileOpen, setMobileOpen } =
+    useSidebarContext();
   const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   const handleSignOut = () => {
     signOut();
     setMobileOpen(false);
     setShowSignOutModal(false);
-    router.push('/');
+    router.push("/");
   };
 
   const handleNavClick = () => {
@@ -52,7 +55,7 @@ export function Sidebar() {
     if (user?.email) {
       return user.email.charAt(0).toUpperCase();
     }
-    return '?';
+    return "?";
   };
 
   return (
@@ -62,7 +65,11 @@ export function Sidebar() {
           onClick={() => setMobileOpen(!mobileOpen)}
           className="p-1.5 hover:bg-[#1a7a3e] rounded-md text-white transition-colors"
         >
-          {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          {mobileOpen ? (
+            <X className="w-4 h-4" />
+          ) : (
+            <Menu className="w-4 h-4" />
+          )}
         </button>
         <h1 className="ml-2 font-bold text-white text-sm">SIA</h1>
       </div>
@@ -74,7 +81,7 @@ export function Sidebar() {
         />
       )}
 
-      <aside 
+      <aside
         className={cn(
           "h-screen bg-[#166534] flex flex-col transition-all duration-300 fixed left-0 top-0 z-40 border-r border-[#F0E6D2]",
           // Desktop
@@ -82,13 +89,14 @@ export function Sidebar() {
           collapsed ? "md:w-16" : "md:w-64",
         )}
       >
-
         <div className="p-5 border-b border-[#F0E6D2]">
           {!collapsed && (
             <div className="overflow-hidden flex items-center gap-3">
               <div>
                 <h1 className="font-bold text-white text-sm">SIA</h1>
-                <p className="text-xs text-white/60 truncate">Exam & Quiz Builder</p>
+                <p className="text-xs text-white/60 truncate">
+                  Exam & Quiz Builder
+                </p>
               </div>
             </div>
           )}
@@ -97,16 +105,17 @@ export function Sidebar() {
         <nav className="flex-1 p-2 space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.path || 
-                            pathname.startsWith(item.path + '/');
-            
+            const isActive =
+              pathname === item.path || pathname.startsWith(item.path + "/");
+
             return (
               <Link
                 key={item.path}
                 href={item.path}
                 className={cn(
                   "sidebar-item text-white/80 hover:text-white hover:bg-[#1a7a3e] transition-colors",
-                  isActive && "bg-[#B38B00] text-white border-l-4 border-[#F0E6D2]"
+                  isActive &&
+                    "bg-[#B38B00] text-white border-l-4 border-[#F0E6D2]",
                 )}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
@@ -134,10 +143,13 @@ export function Sidebar() {
               style={{
                 borderColor: "#F0E6D2",
                 backgroundColor: "transparent",
-                color: "white"
+                color: "white",
               }}
             >
-              <LogOut className="w-4 h-4 flex-shrink-0" style={{ color: "#B38B00" }} />
+              <LogOut
+                className="w-4 h-4 flex-shrink-0"
+                style={{ color: "#B38B00" }}
+              />
               {!collapsed && <span className="text-sm">Sign out</span>}
             </button>
           </div>
@@ -157,19 +169,18 @@ export function Sidebar() {
         </Button>
       </aside>
 
-      <aside 
+      <aside
         className={cn(
           "md:hidden h-screen bg-[#166534] flex flex-col fixed left-0 top-12 z-40 border-r border-[#F0E6D2] w-56 transition-transform duration-300",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.path || 
-                            pathname.startsWith(item.path + '/');
-            
+            const isActive =
+              pathname === item.path || pathname.startsWith(item.path + "/");
+
             return (
               <Link
                 key={item.path}
@@ -177,7 +188,7 @@ export function Sidebar() {
                 onClick={handleNavClick}
                 className={cn(
                   "sidebar-item text-white/80 hover:text-white hover:bg-[#1a7a3e] transition-colors",
-                  isActive && "bg-[#B38B00] text-white"
+                  isActive && "bg-[#B38B00] text-white",
                 )}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
@@ -199,16 +210,19 @@ export function Sidebar() {
             </div>
           )}
           <div className="flex justify-center">
-              <button
-                onClick={() => setShowSignOutModal(true)}
-                className="sidebar-item w-full justify-center text-left border-2 rounded-lg hover:text-white hover:bg-[#1a7a3e] hover:border-[#1a7a3e] transition-all duration-200"
+            <button
+              onClick={() => setShowSignOutModal(true)}
+              className="sidebar-item w-full justify-center text-left border-2 rounded-lg hover:text-white hover:bg-[#1a7a3e] hover:border-[#1a7a3e] transition-all duration-200"
               style={{
                 borderColor: "#F0E6D2",
                 backgroundColor: "#FEF9E7",
-                color: "#166534"
+                color: "#166534",
               }}
             >
-              <LogOut className="w-5 h-5 flex-shrink-0" style={{ color: "#B38B00" }} />
+              <LogOut
+                className="w-5 h-5 flex-shrink-0"
+                style={{ color: "#B38B00" }}
+              />
               <span>Sign out</span>
             </button>
           </div>
@@ -217,38 +231,46 @@ export function Sidebar() {
 
       {showSignOutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/50" 
+          <div
+            className="absolute inset-0 bg-black/50"
             onClick={() => setShowSignOutModal(false)}
           />
-          <div 
+          <div
             className="relative w-full max-w-md rounded-2xl p-8"
-            style={{ 
-              backgroundColor: '#FFFFFF', 
-              borderColor: '#F0E6D2', 
-              borderWidth: '1px',
-              boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.3)'
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderColor: "#F0E6D2",
+              borderWidth: "1px",
+              boxShadow: "0 20px 40px -12px rgba(22, 101, 52, 0.3)",
             }}
           >
-
             <div className="text-center">
               <div className="w-16 h-16 rounded-full bg-[#B38B00]/10 flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle className="w-8 h-8" style={{ color: '#B38B00' }} />
+                <AlertTriangle
+                  className="w-8 h-8"
+                  style={{ color: "#B38B00" }}
+                />
               </div>
-              
-              <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Sign Out</h2>
-              <p className="text-sm mb-6" style={{ color: '#B38B00' }}>
-                Are you sure you want to sign out? You'll need to log in again to access your exams and data.
+
+              <h2
+                className="text-2xl font-bold mb-2"
+                style={{ color: "#166534" }}
+              >
+                Sign Out
+              </h2>
+              <p className="text-sm mb-6" style={{ color: "#B38B00" }}>
+                Are you sure you want to sign out? You'll need to log in again
+                to access your exams and data.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => setShowSignOutModal(false)}
                   className="w-full h-12 px-4 py-2 rounded-xl font-medium transition-all duration-200 border-2"
-                  style={{ 
-                    borderColor: '#F0E6D2',
-                    color: '#166534',
-                    backgroundColor: 'transparent'
+                  style={{
+                    borderColor: "#F0E6D2",
+                    color: "#166534",
+                    backgroundColor: "transparent",
                   }}
                 >
                   Cancel
@@ -256,9 +278,9 @@ export function Sidebar() {
                 <button
                   onClick={handleSignOut}
                   className="w-full h-12 px-4 py-2 text-white hover:opacity-90 rounded-xl font-medium transition-all duration-200"
-                  style={{ 
-                    backgroundColor: '#166534',
-                    boxShadow: '0 4px 8px -2px rgba(22, 101, 52, 0.2)'
+                  style={{
+                    backgroundColor: "#166534",
+                    boxShadow: "0 4px 8px -2px rgba(22, 101, 52, 0.2)",
                   }}
                 >
                   Sign Out

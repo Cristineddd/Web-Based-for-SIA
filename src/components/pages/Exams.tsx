@@ -14,7 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, FileText, Eye, Archive } from "lucide-react";
+import {
+  Plus,
+  Search,
+  FileText,
+  Eye,
+  Archive,
+  Pencil,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -37,8 +45,15 @@ import {
   type ExamFormData,
 } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
-import { collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { AuditLogger } from "@/services/auditLogger";
 
 interface ExamWithStatus extends Exam {
   answerKeyStatus?: {
@@ -57,9 +72,19 @@ export default function Exams() {
   const [search, setSearch] = useState("");
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [duplicateExamData, setDuplicateExamData] = useState<ExamFormData | null>(null);
+  const [duplicateExamData, setDuplicateExamData] =
+    useState<ExamFormData | null>(null);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", subject: "", num_items: 0, choices_per_item: 4, examType: "board" as "board" | "diagnostic" });
+  const [editForm, setEditForm] = useState({
+    title: "",
+    subject: "",
+    num_items: 0,
+    choices_per_item: 4,
+    examType: "board" as "board" | "diagnostic",
+    examCode: "",
+    institutionName: "",
+    logoUrl: "",
+  });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
@@ -80,17 +105,21 @@ export default function Exams() {
 
       // Also check for duplicate title only (case-insensitive)
       const hasDuplicateTitle = exams.some(
-        (exam) => exam.title.toLowerCase().trim() === title.toLowerCase().trim()
+        (exam) =>
+          exam.title.toLowerCase().trim() === title.toLowerCase().trim(),
       );
 
       if (!examExists) {
         if (hasDuplicateTitle) {
           // Show warning but still allow creation from URL params
-          toast.warning(`⚠️ An exam with title "${title}" already exists. Creating a new one...`, {
-            duration: 5000,
-          });
+          toast.warning(
+            `⚠️ An exam with title "${title}" already exists. Creating a new one...`,
+            {
+              duration: 5000,
+            },
+          );
         }
-        
+
         const newExam: Exam = {
           id: `exam_${Date.now()}`,
           title: title,
@@ -152,13 +181,16 @@ export default function Exams() {
           let hasTemplate = false;
           try {
             const templateQuery = query(
-              collection(db, 'templates'),
-              where('examId', '==', exam.id)
+              collection(db, "templates"),
+              where("examId", "==", exam.id),
             );
             const templateSnap = await getDocs(templateQuery);
             hasTemplate = !templateSnap.empty;
           } catch (error) {
-            console.error(`Error checking template for exam ${exam.id}:`, error);
+            console.error(
+              `Error checking template for exam ${exam.id}:`,
+              error,
+            );
           }
 
           return {
@@ -182,20 +214,40 @@ export default function Exams() {
     fetchExams();
   }, [user]);
 
-  const handleCreateExam = async (formData: ExamFormData, forceCreate: boolean = false) => {
+  // Re-fetch whenever the tab becomes visible again (e.g. returning from ExamDetails after finalizing)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchExams();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user]);
+
+  const handleCreateExam = async (
+    formData: ExamFormData,
+    forceCreate: boolean = false,
+  ) => {
     // Check for duplicates first (unless forceCreate is true - user clicked "Proceed Anyway")
     const duplicateExam = exams.find(
-      (e) => e.title.toLowerCase().trim() === formData.name.toLowerCase().trim()
+      (e) =>
+        e.title.toLowerCase().trim() === formData.name.toLowerCase().trim(),
     );
 
     if (duplicateExam && !forceCreate) {
       // Show duplicate warning dialog and toast notification
       setDuplicateExamData(formData);
       setShowCreateModal(false);
-      toast.warning(`⚠️ Duplicate detected: An exam named "${formData.name}" already exists!`, {
-        duration: 5000,
-        description: 'Review the warning dialog to proceed or cancel.',
-      });
+      toast.warning(
+        `⚠️ Duplicate detected: An exam named "${formData.name}" already exists!`,
+        {
+          duration: 5000,
+          description: "Review the warning dialog to proceed or cancel.",
+        },
+      );
       return;
     }
 
@@ -218,7 +270,8 @@ export default function Exams() {
         generated_sheets: [],
         createdBy: user.id,
         className: formData.className,
-        examType: formData.examType || 'board',
+        examType: formData.examType || "board",
+        status: "draft",
       };
 
       // Add to UI immediately (optimistic)
@@ -228,22 +281,39 @@ export default function Exams() {
 
       // Save to Firebase in background (don't wait for it)
       try {
-        console.log('📝 Creating exam from Exams page');
-        console.log('  - User:', user);
-        console.log('  - InstructorId:', user.instructorId);
-        
+        console.log("📝 Creating exam from Exams page");
+        console.log("  - User:", user);
+        console.log("  - InstructorId:", user.instructorId);
+
         if (!user.instructorId) {
-          toast.error('⚠️ Instructor ID not found. Please log out and log back in.');
+          toast.error(
+            "⚠️ Instructor ID not found. Please log out and log back in.",
+          );
           setExams((prevExams) => prevExams.filter((e) => e.id !== tempId));
           return;
         }
-        
+
         const newExam = await createExam(formData, user.id, user.instructorId);
-        console.log('✅ Exam created:', newExam);
-        
+        console.log("✅ Exam created:", newExam);
+
+        // Log exam creation
+        if (user.email) {
+          AuditLogger.logActivity(
+            user.id,
+            user.email,
+            "exam_created",
+            `Created exam: ${newExam.title}`,
+            {
+              entityId: newExam.id,
+              entityName: newExam.title,
+              entityType: "exam",
+            },
+          ).catch(console.error);
+        }
+
         // Replace temp exam with real one
         setExams((prevExams) =>
-          prevExams.map((e) => (e.id === tempId ? newExam : e))
+          prevExams.map((e) => (e.id === tempId ? newExam : e)),
         );
       } catch (error) {
         console.error("Error saving exam to Firebase:", error);
@@ -265,14 +335,26 @@ export default function Exams() {
       num_items: exam.num_items,
       choices_per_item: exam.choices_per_item,
       examType: exam.examType || "board",
+      examCode: exam.examCode || "",
+      institutionName: exam.institutionName || "",
+      logoUrl: exam.logoUrl || "",
     });
   };
 
   const handleSaveEdit = async () => {
     if (!editingExam) return;
-    if (!editForm.title.trim()) { toast.error("Exam name is required"); return; }
-    if (!editForm.subject.trim()) { toast.error("Subject is required"); return; }
-    if (!editForm.num_items || editForm.num_items < 1) { toast.error("Number of items must be at least 1"); return; }
+    if (!editForm.title.trim()) {
+      toast.error("Exam name is required");
+      return;
+    }
+    if (!editForm.subject.trim()) {
+      toast.error("Subject is required");
+      return;
+    }
+    if (!editForm.num_items || editForm.num_items < 1) {
+      toast.error("Number of items must be at least 1");
+      return;
+    }
 
     try {
       setIsSavingEdit(true);
@@ -284,12 +366,15 @@ export default function Exams() {
         num_items: editForm.num_items,
         choices_per_item: editForm.choices_per_item,
         examType: editForm.examType,
+        examCode: editForm.examCode.trim().toUpperCase(),
+        institutionName: editForm.institutionName,
+        logoUrl: editForm.logoUrl,
       });
 
       // Delete any existing template linked to this exam so a new one can be generated
       const templateQuery = query(
         collection(db, "templates"),
-        where("examId", "==", editingExam.id)
+        where("examId", "==", editingExam.id),
       );
       const templateSnap = await getDocs(templateQuery);
       if (!templateSnap.empty) {
@@ -308,14 +393,33 @@ export default function Exams() {
                 num_items: editForm.num_items,
                 choices_per_item: editForm.choices_per_item,
                 examType: editForm.examType,
+                examCode: editForm.examCode.trim().toUpperCase(),
+                institutionName: editForm.institutionName,
+                logoUrl: editForm.logoUrl,
                 updatedAt: new Date().toISOString(),
                 hasTemplate: false, // template was just deleted
               }
-            : e
-        )
+            : e,
+        ),
       );
 
       toast.success("Exam updated successfully");
+
+      // Log exam update
+      if (user?.email) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "exam_updated",
+          `Updated exam configuration: ${editForm.title.trim()}`,
+          {
+            entityId: editingExam.id,
+            entityName: editForm.title.trim(),
+            entityType: "exam",
+          },
+        ).catch(console.error);
+      }
+
       setEditingExam(null);
     } catch (error) {
       console.error("Error updating exam:", error);
@@ -329,7 +433,25 @@ export default function Exams() {
     if (!archiveId) return;
 
     try {
+      // Get exam details for logging before archiving
+      const examToArchive = exams.find((e) => e.id === archiveId);
+
       await archiveExam(archiveId);
+
+      // Log exam archival
+      if (user?.email && examToArchive) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "exam_deleted",
+          `Archived exam: ${examToArchive.title}`,
+          {
+            entityId: archiveId,
+            entityName: examToArchive.title,
+            entityType: "exam",
+          },
+        ).catch(console.error);
+      }
 
       setExams(exams.filter((e) => e.id !== archiveId));
       toast.success("Exam archived successfully");
@@ -385,27 +507,32 @@ export default function Exams() {
       <Card className="table-container overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow className="bg-table-header hover:bg-table-header">
-              <TableHead>Title</TableHead>
-              <TableHead className="hidden sm:table-cell">Subject</TableHead>
-              <TableHead className="hidden lg:table-cell">Class</TableHead>
-              <TableHead className="text-center">Items</TableHead>
-              <TableHead className="text-center hidden md:table-cell">
+            <TableRow className="bg-table-header hover:bg-table-header text-table-header">
+              <TableHead className="w-[30%]">Exam Name</TableHead>
+              <TableHead className="w-[20%] hidden sm:table-cell">
+                Subject/Folder
+              </TableHead>
+              <TableHead className="w-[20%] hidden lg:table-cell">
+                Class
+              </TableHead>
+              <TableHead className="w-[10%] text-center">Items</TableHead>
+              <TableHead className="w-[10%] text-center hidden md:table-cell">
                 Choices
               </TableHead>
-              <TableHead className="text-center hidden sm:table-cell">
+              <TableHead className="w-[15%] text-center">Status</TableHead>
+              <TableHead className="w-[15%] text-center hidden sm:table-cell">
                 Answer Key
               </TableHead>
-              <TableHead className="text-center hidden lg:table-cell">
+              <TableHead className="w-[10%] text-center hidden lg:table-cell">
                 Template
               </TableHead>
-              <TableHead className="text-center">Actions</TableHead>
+              <TableHead className="w-[10%] text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={9} className="text-center py-12">
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                     Loading exams...
@@ -448,6 +575,17 @@ export default function Exams() {
                   <TableCell className="text-center hidden md:table-cell">
                     {exam.choices_per_item}
                   </TableCell>
+                  <TableCell className="text-center">
+                    {exam.status === "final" ? (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground border border-secondary">
+                        Final
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                        Draft
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-center hidden sm:table-cell">
                     {exam.answerKeyStatus?.hasAnswerKey ? (
                       exam.answerKeyStatus.completed ===
@@ -480,11 +618,28 @@ export default function Exams() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
-                      <Link href={`/exams/${exam.id}`}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Eye className="w-4 h-4" />
+                      {exam.status !== "final" && (
+                        <Link href={`/exams/${exam.id}`}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                      )}
+                      {exam.status !== "final" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => handleEditExam(exam)}
+                          title="Edit exam"
+                        >
+                          <Pencil className="w-4 h-4" />
                         </Button>
-                      </Link>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -515,38 +670,107 @@ export default function Exams() {
           <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
-              <button onClick={() => setEditingExam(null)} className="p-1 hover:bg-muted rounded-md">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              <button
+                onClick={() => setEditingExam(null)}
+                className="p-1 hover:bg-muted rounded-md"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Exam Name <span className="text-destructive">*</span></label>
+                <label className="text-sm font-semibold text-foreground">
+                  Exam Code <span className="text-destructive">*</span>
+                </label>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    value={editForm.examCode}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        examCode: e.target.value.toUpperCase(),
+                      })
+                    }
+                    className="w-full font-mono"
+                    placeholder="e.g. EX-ABC123"
+                    maxLength={12}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                      let code = "";
+                      for (let i = 0; i < 6; i++) {
+                        code += chars.charAt(
+                          Math.floor(Math.random() * chars.length),
+                        );
+                      }
+                      setEditForm({ ...editForm, examCode: `EX-${code}` });
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                    title="Regenerate random code"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground italic">
+                  Unique identifier used for answer sheet scanning and
+                  identification.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Exam Name <span className="text-destructive">*</span>
+                </label>
                 <input
                   type="text"
                   value={editForm.title}
-                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, title: e.target.value })
+                  }
                   className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Exam name"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Subject / Folder <span className="text-destructive">*</span></label>
+                <label className="text-sm font-semibold text-foreground">
+                  Subject / Folder <span className="text-destructive">*</span>
+                </label>
                 <input
                   type="text"
                   value={editForm.subject}
-                  onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, subject: e.target.value })
+                  }
                   className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Subject"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Number of Items <span className="text-destructive">*</span></label>
+                <label className="text-sm font-semibold text-foreground">
+                  Number of Items <span className="text-destructive">*</span>
+                </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[20, 50, 100].map((num) => (
                     <button
                       key={num}
-                      onClick={() => setEditForm({ ...editForm, num_items: num })}
+                      onClick={() =>
+                        setEditForm({ ...editForm, num_items: num })
+                      }
                       className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
                         editForm.num_items === num
                           ? "bg-primary text-primary-foreground border-primary"
@@ -559,12 +783,22 @@ export default function Exams() {
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Choices per Question</label>
+                <label className="text-sm font-semibold text-foreground">
+                  Choices per Question
+                </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {[{ label: "4 Choices (A–D)", value: 4 }, { label: "5 Choices (A–E)", value: 5 }].map((opt) => (
+                  {[
+                    { label: "4 Choices (A–D)", value: 4 },
+                    { label: "5 Choices (A–E)", value: 5 },
+                  ].map((opt) => (
                     <button
                       key={opt.value}
-                      onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                      onClick={() =>
+                        setEditForm({
+                          ...editForm,
+                          choices_per_item: opt.value,
+                        })
+                      }
                       className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
                         editForm.choices_per_item === opt.value
                           ? "bg-primary text-primary-foreground border-primary"
@@ -577,12 +811,22 @@ export default function Exams() {
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Exam Type</label>
+                <label className="text-sm font-semibold text-foreground">
+                  Exam Type
+                </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {[{ label: "Board Exam", value: "board" }, { label: "Diagnostic Test", value: "diagnostic" }].map((opt) => (
+                  {[
+                    { label: "Board Exam", value: "board" },
+                    { label: "Diagnostic Test", value: "diagnostic" },
+                  ].map((opt) => (
                     <button
                       key={opt.value}
-                      onClick={() => setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })}
+                      onClick={() =>
+                        setEditForm({
+                          ...editForm,
+                          examType: opt.value as "board" | "diagnostic",
+                        })
+                      }
                       className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
                         editForm.examType === opt.value
                           ? "bg-primary text-primary-foreground border-primary"
@@ -620,7 +864,8 @@ export default function Exams() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive Exam</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to archive this exam? It will be moved to the Archive page and you can restore it later.
+              Are you sure you want to archive this exam? It will be moved to
+              the Archive page and you can restore it later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -636,8 +881,8 @@ export default function Exams() {
       </AlertDialog>
 
       {/* Duplicate Batch Warning Dialog */}
-      <AlertDialog 
-        open={!!duplicateExamData} 
+      <AlertDialog
+        open={!!duplicateExamData}
         onOpenChange={(open) => !open && setDuplicateExamData(null)}
       >
         <AlertDialogContent className="border-2 border-warning">
@@ -647,9 +892,16 @@ export default function Exams() {
               Duplicate Batch Detected
             </AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">
-              An exam with the title <strong className="text-primary">"{duplicateExamData?.name}"</strong> already exists in your records.
-              <br /><br />
-              Creating multiple exams with the same name can lead to confusion during grading and reporting. Are you sure you want to proceed with creating this duplicate batch?
+              An exam with the title{" "}
+              <strong className="text-primary">
+                "{duplicateExamData?.name}"
+              </strong>{" "}
+              already exists in your records.
+              <br />
+              <br />
+              Creating multiple exams with the same name can lead to confusion
+              during grading and reporting. Are you sure you want to proceed
+              with creating this duplicate batch?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -662,7 +914,7 @@ export default function Exams() {
                   // Pass forceCreate=true to bypass duplicate check
                   handleCreateExam(duplicateExamData, true);
                   setDuplicateExamData(null);
-                  toast.info('Creating duplicate exam as requested...');
+                  toast.info("Creating duplicate exam as requested...");
                 }
               }}
               className="bg-warning text-warning-foreground hover:bg-warning/90"

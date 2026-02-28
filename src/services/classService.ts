@@ -1,17 +1,17 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  getDoc, 
-  getDocs, 
-  updateDoc, 
+import {
+  collection,
+  doc,
+  addDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
   deleteDoc,
   query,
   where,
   orderBy,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export interface Student {
   student_id: string;
@@ -34,26 +34,26 @@ export interface Class {
   isArchived?: boolean;
 }
 
-const CLASSES_COLLECTION = 'classes';
+const CLASSES_COLLECTION = "classes";
 
 /**
  * Create a new class in Firestore
  */
 export async function createClass(
-  classData: Omit<Class, 'id'>, 
-  userId: string, 
-  instructorId?: string // Add instructorId parameter
+  classData: Omit<Class, "id">,
+  userId: string,
+  instructorId?: string, // Add instructorId parameter
 ): Promise<Class> {
   try {
-    console.log('📚 Creating class...');
-    console.log('  - Class data:', classData);
-    console.log('  - User ID:', userId);
-    console.log('  - Instructor ID:', instructorId);
-    
+    console.log("📚 Creating class...");
+    console.log("  - Class data:", classData);
+    console.log("  - User ID:", userId);
+    console.log("  - Instructor ID:", instructorId);
+
     if (!instructorId) {
-      console.warn('⚠️ WARNING: instructorId is undefined or null!');
+      console.warn("⚠️ WARNING: instructorId is undefined or null!");
     }
-    
+
     const newClassData = {
       ...classData,
       createdBy: userId, // Keep userId for backward compatibility
@@ -62,10 +62,30 @@ export async function createClass(
       updatedAt: serverTimestamp(),
     };
 
-    console.log('📤 Sending to Firestore:', newClassData);
-    const docRef = await addDoc(collection(db, CLASSES_COLLECTION), newClassData);
-    console.log('✅ Class created successfully with ID:', docRef.id);
-    
+    // Helper: Recursively remove undefined fields (Firebase doesn't accept undefined)
+    const removeUndefined = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.map(removeUndefined);
+      } else if (obj !== null && typeof obj === "object") {
+        // Skip Firestore FieldValues (like serverTimestamp)
+        if (typeof obj.isEqual === "function" && obj.toMillis) {
+          return obj;
+        }
+        return Object.fromEntries(
+          Object.entries(obj)
+            .filter(([_, v]) => v !== undefined)
+            .map(([k, v]) => [k, removeUndefined(v)]),
+        );
+      }
+      return obj;
+    };
+
+    const cleanData = removeUndefined(newClassData);
+
+    console.log("📤 Sending to Firestore:", cleanData);
+    const docRef = await addDoc(collection(db, CLASSES_COLLECTION), cleanData);
+    console.log("✅ Class created successfully with ID:", docRef.id);
+
     // Return the class with the generated ID (include instructorId)
     const newClass: Class = {
       id: docRef.id,
@@ -77,9 +97,9 @@ export async function createClass(
 
     return newClass;
   } catch (error) {
-    console.error('Error creating class:', error);
-    console.error('Error code:', (error as any).code);
-    console.error('Error message:', (error as any).message);
+    console.error("Error creating class:", error);
+    console.error("Error code:", (error as any).code);
+    console.error("Error message:", (error as any).message);
     throw error;
   }
 }
@@ -99,13 +119,13 @@ export async function getTotalStudentCount(userId: string): Promise<number> {
       const data = doc.data() as any;
       // Filter by userId on client-side
       if (data.createdBy === userId) {
-        totalStudents += (data.students?.length || 0);
+        totalStudents += data.students?.length || 0;
       }
     });
 
     return totalStudents;
   } catch (error: any) {
-    console.error('Error fetching student count:', error);
+    console.error("Error fetching student count:", error);
     return 0;
   }
 }
@@ -116,15 +136,18 @@ export async function getTotalStudentCount(userId: string): Promise<number> {
 export async function getClasses(userId?: string): Promise<Class[]> {
   try {
     let q;
-    
+
     if (userId) {
       // Query only by createdBy (no orderBy to avoid index requirement)
       q = query(
         collection(db, CLASSES_COLLECTION),
-        where('createdBy', '==', userId)
+        where("createdBy", "==", userId),
       );
     } else {
-      q = query(collection(db, CLASSES_COLLECTION), orderBy('createdAt', 'desc'));
+      q = query(
+        collection(db, CLASSES_COLLECTION),
+        orderBy("createdAt", "desc"),
+      );
     }
 
     const querySnapshot = await getDocs(q);
@@ -139,7 +162,10 @@ export async function getClasses(userId?: string): Promise<Class[]> {
         section_block: data.section_block,
         room: data.room,
         students: data.students || [],
-        created_at: data.created_at || (data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()),
+        created_at:
+          data.created_at ||
+          data.createdAt?.toDate?.()?.toISOString() ||
+          new Date().toISOString(),
         createdBy: data.createdBy,
         updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
       });
@@ -156,7 +182,7 @@ export async function getClasses(userId?: string): Promise<Class[]> {
 
     return classes;
   } catch (error) {
-    console.error('Error fetching classes:', error);
+    console.error("Error fetching classes:", error);
     throw error;
   }
 }
@@ -178,7 +204,10 @@ export async function getClassById(classId: string): Promise<Class | null> {
         section_block: data.section_block,
         room: data.room,
         students: data.students || [],
-        created_at: data.created_at || (data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()),
+        created_at:
+          data.created_at ||
+          data.createdAt?.toDate?.()?.toISOString() ||
+          new Date().toISOString(),
         createdBy: data.createdBy,
         updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
       };
@@ -186,7 +215,7 @@ export async function getClassById(classId: string): Promise<Class | null> {
 
     return null;
   } catch (error) {
-    console.error('Error fetching class:', error);
+    console.error("Error fetching class:", error);
     throw error;
   }
 }
@@ -194,13 +223,16 @@ export async function getClassById(classId: string): Promise<Class | null> {
 /**
  * Update a class
  */
-export async function updateClass(classId: string, classData: Partial<Omit<Class, 'id'>>): Promise<void> {
+export async function updateClass(
+  classId: string,
+  classData: Partial<Omit<Class, "id">>,
+): Promise<void> {
   try {
     const classRef = doc(db, CLASSES_COLLECTION, classId);
-    
+
     // Remove undefined and null values from the update data
     const cleanData: Record<string, any> = {};
-    
+
     Object.entries(classData).forEach(([key, value]) => {
       // Skip undefined and null values
       if (value !== undefined && value !== null) {
@@ -208,7 +240,7 @@ export async function updateClass(classId: string, classData: Partial<Omit<Class
         if (Array.isArray(value)) {
           // Clean each object in the array
           cleanData[key] = value.map((item: any) => {
-            if (typeof item === 'object' && item !== null) {
+            if (typeof item === "object" && item !== null) {
               const cleanedItem: Record<string, any> = {};
               Object.entries(item).forEach(([itemKey, itemValue]) => {
                 if (itemValue !== undefined && itemValue !== null) {
@@ -219,7 +251,7 @@ export async function updateClass(classId: string, classData: Partial<Omit<Class
             }
             return item;
           });
-        } else if (typeof value === 'object') {
+        } else if (typeof value === "object") {
           // For objects, also clean nested undefined values
           const cleanedObject: Record<string, any> = {};
           Object.entries(value).forEach(([nestedKey, nestedValue]) => {
@@ -235,16 +267,19 @@ export async function updateClass(classId: string, classData: Partial<Omit<Class
         }
       }
     });
-    
+
     // Add timestamp
     cleanData.updatedAt = serverTimestamp();
-    
-    console.log('Final data being sent to Firestore:', cleanData);
-    console.log('Checking for undefined values:', Object.entries(cleanData).filter(([_k, v]) => v === undefined));
-    
+
+    console.log("Final data being sent to Firestore:", cleanData);
+    console.log(
+      "Checking for undefined values:",
+      Object.entries(cleanData).filter(([_k, v]) => v === undefined),
+    );
+
     await updateDoc(classRef, cleanData);
   } catch (error) {
-    console.error('Error updating class:', error);
+    console.error("Error updating class:", error);
     throw error;
   }
 }
@@ -257,7 +292,7 @@ export async function deleteClass(classId: string): Promise<void> {
     const classRef = doc(db, CLASSES_COLLECTION, classId);
     await deleteDoc(classRef);
   } catch (error) {
-    console.error('Error deleting class:', error);
+    console.error("Error deleting class:", error);
     throw error;
   }
 }
@@ -265,11 +300,14 @@ export async function deleteClass(classId: string): Promise<void> {
 /**
  * Add a student to a class
  */
-export async function addStudentToClass(classId: string, student: Student): Promise<void> {
+export async function addStudentToClass(
+  classId: string,
+  student: Student,
+): Promise<void> {
   try {
     const classRef = doc(db, CLASSES_COLLECTION, classId);
     const classDoc = await getDoc(classRef);
-    
+
     if (classDoc.exists()) {
       const data = classDoc.data() as any;
       const currentStudents = data.students || [];
@@ -279,7 +317,7 @@ export async function addStudentToClass(classId: string, student: Student): Prom
       });
     }
   } catch (error) {
-    console.error('Error adding student to class:', error);
+    console.error("Error adding student to class:", error);
     throw error;
   }
 }
@@ -287,22 +325,27 @@ export async function addStudentToClass(classId: string, student: Student): Prom
 /**
  * Remove a student from a class
  */
-export async function removeStudentFromClass(classId: string, studentId: string): Promise<void> {
+export async function removeStudentFromClass(
+  classId: string,
+  studentId: string,
+): Promise<void> {
   try {
     const classRef = doc(db, CLASSES_COLLECTION, classId);
     const classDoc = await getDoc(classRef);
-    
+
     if (classDoc.exists()) {
       const data = classDoc.data() as any;
       const currentStudents = data.students || [];
-      const updatedStudents = currentStudents.filter((s: Student) => s.student_id !== studentId);
+      const updatedStudents = currentStudents.filter(
+        (s: Student) => s.student_id !== studentId,
+      );
       await updateDoc(classRef, {
         students: updatedStudents,
         updatedAt: serverTimestamp(),
       });
     }
   } catch (error) {
-    console.error('Error removing student from class:', error);
+    console.error("Error removing student from class:", error);
     throw error;
   }
 }

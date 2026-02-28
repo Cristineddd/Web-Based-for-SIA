@@ -26,6 +26,7 @@ import { ArrowLeft, Loader2, FileText } from "lucide-react";
 import { z } from "zod";
 import { createExam } from "@/services/examService";
 import { getClasses, type Class } from "@/services/classService";
+import { AuditLogger } from "@/services/auditLogger";
 
 const examSchema = z.object({
   title: z
@@ -132,21 +133,21 @@ export default function NewExam() {
         student_id_length: Number(formData.student_id_length),
       });
 
-        // Prevent selecting a past date
-        try {
-          const selected = new Date(validated.date + 'T00:00:00');
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          if (selected < today) {
-            toast.error('Exam date cannot be in the past');
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          toast.error('Invalid date selected');
+      // Prevent selecting a past date
+      try {
+        const selected = new Date(validated.date + "T00:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (selected < today) {
+          toast.error("Exam date cannot be in the past");
           setLoading(false);
           return;
         }
+      } catch (e) {
+        toast.error("Invalid date selected");
+        setLoading(false);
+        return;
+      }
 
       // Prepare data for the service
       const examData = {
@@ -159,18 +160,35 @@ export default function NewExam() {
         className: formData.className,
       };
 
-      console.log('📝 Creating exam from NewExam page');
-      console.log('  - User:', user);
-      console.log('  - InstructorId:', user.instructorId);
-      
+      console.log("📝 Creating exam from NewExam page");
+      console.log("  - User:", user);
+      console.log("  - InstructorId:", user.instructorId);
+
       if (!user.instructorId) {
-        toast.error('⚠️ Instructor ID not found. Please log out and log back in.');
+        toast.error(
+          "⚠️ Instructor ID not found. Please log out and log back in.",
+        );
         setLoading(false);
         return;
       }
 
       const newExam = await createExam(examData, user.id, user.instructorId);
-      console.log('✅ Exam created:', newExam);
+      console.log("✅ Exam created:", newExam);
+
+      // Log exam creation
+      if (user.email) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "exam_created",
+          `Created exam: ${newExam.title}`,
+          {
+            entityId: newExam.id,
+            entityName: newExam.title,
+            entityType: "exam",
+          },
+        ).catch(console.error);
+      }
 
       toast.success("Exam created successfully");
       router.push(`/exams/${newExam.id}`);

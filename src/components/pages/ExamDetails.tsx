@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   ArrowLeft,
@@ -14,15 +15,26 @@ import {
   CheckCircle,
   Loader2,
   Pencil,
+  RefreshCw,
 } from "lucide-react";
 import { getExamById, updateExam, Exam } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
 import { ScanningService } from "@/services/scanningService";
 import { useAuth } from "@/contexts/AuthContext";
 import { db, auth } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, query, where, getDocs, deleteDoc } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+} from "firebase/firestore";
 import { toast } from "sonner";
 import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
+import { AuditLogger } from "@/services/auditLogger";
+import { InstructorSettingsService } from "@/services/instructorSettingsService";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -36,6 +48,7 @@ interface AnswerKeyStatus {
 
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,8 +69,14 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     num_items: 0,
     choices_per_item: 4,
     examType: "board" as "board" | "diagnostic",
+    institutionName: "",
+    examCode: "",
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Finalize exam state
+  const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
 
   useEffect(() => {
     async function fetchExam() {
@@ -75,6 +94,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             num_items: examData.num_items,
             choices_per_item: examData.choices_per_item,
             examType: examData.examType || "board",
+            institutionName: examData.institutionName || "",
+            examCode: examData.examCode || "",
           });
 
           try {
@@ -101,9 +122,12 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
           // Fetch scanned results count
           try {
-            const scannedResult = await ScanningService.getScannedResultsByExamId(params.id);
+            const scannedResult =
+              await ScanningService.getScannedResultsByExamId(params.id);
             if (scannedResult.success && scannedResult.data) {
-              setScannedPaperCount(scannedResult.data.filter(r => !r.isNullId).length);
+              setScannedPaperCount(
+                scannedResult.data.filter((r) => !r.isNullId).length,
+              );
             }
           } catch (error) {
             console.error("Error fetching scanned results:", error);
@@ -112,8 +136,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           // Check if a template already exists for this exam
           try {
             const templateQuery = query(
-              collection(db, 'templates'),
-              where('examId', '==', params.id)
+              collection(db, "templates"),
+              where("examId", "==", params.id),
             );
             const templateSnap = await getDocs(templateQuery);
             setHasTemplate(!templateSnap.empty);
@@ -123,7 +147,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         }
       } catch (error) {
         console.error("Error fetching exam:", error);
-        const msg = error instanceof Error ? error.message : "Failed to load exam";
+        const msg =
+          error instanceof Error ? error.message : "Failed to load exam";
         setError(msg);
       } finally {
         setLoading(false);
@@ -167,9 +192,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             <h1 className="text-3xl font-bold text-foreground">
               {error ? "Error loading exam" : "Exam not found"}
             </h1>
-            {error && (
-              <p className="text-sm text-destructive mt-1">{error}</p>
-            )}
+            {error && <p className="text-sm text-destructive mt-1">{error}</p>}
           </div>
         </div>
       </div>
@@ -177,25 +200,38 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   }
 
   const handleSaveEdit = async () => {
-    if (!editForm.title.trim()) { toast.error("Exam name is required"); return; }
-    if (!editForm.subject.trim()) { toast.error("Subject is required"); return; }
-    if (!editForm.num_items || editForm.num_items < 1) { toast.error("Number of items must be at least 1"); return; }
+    if (!editForm.title.trim()) {
+      toast.error("Exam name is required");
+      return;
+    }
+    if (!editForm.subject.trim()) {
+      toast.error("Subject is required");
+      return;
+    }
+    if (!editForm.num_items || editForm.num_items < 1) {
+      toast.error("Number of items must be at least 1");
+      return;
+    }
 
     try {
       setIsSavingEdit(true);
 
-      await updateExam(params.id, {
+      const updates = {
         title: editForm.title.trim(),
         subject: editForm.subject.trim(),
         num_items: editForm.num_items,
         choices_per_item: editForm.choices_per_item,
         examType: editForm.examType,
-      });
+        institutionName: editForm.institutionName,
+        examCode: editForm.examCode.trim().toUpperCase(),
+      };
+
+      await updateExam(params.id, updates);
 
       // Delete any existing template linked to this exam so a new one can be generated
       const templateQuery = query(
         collection(db, "templates"),
-        where("examId", "==", params.id)
+        where("examId", "==", params.id),
       );
       const templateSnap = await getDocs(templateQuery);
       if (!templateSnap.empty) {
@@ -214,12 +250,29 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               num_items: editForm.num_items,
               choices_per_item: editForm.choices_per_item,
               examType: editForm.examType,
+              institutionName: editForm.institutionName,
+              examCode: editForm.examCode.trim().toUpperCase(),
             }
-          : prev
+          : prev,
       );
 
       // Update answer key status total to match new num_items
       setAnswerKeyStatus((prev) => ({ ...prev, total: editForm.num_items }));
+
+      // Log exam update
+      if (user?.email) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "exam_updated",
+          `Updated exam configuration: ${editForm.title.trim()}`,
+          {
+            entityId: params.id,
+            entityName: editForm.title.trim(),
+            entityType: "exam",
+          },
+        ).catch(console.error);
+      }
 
       toast.success("Exam updated successfully");
       setIsEditing(false);
@@ -231,19 +284,58 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     }
   };
 
+  const handleFinalizeExam = async () => {
+    try {
+      if (!user?.id || !user?.email) {
+        toast.error("You must be logged in to finalize an exam");
+        return;
+      }
+
+      setIsFinalizing(true);
+      await updateExam(params.id, { status: "final" });
+
+      setExam((prev) => (prev ? { ...prev, status: "final" } : prev));
+
+      // Log finalization action
+      AuditLogger.logActivity(
+        user.id,
+        user.email,
+        "exam_finalized",
+        `Finalized exam configuration: ${exam?.title}`,
+        {
+          entityId: params.id,
+          entityName: exam?.title,
+          entityType: "exam",
+        },
+      ).catch(console.error);
+
+      toast.success("Exam finalized successfully!");
+      setShowFinalizeConfirm(false);
+      // Force the Exams list to re-fetch so the Status column reflects "Final"
+      router.refresh();
+    } catch (err) {
+      console.error("Error finalizing exam:", err);
+      toast.error("Failed to finalize exam. Please try again.");
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
   const handleCreateTemplate = async () => {
     if (!user?.instructorId) {
-      toast.error('⚠️ Instructor ID not found. Please log out and log back in.');
+      toast.error(
+        "⚠️ Instructor ID not found. Please log out and log back in.",
+      );
       return;
     }
 
     if (!exam) {
-      toast.error('Exam information not found');
+      toast.error("Exam information not found");
       return;
     }
 
     if (hasTemplate) {
-      toast.error('A template has already been generated for this exam.');
+      toast.error("A template has already been generated for this exam.");
       return;
     }
 
@@ -251,17 +343,17 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
     try {
       const currentUser = auth.currentUser;
-      console.log('🔍 Firebase Auth State:', {
+      console.log("🔍 Firebase Auth State:", {
         isAuthenticated: !!currentUser,
         uid: currentUser?.uid,
       });
 
       const templateData = {
         name: exam.title,
-        description: exam.subject || 'Answer Sheet Template',
+        description: exam.subject || "Answer Sheet Template",
         numQuestions: exam.num_items,
         choicesPerQuestion: exam.choices_per_item,
-        layout: 'single',
+        layout: "single",
         includeStudentId: true,
         studentIdLength: 10,
         createdBy: user.id,
@@ -272,29 +364,40 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         createdAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, 'templates'), templateData);
-      
+      await addDoc(collection(db, "templates"), templateData);
+
       // Use the exam's stored exam code (unique identifier for this exam)
       const examCode = exam.examCode || params.id.substring(0, 8).toUpperCase();
-      
+
+      // Fetch instructor settings for branding (fallback)
+      const settings = user?.id
+        ? await InstructorSettingsService.getSettings(user.id)
+        : null;
+
       await generateTemplatePDF({
         name: exam.title,
-        description: exam.subject || 'Answer Sheet Template',
+        description: exam.subject || "Answer Sheet Template",
         numQuestions: exam.num_items,
         choicesPerQuestion: exam.choices_per_item,
         examName: exam.title,
         examCode: examCode,
+        institutionName: exam.institutionName || settings?.institutionName,
+        logoUrl: exam.logoUrl || settings?.logoUrl,
       });
-      
+
       setHasTemplate(true);
-      toast.success('✅ Template created and downloaded!');
+      toast.success("✅ Template created and downloaded!");
     } catch (error: any) {
-      console.error('❌ Error creating template:', error);
-      
-      if (error?.code === 'permission-denied') {
-        toast.error('Permission denied. Please check if you are logged in and try again.');
+      console.error("❌ Error creating template:", error);
+
+      if (error?.code === "permission-denied") {
+        toast.error(
+          "Permission denied. Please check if you are logged in and try again.",
+        );
       } else {
-        toast.error(`Failed to create template: ${error?.message || 'Unknown error'}`);
+        toast.error(
+          `Failed to create template: ${error?.message || "Unknown error"}`,
+        );
       }
     } finally {
       setCreatingTemplate(false);
@@ -311,12 +414,21 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     },
     {
       icon: hasTemplate ? CheckCircle : creatingTemplate ? Loader2 : FilePlus,
-      label: hasTemplate ? "Template Created" : creatingTemplate ? "Generating..." : "Create Template",
+      label: hasTemplate
+        ? "Template Created"
+        : creatingTemplate
+          ? "Generating..."
+          : "Create Template",
       description: hasTemplate
         ? "Answer sheet template already generated"
         : "Auto-generate and download answer sheet PDF",
-      color: hasTemplate ? "bg-green-100 text-green-600" : "bg-green-50 text-green-600",
-      onClick: hasTemplate || creatingTemplate ? undefined : () => handleCreateTemplate(),
+      color: hasTemplate
+        ? "bg-green-100 text-green-600"
+        : "bg-green-50 text-green-600",
+      onClick:
+        hasTemplate || creatingTemplate
+          ? undefined
+          : () => handleCreateTemplate(),
       disabled: hasTemplate || creatingTemplate,
     },
     {
@@ -365,16 +477,39 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground truncate">
             {exam.examCode || "No exam code"}
+            {exam.status === "final" ? (
+              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground border border-secondary">
+                Final
+              </span>
+            ) : (
+              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                Draft
+              </span>
+            )}
           </p>
         </div>
-        <button
-          onClick={() => setIsEditing(true)}
-          className="flex items-center gap-2 px-3 py-2 border-2 border-primary text-primary rounded-md font-semibold text-sm hover:bg-primary hover:text-primary-foreground transition-colors flex-shrink-0"
-          title="Edit exam details"
-        >
-          <Pencil className="w-4 h-4" />
-          <span className="hidden sm:inline">Edit Exam</span>
-        </button>
+
+        {exam.status !== "final" && (
+          <button
+            onClick={() => setShowFinalizeConfirm(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-success text-white rounded-md font-semibold text-sm hover:bg-success/90 transition-colors flex-shrink-0"
+            title="Finalize exam to lock configuration"
+          >
+            <CheckCircle className="w-4 h-4" />
+            <span className="hidden sm:inline">Finalize</span>
+          </button>
+        )}
+
+        {exam.status !== "final" && (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-2 px-3 py-2 border-2 border-primary text-primary rounded-md font-semibold text-sm hover:bg-primary hover:text-primary-foreground transition-colors flex-shrink-0"
+            title="Edit exam details"
+          >
+            <Pencil className="w-4 h-4" />
+            <span className="hidden sm:inline">Edit</span>
+          </button>
+        )}
       </div>
 
       {/* Exam Information */}
@@ -464,9 +599,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             <p className="text-muted-foreground font-semibold mb-1">
               Papers Scanned
             </p>
-            <p className="text-foreground">
-              {scannedPaperCount} papers
-            </p>
+            <p className="text-foreground">{scannedPaperCount} papers</p>
           </div>
         </div>
       </Card>
@@ -499,7 +632,11 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
             if (btn.onClick) {
               return (
-                <button key={btn.label} onClick={btn.onClick} className="group text-left">
+                <button
+                  key={btn.label}
+                  onClick={btn.onClick}
+                  className="group text-left"
+                >
                   {content}
                 </button>
               );
@@ -514,7 +651,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             }
 
             return (
-              <Link key={btn.label} href={btn.href || '#'} className="group">
+              <Link key={btn.label} href={btn.href || "#"} className="group">
                 {content}
               </Link>
             );
@@ -530,22 +667,77 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <div>
                 <h2 className="text-xl font-bold text-primary">Edit Exam</h2>
-                <p className="text-sm text-muted-foreground">Update exam information and settings</p>
+                <p className="text-sm text-muted-foreground">
+                  Update exam information and settings
+                </p>
               </div>
               <button
                 onClick={() => setIsEditing(false)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-muted rounded-lg transition-colors"
                 aria-label="Close"
               >
-                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-5 h-5 text-gray-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
 
             {/* Content */}
             <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
-              {/* Two Column Layout */}
+              {/* Exam Code Row (Full Width) */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-foreground">
+                  Exam Code <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editForm.examCode}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        examCode: e.target.value.toUpperCase(),
+                      })
+                    }
+                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-muted rounded-lg bg-white dark:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono text-lg"
+                    placeholder="e.g. EX-ABC123"
+                    maxLength={12}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                      let code = "";
+                      for (let i = 0; i < 6; i++) {
+                        code += chars.charAt(
+                          Math.floor(Math.random() * chars.length),
+                        );
+                      }
+                      setEditForm({ ...editForm, examCode: `EX-${code}` });
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors"
+                    title="Regenerate random code"
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Unique identifier used for answer sheet scanning and
+                  identification.
+                </p>
+              </div>
+
+              {/* Two Column Layout (Name and Subject) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Exam Name */}
                 <div className="space-y-2">
@@ -555,7 +747,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   <input
                     type="text"
                     value={editForm.title}
-                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, title: e.target.value })
+                    }
                     className="w-full px-4 py-2.5 border border-gray-200 dark:border-muted rounded-lg bg-white dark:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                     placeholder="Enter exam name"
                   />
@@ -569,7 +763,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   <input
                     type="text"
                     value={editForm.subject}
-                    onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, subject: e.target.value })
+                    }
                     className="w-full px-4 py-2.5 border border-gray-200 dark:border-muted rounded-lg bg-white dark:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                     placeholder="Enter subject or folder name"
                   />
@@ -585,7 +781,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   {[20, 50, 100].map((num) => (
                     <button
                       key={num}
-                      onClick={() => setEditForm({ ...editForm, num_items: num })}
+                      onClick={() =>
+                        setEditForm({ ...editForm, num_items: num })
+                      }
                       className={`py-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
                         editForm.num_items === num
                           ? "bg-primary text-white border-primary"
@@ -605,7 +803,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* Choices per Question */}
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 dark:text-foreground">Choices per Question</label>
+                  <label className="text-sm font-medium text-gray-700 dark:text-foreground">
+                    Choices per Question
+                  </label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { label: "4 (A–D)", value: 4 },
@@ -613,7 +813,12 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                     ].map((opt) => (
                       <button
                         key={opt.value}
-                        onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                        onClick={() =>
+                          setEditForm({
+                            ...editForm,
+                            choices_per_item: opt.value,
+                          })
+                        }
                         className={`py-2.5 px-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
                           editForm.choices_per_item === opt.value
                             ? "bg-primary text-white border-primary"
@@ -628,7 +833,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
                 {/* Exam Type */}
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700 dark:text-foreground">Exam Type</label>
+                  <label className="text-sm font-medium text-gray-700 dark:text-foreground">
+                    Exam Type
+                  </label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { label: "Board", value: "board" },
@@ -637,7 +844,10 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                       <button
                         key={opt.value}
                         onClick={() =>
-                          setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })
+                          setEditForm({
+                            ...editForm,
+                            examType: opt.value as "board" | "diagnostic",
+                          })
                         }
                         className={`py-2.5 px-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
                           editForm.examType === opt.value
@@ -652,11 +862,39 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                 </div>
               </div>
 
+              {/* Branding Section */}
+              <div className="pt-4 border-t space-y-4">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-foreground">
+                  Answer Sheet Branding (Optional)
+                </h3>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-foreground mb-2">
+                      Institution Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.institutionName}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          institutionName: e.target.value,
+                        }))
+                      }
+                      className="w-full px-4 py-2 border border-gray-200 dark:border-muted rounded-lg bg-white dark:bg-background focus:ring-2 focus:ring-primary/20 outline-none"
+                      placeholder="e.g. Gordon College SIA Department"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Warning Message */}
               <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <span className="text-amber-500 text-lg flex-shrink-0">⚠️</span>
                 <p className="text-sm text-amber-700 dark:text-amber-400">
-                  Editing this exam will delete any existing answer sheet template so you can generate a new one.
+                  Editing this exam will delete any existing answer sheet
+                  template so you can generate a new one.
                 </p>
               </div>
             </div>
@@ -681,6 +919,49 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   </>
                 ) : (
                   <span>Save Changes</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Finalize Exam Confirmation Dialog */}
+      {showFinalizeConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-background rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold text-foreground mb-4">
+              Finalize Exam
+            </h2>
+            <p className="text-muted-foreground text-sm mb-6">
+              Are you sure you want to finalize <strong>{exam.title}</strong>?
+              Once finalized, you will{" "}
+              <strong className="text-destructive">not be able to edit</strong>{" "}
+              the number of items or choice structures.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowFinalizeConfirm(false)}
+                className="px-4 py-2 border border-muted rounded-md font-medium hover:bg-muted transition-colors"
+                disabled={isFinalizing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleFinalizeExam}
+                className="px-4 py-2 bg-success text-white rounded-md font-medium hover:bg-success/90 transition-colors flex items-center gap-2"
+                disabled={isFinalizing}
+              >
+                {isFinalizing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Finalizing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Confirm Finalize
+                  </>
                 )}
               </button>
             </div>

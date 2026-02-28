@@ -1,14 +1,21 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Archive as ArchiveIcon, Search, GraduationCap, Trash2, RotateCcw } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Archive as ArchiveIcon,
+  Search,
+  GraduationCap,
+  Trash2,
+  RotateCcw,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { AuditLogger } from "@/services/auditLogger";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +25,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -26,7 +33,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 
 interface ArchivedClass {
   id: string;
@@ -43,7 +50,7 @@ export default function ArchivedClasses() {
   const { user } = useAuth();
   const [archivedClasses, setArchivedClasses] = useState<ArchivedClass[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [restoreId, setRestoreId] = useState<string | null>(null);
 
@@ -56,28 +63,30 @@ export default function ArchivedClasses() {
           return;
         }
 
-        const classesRef = collection(db, 'classes');
-        const q = query(classesRef, where('isArchived', '==', true));
+        const classesRef = collection(db, "classes");
+        const q = query(classesRef, where("isArchived", "==", true));
         const snapshot = await getDocs(q);
 
         const classes = snapshot.docs.map((doc) => {
           const data = doc.data();
           return {
             id: doc.id,
-            class_name: data.class_name || '',
-            course_subject: data.course_subject || '',
-            section_block: data.section_block || '',
-            room: data.room || '',
-            students_count: Array.isArray(data.students) ? data.students.length : 0,
-            created_at: data.created_at || '',
+            class_name: data.class_name || "",
+            course_subject: data.course_subject || "",
+            section_block: data.section_block || "",
+            room: data.room || "",
+            students_count: Array.isArray(data.students)
+              ? data.students.length
+              : 0,
+            created_at: data.created_at || "",
             isArchived: data.isArchived || true,
           } as ArchivedClass;
         });
 
         setArchivedClasses(classes);
       } catch (error) {
-        console.error('Error fetching archived classes:', error);
-        toast.error('Failed to load archived classes');
+        console.error("Error fetching archived classes:", error);
+        toast.error("Failed to load archived classes");
       } finally {
         setLoading(false);
       }
@@ -86,24 +95,41 @@ export default function ArchivedClasses() {
     fetchArchivedClasses();
   }, [user?.id]);
 
-  const filteredClasses = archivedClasses.filter((c) =>
-    c.class_name.toLowerCase().includes(search.toLowerCase()) ||
-    c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
-    c.section_block.toLowerCase().includes(search.toLowerCase())
+  const filteredClasses = archivedClasses.filter(
+    (c) =>
+      c.class_name.toLowerCase().includes(search.toLowerCase()) ||
+      c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
+      c.section_block.toLowerCase().includes(search.toLowerCase()),
   );
 
   const handleDelete = async () => {
     if (!deleteId) return;
 
     try {
-      const { deleteClass } = await import('@/services/classService');
+      const classToDelete = archivedClasses.find((c) => c.id === deleteId);
+      const { deleteClass } = await import("@/services/classService");
       await deleteClass(deleteId);
+
+      if (user?.email && classToDelete) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "class_deleted",
+          `Permanently deleted archived class: ${classToDelete.class_name}`,
+          {
+            entityId: deleteId,
+            entityName: classToDelete.class_name,
+            entityType: "class",
+          },
+        ).catch(console.error);
+      }
+
       setArchivedClasses(archivedClasses.filter((c) => c.id !== deleteId));
       setDeleteId(null);
-      toast.success('Archived class deleted successfully');
+      toast.success("Archived class deleted successfully");
     } catch (error) {
-      console.error('Error deleting class:', error);
-      toast.error('Failed to delete archived class');
+      console.error("Error deleting class:", error);
+      toast.error("Failed to delete archived class");
     }
   };
 
@@ -111,14 +137,30 @@ export default function ArchivedClasses() {
     if (!restoreId) return;
 
     try {
-      const { updateClass } = await import('@/services/classService');
+      const classToRestore = archivedClasses.find((c) => c.id === restoreId);
+      const { updateClass } = await import("@/services/classService");
       await updateClass(restoreId, { isArchived: false });
+
+      if (user?.email && classToRestore) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "admin_action",
+          `Restored archived class: ${classToRestore.class_name}`,
+          {
+            entityId: restoreId,
+            entityName: classToRestore.class_name,
+            entityType: "class",
+          },
+        ).catch(console.error);
+      }
+
       setArchivedClasses(archivedClasses.filter((c) => c.id !== restoreId));
       setRestoreId(null);
-      toast.success('Class restored successfully');
+      toast.success("Class restored successfully");
     } catch (error) {
-      console.error('Error restoring class:', error);
-      toast.error('Failed to restore class');
+      console.error("Error restoring class:", error);
+      toast.error("Failed to restore class");
     }
   };
 
@@ -127,7 +169,9 @@ export default function ArchivedClasses() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Archived Classes</h1>
+          <h1 className="text-3xl font-bold text-foreground">
+            Archived Classes
+          </h1>
           <p className="text-muted-foreground mt-1">
             View and manage archived classes
           </p>
@@ -156,7 +200,9 @@ export default function ArchivedClasses() {
         <Card className="p-12 text-center">
           <ArchiveIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">
-            {search ? 'No archived classes found matching your search' : 'No archived classes'}
+            {search
+              ? "No archived classes found matching your search"
+              : "No archived classes"}
           </p>
         </Card>
       ) : (
@@ -175,7 +221,9 @@ export default function ArchivedClasses() {
             <TableBody>
               {filteredClasses.map((archivedClass) => (
                 <TableRow key={archivedClass.id}>
-                  <TableCell className="font-medium">{archivedClass.class_name}</TableCell>
+                  <TableCell className="font-medium">
+                    {archivedClass.class_name}
+                  </TableCell>
                   <TableCell>{archivedClass.course_subject}</TableCell>
                   <TableCell>{archivedClass.section_block}</TableCell>
                   <TableCell>{archivedClass.room}</TableCell>
@@ -218,7 +266,8 @@ export default function ArchivedClasses() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Archived Class</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to permanently delete this archived class? This action cannot be undone.
+              Are you sure you want to permanently delete this archived class?
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -239,7 +288,8 @@ export default function ArchivedClasses() {
           <AlertDialogHeader>
             <AlertDialogTitle>Restore Class</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to restore this class? It will reappear in your active classes.
+              Are you sure you want to restore this class? It will reappear in
+              your active classes.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
