@@ -1,5 +1,10 @@
-import AuditLogsViewer from '@/components/pages/AuditLogs';
+import AuditLogsViewer from "@/components/pages/AuditLogs";
+import { ProtectedLayout } from "@/components/layout/ProtectedLayout";
 
 export default function AuditLogsPage() {
-  return <AuditLogsViewer />;
+  return (
+    <ProtectedLayout>
+      <AuditLogsViewer />
+    </ProtectedLayout>
+  );
 }

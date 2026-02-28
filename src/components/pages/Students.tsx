@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
-import Fuse from 'fuse.js';
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import Fuse from "fuse.js";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import StudentSearchCombobox, { type SearchableStudent } from '@/components/ui/StudentSearchCombobox';
-import { useDebounce } from '@/hooks/useDebounce';
+import StudentSearchCombobox, {
+  type SearchableStudent,
+} from "@/components/ui/StudentSearchCombobox";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Table,
   TableBody,
@@ -51,7 +50,8 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { StudentService } from "@/services/studentService";
-import { exportStudentRosterToExcel } from '@/services/excelExportService';
+import { AuditLogger } from "@/services/auditLogger";
+import { exportStudentRosterToExcel } from "@/services/excelExportService";
 
 interface Student {
   id: string;
@@ -144,7 +144,7 @@ export default function Students() {
             email: record.email || "",
             grade: record.grade || null,
             section: record.section || null,
-          }))
+          })),
         );
       } else {
         // CSV export
@@ -287,13 +287,24 @@ export default function Students() {
                 row["last_name"] || row["Last Name"] || row["LastName"] || "",
               ).trim(),
               grade: String(
-                row["grade"] || row["Grade"] || row["year"] || row["Year"] || "",
+                row["grade"] ||
+                  row["Grade"] ||
+                  row["year"] ||
+                  row["Year"] ||
+                  "",
               ).trim(),
               email: String(row["email"] || row["Email"] || "").trim() || null,
               section:
                 String(row["section"] || row["Section"] || "").trim() || null,
             }))
-            .filter((s) => s.student_id && s.first_name && s.last_name && s.grade && s.section);
+            .filter(
+              (s) =>
+                s.student_id &&
+                s.first_name &&
+                s.last_name &&
+                s.grade &&
+                s.section,
+            );
 
           if (parsedStudents.length === 0) {
             toast.error("No valid student records found in file");
@@ -342,7 +353,14 @@ export default function Students() {
             grade: string;
             email: string | null;
             section: string | null;
-          } => Boolean(s.student_id && s.first_name && s.last_name && s.grade && s.section),
+          } =>
+            Boolean(
+              s.student_id &&
+              s.first_name &&
+              s.last_name &&
+              s.grade &&
+              s.section,
+            ),
         )
         .map((s) => ({
           student_id: s.student_id,
@@ -360,13 +378,27 @@ export default function Students() {
       await fetchStudents();
 
       if (result.created.length > 0) {
-        toast.success(`Successfully imported ${result.created.length} students`);
+        toast.success(
+          `Successfully imported ${result.created.length} students`,
+        );
       }
       if (result.errors.length > 0) {
         toast.error(
           `Failed to import ${result.errors.length} student(s). Check duplicates/format.`,
         );
       }
+
+      // Log the import activity
+      await AuditLogger.logStudentImport(
+        user.id,
+        user.email || "unknown",
+        selectedFile?.name || "student_import",
+        result.created.length,
+        result.errors.length === 0,
+        result.errors.length > 0
+          ? `${result.errors.length} student(s) failed to import`
+          : undefined,
+      );
 
       // NEW LOGIC: Upload the actual file to the server for backup/record keeping
       if (selectedFile) {
@@ -431,14 +463,15 @@ export default function Students() {
   };
 
   // Convert to searchable format for the combobox
-  const searchableStudents: SearchableStudent[] = useMemo(() =>
-    students.map((s) => ({
-      studentId: s.student_id,
-      studentName: `${s.last_name}, ${s.first_name}`,
-      section: s.section,
-      email: s.email,
-      _originalId: s.id,
-    })),
+  const searchableStudents: SearchableStudent[] = useMemo(
+    () =>
+      students.map((s) => ({
+        studentId: s.student_id,
+        studentName: `${s.last_name}, ${s.first_name}`,
+        section: s.section,
+        email: s.email,
+        _originalId: s.id,
+      })),
     [students],
   );
 
@@ -447,11 +480,11 @@ export default function Students() {
     () =>
       new Fuse(students, {
         keys: [
-          { name: 'student_id', weight: 0.35 },
-          { name: 'first_name', weight: 0.25 },
-          { name: 'last_name', weight: 0.25 },
-          { name: 'section', weight: 0.1 },
-          { name: 'email', weight: 0.05 },
+          { name: "student_id", weight: 0.35 },
+          { name: "first_name", weight: 0.25 },
+          { name: "last_name", weight: 0.25 },
+          { name: "section", weight: 0.1 },
+          { name: "email", weight: 0.05 },
         ],
         threshold: 0.35,
         distance: 100,
