@@ -43,8 +43,6 @@ import {
   AlertCircle,
   X,
   Archive,
-  ShieldCheck,
-  ShieldX,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import * as XLSX from "xlsx"; // Added import here
@@ -76,8 +74,6 @@ export default function ClassManagement() {
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [verifying, setVerifying] = useState<string | null>(null);
-  const [exportingVerified, setExportingVerified] = useState(false);
 
   const [newClass, setNewClass] = useState({
     class_name: "",
@@ -726,44 +722,6 @@ export default function ClassManagement() {
                       <GraduationCap className="w-4 h-4 text-yellow-600" />
                       {classItem.students.length}
                     </p>
-                  </div>
-                  <div className="text-center">
-                    {(() => {
-                      const verifiedCount = classItem.students.filter(s => s.validation_status === 'official').length;
-                      const totalCount = classItem.students.length;
-                      
-                      if (totalCount === 0) {
-                        return (
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1">Verified</p>
-                            <p className="text-xs text-muted-foreground">No students</p>
-                          </div>
-                        );
-                      }
-                      
-                      return (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Verified</p>
-                          <div className="flex items-center gap-1 justify-center">
-                            {verifiedCount > 0 ? (
-                              <>
-                                <ShieldCheck className="w-4 h-4 text-green-600" />
-                                <span className="text-sm font-medium text-green-600">
-                                  {verifiedCount}/{totalCount}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <ShieldX className="w-4 h-4 text-yellow-600" />
-                                <span className="text-sm font-medium text-yellow-600">
-                                  0/{totalCount}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground mb-1">Created</p>
@@ -1717,18 +1675,15 @@ export default function ClassManagement() {
 
       {/* View Class Dialog */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[95vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-3 sm:p-6">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-lg sm:text-xl">{selectedClass?.class_name}</DialogTitle>
             <DialogDescription className="text-sm">
-              {selectedClass?.course_subject} - Section{" "}
+              {selectedClass?.course_subject} - Block{" "}
               {selectedClass?.section_block}
             </DialogDescription>
           </DialogHeader>
-          {selectedClass && (() => {
-            const verifiedCount = selectedClass.students.filter(s => s.validation_status === 'official').length;
-            const totalCount = selectedClass.students.length;
-            return (
+          {selectedClass && (
             <div className="space-y-4">
               <div className="p-4 bg-muted rounded-lg">
                 <div>
@@ -1740,143 +1695,53 @@ export default function ClassManagement() {
               <div>
                 <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
                   <h4 className="font-medium text-sm sm:text-base">
-                    Students ({totalCount})
-                    {verifiedCount > 0 && (
-                      <span className="ml-2 text-xs font-normal text-green-600">
-                        {verifiedCount} verified
-                      </span>
-                    )}
+                    Students ({selectedClass.students.length})
                   </h4>
-                  {totalCount > 0 && (
-                    <Button
-                      size="sm"
-                      disabled={exportingVerified || verifiedCount === 0}
-                      className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
-                      onClick={async () => {
-                        setExportingVerified(true);
-                        try {
-                          const verified = selectedClass.students.filter(s => s.validation_status === 'official');
-                          if (verified.length === 0) {
-                            toast.error('No verified students to export');
-                            return;
-                          }
-                          const rows = verified.map(s => ({
-                            student_id: s.student_id,
-                            first_name: s.first_name,
-                            last_name: s.last_name,
-                            email: s.email || '',
-                            status: 'Verified',
-                          }));
-                          const worksheet = XLSX.utils.json_to_sheet(rows);
-                          const workbook = XLSX.utils.book_new();
-                          XLSX.utils.book_append_sheet(workbook, worksheet, 'Verified Students');
-                          XLSX.writeFile(workbook, `${selectedClass.class_name}_verified_students.xlsx`);
-                          toast.success(`Exported ${verified.length} verified student(s)`);
-                        } catch (error) {
-                          console.error('Export error:', error);
-                          toast.error('Failed to export');
-                        } finally {
-                          setExportingVerified(false);
-                        }
-                      }}
-                    >
-                      {exportingVerified ? (
-                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                      ) : (
-                        <ShieldCheck className="w-4 h-4 mr-1" />
-                      )}
-                      <span className="hidden sm:inline">Export Verified </span>({verifiedCount})
-                    </Button>
-                  )}
                 </div>
                 {selectedClass.students.length > 0 ? (
-                  <div className="border rounded-lg overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="min-w-[100px] text-xs sm:text-sm">Student ID</TableHead>
-                          <TableHead className="min-w-[120px] text-xs sm:text-sm">Name</TableHead>
-                          <TableHead className="min-w-[150px] hidden md:table-cell text-xs sm:text-sm">Email</TableHead>
-                          <TableHead className="text-center min-w-[90px] text-xs sm:text-sm">Status</TableHead>
-                          <TableHead className="text-center w-[70px] text-xs sm:text-sm">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedClass.students.map((student, idx) => (
-                          <TableRow key={`${selectedClass.id}-view-${idx}`}>
-                            <TableCell className="font-mono text-xs sm:text-sm p-2 sm:p-4">{student.student_id}</TableCell>
-                            <TableCell className="text-xs sm:text-sm p-2 sm:p-4">
-                              <div className="max-w-[120px] sm:max-w-none">
-                                <div className="truncate">{`${student.first_name} ${student.last_name}`}</div>
-                                <div className="md:hidden text-xs text-muted-foreground truncate mt-1">
-                                  {student.email || "No email"}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-xs sm:text-sm hidden md:table-cell p-2 sm:p-4">{student.email || "—"}</TableCell>
-                            <TableCell className="p-1 sm:p-4">
-                              <div className="flex justify-center">
-                                {student.validation_status === 'official' ? (
-                                  <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                                    <ShieldCheck className="w-3 h-3" />
-                                    <span className="hidden sm:inline">Verified</span>
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300">
-                                    <ShieldX className="w-3 h-3" />
-                                    <span className="hidden sm:inline">Unverified</span>
-                                  </span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="p-1 sm:p-4">
-                              <div className="flex justify-center">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className={`h-8 w-8 sm:h-7 sm:w-7 ${
-                                    student.validation_status === 'official'
-                                      ? 'text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50'
-                                      : 'text-green-600 hover:text-green-700 hover:bg-green-50'
-                                  }`}
-                                  disabled={verifying === student.student_id}
-                                  title={student.validation_status === 'official' ? 'Mark as unverified' : 'Mark as verified'}
-                                  onClick={async () => {
-                                    setVerifying(student.student_id);
-                                    try {
-                                      const updatedStudents = selectedClass.students.map((s, i) =>
-                                        i === idx
-                                          ? { ...s, validation_status: (s.validation_status === 'official' ? 'unvalidated' : 'official') as 'official' | 'unvalidated' }
-                                          : s
-                                      );
-                                      await updateClass(selectedClass.id, { students: updatedStudents });
-                                      setSelectedClass({ ...selectedClass, students: updatedStudents });
-                                      // Also update the classes list
-                                      setClasses(prev => prev.map(c => c.id === selectedClass.id ? { ...c, students: updatedStudents } : c));
-                                      const newStatus = student.validation_status === 'official' ? 'unverified' : 'verified';
-                                      toast.success(`${student.first_name} ${student.last_name} marked as ${newStatus}`);
-                                    } catch (error) {
-                                      console.error('Error updating verification:', error);
-                                      toast.error('Failed to update verification status');
-                                    } finally {
-                                      setVerifying(null);
-                                    }
-                                  }}
-                                >
-                                  {verifying === student.student_id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : student.validation_status === 'official' ? (
-                                    <ShieldX className="w-4 h-4" />
-                                  ) : (
-                                    <ShieldCheck className="w-4 h-4" />
-                                  )}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                <div className="space-y-4">
+                    {/* Mobile Card Layout */}
+                    <div className="block sm:hidden space-y-3">
+                      {selectedClass.students.map((student, idx) => (
+                        <div key={`${selectedClass.id}-mobile-${idx}`} className="bg-card border rounded-lg p-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-mono text-sm font-medium">{student.student_id}</div>
+                            <div className="text-sm font-medium truncate">{`${student.first_name} ${student.last_name}`}</div>
+                            <div className="text-xs text-muted-foreground truncate">{student.email || "No email"}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop Table Layout */}
+                    <div className="hidden sm:block">
+                      <div className="border rounded-lg overflow-hidden">
+                        <div className="max-h-[40vh] sm:max-h-[50vh] overflow-y-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="min-w-[70px] sm:min-w-[80px] text-xs sm:text-sm px-1 sm:px-3 w-[100px]">ID</TableHead>
+                                <TableHead className="min-w-[80px] sm:min-w-[100px] text-xs sm:text-sm px-1 sm:px-3 w-[120px]">Name</TableHead>
+                                <TableHead className="min-w-[100px] text-xs sm:text-sm px-1 sm:px-3">Email</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {selectedClass.students.map((student, idx) => (
+                                <TableRow key={`${selectedClass.id}-view-${idx}`} className="hover:bg-muted/50">
+                                  <TableCell className="font-mono text-xs sm:text-sm p-1 sm:p-2 w-[100px] max-w-[100px]">
+                                    <div className="truncate">{student.student_id}</div>
+                                  </TableCell>
+                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2 w-[120px] max-w-[120px]">
+                                    <div className="truncate font-medium text-xs sm:text-sm">{`${student.first_name} ${student.last_name}`}</div>
+                                  </TableCell>
+                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2">{student.email || "—"}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-center py-4">
@@ -1885,9 +1750,8 @@ export default function ClassManagement() {
                 )}
               </div>
             </div>
-            );
-          })()}
-          <DialogFooter className="mt-4 pt-4 border-t">
+          )}
+          <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
             <Button 
               onClick={() => setShowViewDialog(false)}
               className="w-full sm:w-auto"

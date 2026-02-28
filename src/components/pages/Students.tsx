@@ -107,19 +107,62 @@ export default function Students() {
         return;
       }
 
-      const records = await StudentService.getAllStudents(user.id);
-      const mappedStudents: Student[] = records.map((record) => ({
-        id: record.student_id,
-        student_id: record.student_id,
-        first_name: record.first_name,
-        last_name: record.last_name,
-        grade: record.grade || null,
-        email: record.email || null,
-        section: record.section || null,
-        created_at: record.created_at,
-      }));
+      // First try to get from classes collection (where students actually are)
+      try {
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const { db } = await import('@/lib/firebase');
+        
+        const classesRef = collection(db, 'classes');
+        const classesQuery = query(classesRef, where('createdBy', '==', user.id));
+        const classesSnapshot = await getDocs(classesQuery);
+        
+        // Aggregate all students from all classes
+        const allStudents = new Map<string, Student>(); // Use Map to avoid duplicates
+        
+        classesSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const classStudents = data.students || [];
+          
+          // Only process students from non-archived classes
+          if (!data.isArchived) {
+            classStudents.forEach((student: any) => {
+              if (student.student_id) {
+                allStudents.set(student.student_id, {
+                  id: student.student_id,
+                  student_id: student.student_id,
+                  first_name: student.first_name || '',
+                  last_name: student.last_name || '',
+                  grade: student.grade || null,
+                  email: student.email || null,
+                  section: student.section || null,
+                  created_at: data.created_at || new Date().toISOString(),
+                });
+              }
+            });
+          }
+        });
+        
+        const mappedStudents = Array.from(allStudents.values());
+        console.log('Students loaded from classes:', mappedStudents.length);
+        setStudents(mappedStudents);
+      } catch (classError) {
+        console.warn('Could not fetch from classes, falling back to students collection:', classError);
+        
+        // Fallback to dedicated students collection
+        const records = await StudentService.getAllStudents(user.id);
+        const mappedStudents: Student[] = records.map((record) => ({
+          id: record.student_id,
+          student_id: record.student_id,
+          first_name: record.first_name,
+          last_name: record.last_name,
+          grade: record.grade || null,
+          email: record.email || null,
+          section: record.section || null,
+          created_at: record.created_at,
+        }));
 
-      setStudents(mappedStudents);
+        setStudents(mappedStudents);
+      }
     } catch (error) {
       console.error("Error fetching students:", error);
       toast.error("Failed to load students");
@@ -140,38 +183,109 @@ export default function Students() {
       }
 
       setExporting(true);
-      const records = await StudentService.getAllStudents(user.id);
-      if (records.length === 0) {
-        toast.error("No student records to export");
-        return;
+      
+      // Get students from classes collection first (where the actual data is)
+      try {
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const { db } = await import('@/lib/firebase');
+        
+        const classesRef = collection(db, 'classes');
+        const classesQuery = query(classesRef, where('createdBy', '==', user.id));
+        const classesSnapshot = await getDocs(classesQuery);
+        
+        // Aggregate all students from all classes
+        const allStudents = new Map<string, any>(); // Use Map to avoid duplicates
+        
+        classesSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const classStudents = data.students || [];
+          
+          // Only process students from non-archived classes
+          if (!data.isArchived) {
+            classStudents.forEach((student: any) => {
+              if (student.student_id && !allStudents.has(student.student_id)) {
+                allStudents.set(student.student_id, {
+                  student_id: student.student_id,
+                  first_name: student.first_name || '',
+                  last_name: student.last_name || '',
+                  email: student.email || '',
+                });
+              }
+            });
+          }
+        });
+        
+        const records = Array.from(allStudents.values());
+        console.log('Exporting students from classes:', records.length);
+        
+        if (records.length === 0) {
+          toast.error("No student records to export");
+          return;
+        }
+
+        const rows = records.map((record) => ({
+          student_id: record.student_id,
+          first_name: record.first_name,
+          last_name: record.last_name,
+          email: record.email || "",
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        if (format === "xlsx") {
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Student IDs");
+          XLSX.writeFile(workbook, "student_id_list.xlsx");
+        } else {
+          const csv = XLSX.utils.sheet_to_csv(worksheet);
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "student_id_list.csv";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+
+        toast.success(`Exported ${rows.length} student ID records`);
+      } catch (classError) {
+        console.warn('Could not export from classes, falling back to students collection:', classError);
+        
+        // Fallback to dedicated students collection
+        const records = await StudentService.getAllStudents(user.id);
+        if (records.length === 0) {
+          toast.error("No student records to export");
+          return;
+        }
+
+        const rows = records.map((record) => ({
+          student_id: record.student_id,
+          first_name: record.first_name,
+          last_name: record.last_name,
+          email: record.email || "",
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        if (format === "xlsx") {
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Student IDs");
+          XLSX.writeFile(workbook, "student_id_list.xlsx");
+        } else {
+          const csv = XLSX.utils.sheet_to_csv(worksheet);
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "student_id_list.csv";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+
+        toast.success(`Exported ${rows.length} student ID records`);
       }
-
-      const rows = records.map((record) => ({
-        student_id: record.student_id,
-        first_name: record.first_name,
-        last_name: record.last_name,
-        email: record.email || "",
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(rows);
-      if (format === "xlsx") {
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Student IDs");
-        XLSX.writeFile(workbook, "student_id_list.xlsx");
-      } else {
-        const csv = XLSX.utils.sheet_to_csv(worksheet);
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "student_id_list.csv";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }
-
-      toast.success(`Exported ${rows.length} student ID records`);
     } catch (error) {
       console.error("Error exporting student IDs:", error);
       toast.error("Failed to export student IDs");
