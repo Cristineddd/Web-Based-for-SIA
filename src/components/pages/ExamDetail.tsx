@@ -18,7 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { generateAnswerSheetPDF } from '@/lib/pdfGenerator';
-import { getExamById, type Exam } from '@/services/examService';
+import { getExamById, addGeneratedSheetToExam, type Exam } from '@/services/examService';
 
 export default function ExamDetail() {
   const { id } = useParams<{ id: string }>();
@@ -54,7 +54,12 @@ export default function ExamDetail() {
       
       setExam(examData);
       setAnswers({});
-      setTotalGenerated(0);
+      // Restore persisted total from generated_sheets
+      const persisted = (examData.generated_sheets || []).reduce(
+        (sum, s) => sum + (s.sheet_count || 0),
+        0,
+      );
+      setTotalGenerated(persisted);
       setIsOffline(false);
     } catch (error: any) {
       console.error('Error fetching exam:', error);
@@ -109,8 +114,22 @@ export default function ExamDetail() {
     try {
       await generateAnswerSheetPDF(exam, sheetCount);
 
+      // Persist this batch to Firestore
+      const currentBatches = exam.generated_sheets || [];
+      const batchNumber = currentBatches.length + 1;
+      await addGeneratedSheetToExam(id!, {
+        id: `batch-${Date.now()}`,
+        sheet_count: sheetCount,
+        created_at: new Date().toISOString(),
+        examCode: exam.examCode,
+        batchNumber,
+      });
+
+      // Update local state
+      const newSheet = { id: `batch-${Date.now()}`, sheet_count: sheetCount, created_at: new Date().toISOString(), examCode: exam.examCode, batchNumber };
+      setExam((prev) => prev ? { ...prev, generated_sheets: [...(prev.generated_sheets || []), newSheet] } : prev);
       setTotalGenerated((prev) => prev + sheetCount);
-      toast.success(`Generated ${sheetCount} answer sheet(s)`);
+      toast.success(`Generated ${sheetCount} answer sheet(s) — Batch #${batchNumber}`);
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF');

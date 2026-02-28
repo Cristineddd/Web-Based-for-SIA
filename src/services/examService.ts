@@ -53,6 +53,8 @@ export interface GeneratedSheet {
   id: string;
   sheet_count: number;
   created_at: string;
+  examCode?: string; // Links this batch to the exam code printed on sheets
+  batchNumber?: number; // Sequential batch number (1, 2, 3…)
 }
 
 // ── Exam Edit Business Rules ──────────────────────────────────────────────
