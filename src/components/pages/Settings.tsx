@@ -1,11 +1,19 @@
 'use client';
 
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Settings as SettingsIcon, Bell, Lock, Database, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Settings() {
   const { user } = useAuth();
+
+  // ── General settings state (local only) ──────────────────────────────
+  const [settings, setSettings] = useState({
+    passingThreshold: 60,
+    institutionName: 'University of Science and Technology',
+    timezone: 'UTC-8:00 (Philippine Time)',
+  });
 
   return (
     <div className="space-y-6">
@@ -68,48 +76,63 @@ export default function Settings() {
         </div>
 
         <div className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Institution Name</label>
-            <input 
-              type="text" 
-              defaultValue="University of Science and Technology" 
-              className="w-full px-4 py-2 border rounded-md bg-background"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Institution Name</label>
+              <input
+                type="text"
+                value={settings.institutionName ?? ''}
+                onChange={(e) => setSettings((s) => ({ ...s, institutionName: e.target.value }))}
+                className="w-full px-4 py-2 border rounded-md bg-background"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Default Passing Grade</label>
-            <input 
-              type="number" 
-              min="0" 
-              max="100"
-              defaultValue="60" 
-              className="w-full px-4 py-2 border rounded-md bg-background"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Default Passing Grade (%)</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={settings.passingThreshold}
+                  onChange={(e) =>
+                    setSettings((s) => ({
+                      ...s,
+                      passingThreshold: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                    }))
+                  }
+                  className="w-32 px-4 py-2 border rounded-md bg-background"
+                />
+                <span className="text-sm text-muted-foreground">
+                  Students scoring ≥ {settings.passingThreshold}% are marked as passing
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                This threshold applies to the Results &amp; Analytics score table and reports.
+              </p>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Timezone</label>
-            <select className="w-full px-4 py-2 border rounded-md bg-background">
-              <option>UTC-8:00 (Philippine Time)</option>
-              <option>UTC+0:00 (GMT)</option>
-              <option>UTC+8:00 (Singapore)</option>
-            </select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Timezone</label>
+              <select
+                value={settings.timezone ?? 'UTC-8:00 (Philippine Time)'}
+                onChange={(e) => setSettings((s) => ({ ...s, timezone: e.target.value }))}
+                className="w-full px-4 py-2 border rounded-md bg-background"
+              >
+                <option>UTC-8:00 (Philippine Time)</option>
+                <option>UTC+0:00 (GMT)</option>
+                <option>UTC+8:00 (Singapore)</option>
+              </select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Current Date</label>
-            <input 
-              type="date" 
-              defaultValue={new Date().toISOString().split('T')[0]}
-              className="w-full px-4 py-2 border rounded-md bg-background"
-            />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Current Date</label>
+              <input
+                type="date"
+                defaultValue={new Date().toISOString().split('T')[0]}
+                className="w-full px-4 py-2 border rounded-md bg-background"
+              />
+            </div>
           </div>
-
-          <button className="px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90">
-            Save Changes
-          </button>
-        </div>
       </Card>
 
       {/* Notification Settings */}

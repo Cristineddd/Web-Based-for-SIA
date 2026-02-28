@@ -12,6 +12,19 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+/**
+ * Generate a unique exam code (e.g., "EX-A1B2C3")
+ * This code is printed on answer sheets to identify which exam they belong to
+ */
+function generateExamCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars like 0/O, 1/I/L
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `EX-${code}`;
+}
+
 export interface Exam {
   id: string;
   title: string;
@@ -30,6 +43,7 @@ export interface Exam {
   choicePoints?: { [choice: string]: number };
   isArchived?: boolean;
   archivedAt?: string;
+  examCode?: string; // Unique exam code for template validation (e.g., "EX-A1B2C3")
 }
 
 export interface GeneratedSheet {
@@ -67,6 +81,10 @@ export async function createExam(
     if (!instructorId) {
       console.warn('⚠️ WARNING: instructorId is undefined or null!');
     }
+
+    // Generate a unique exam code for this exam
+    const examCode = generateExamCode();
+    console.log('  - Generated Exam Code:', examCode);
     
     const examData = {
       title: formData.name,
@@ -84,6 +102,7 @@ export async function createExam(
       classId: formData.classId || null,
       examType: formData.examType || 'board',
       choicePoints: formData.choicePoints || {},
+      examCode: examCode, // Unique code for template validation
     };
     const docRef = await addDoc(collection(db, "exams"), examData);
 
@@ -103,6 +122,7 @@ export async function createExam(
       className: examData.className || undefined,
       examType: examData.examType || 'board',
       choicePoints: examData.choicePoints,
+      examCode: examCode, // Include examCode in return value
     };
 
     return newExam;
@@ -251,12 +271,24 @@ export async function getExamById(examId: string): Promise<Exam | null> {
     }
 
     const data = docSnap.data();
+    
+    // If exam doesn't have an examCode, generate one and save it (for legacy exams)
+    let examCode = data.examCode;
+    if (!examCode) {
+      examCode = generateExamCode();
+      // Update the exam with the new code (fire and forget)
+      updateDoc(docRef, { examCode }).catch(err => {
+        console.warn('Failed to save generated exam code:', err);
+      });
+    }
+    
     return {
       id: docSnap.id,
       title: data.title,
       subject: data.subject,
       num_items: data.num_items,
       choices_per_item: data.choices_per_item,
+      student_id_length: data.student_id_length,
       created_at:
         data.created_at ||
         data.createdAt?.toDate?.().toISOString() ||
@@ -264,15 +296,25 @@ export async function getExamById(examId: string): Promise<Exam | null> {
       answer_keys: data.answer_keys || [],
       generated_sheets: data.generated_sheets || [],
       createdBy: data.createdBy,
+      instructorId: data.instructorId,
       updatedAt:
         data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
       className: data.className || undefined,
+      examType: (data.examType as 'board' | 'diagnostic') || 'board',
+      choicePoints: data.choicePoints || {},
+      isArchived: data.isArchived || false,
+      examCode: examCode, // Include exam code for template validation
     };
   } catch (error: any) {
     // Silently handle offline errors - don't throw
     if (error?.code === 'failed-precondition' || error?.code === 'unavailable' || error?.message?.includes('offline')) {
       console.warn('Firestore offline - retrying...');
       return null;
+    }
+    // Surface permission errors clearly
+    if (error?.code === 'permission-denied') {
+      console.error('Firestore permission denied when fetching exam:', error);
+      throw new Error('Permission denied. Please make sure you are logged in.');
     }
     console.error("Error fetching exam:", error);
     throw new Error("Failed to fetch exam");

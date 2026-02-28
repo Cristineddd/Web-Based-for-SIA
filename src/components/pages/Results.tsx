@@ -1,8 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { useDebounce } from '@/hooks/useDebounce';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   ChevronLeft, 
   FileText, 
@@ -15,7 +26,12 @@ import {
   Check,
   FileSpreadsheet,
   Table2,
-  Info
+  Info,
+  Search,
+  Filter,
+  RotateCcw,
+  Archive,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getClasses, Class } from '@/services/classService';
@@ -28,7 +44,14 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import jsPDF from 'jspdf';
+import ExamScoresTable from '@/components/pages/ExamScoresTable';
+import ExportFilterPanel, { ExportDataRow, ExportFormat } from '@/components/pages/ExportFilterPanel';
+import { exportClassResultsToExcel } from '@/services/excelExportService';
+import { generateClassResultsPdf, generateClassSummaryPdf, ExportMetadata } from '@/services/pdfReportService';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import { batchExportExams, BatchExportFormat, BatchExportProgress } from '@/services/batchExportService';
+import { ReportHistoryService } from '@/services/reportHistoryService';
 
 // Types for our component
 interface ClassResult {
@@ -87,99 +110,45 @@ function getGradeColorClass(grade: string): string {
   }
 }
 
-// Confirmation Modal Component
-function ConfirmationModal({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  type,
-  className: _className 
-}: { 
-  isOpen: boolean; 
-  onClose: () => void; 
-  onConfirm: () => void; 
-  type: 'PDF' | 'Excel' | 'CSV';
-  className: string;
-}) {
-  if (!isOpen) return null;
-
-  const iconColors = {
-    PDF: 'text-red-500',
-    Excel: 'text-green-600',
-    CSV: 'text-green-700'
-  };
-
-  const buttonColors = {
-    PDF: 'bg-red-500 hover:bg-red-600',
-    Excel: 'bg-green-600 hover:bg-green-700',
-    CSV: 'bg-green-700 hover:bg-green-800'
-  };
-
-  const Icon = type === 'PDF' ? FileText : type === 'Excel' ? FileSpreadsheet : Table2;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-        <div className="flex items-start gap-4">
-          <div className={`p-3 rounded-lg bg-gray-100 ${iconColors[type]}`}>
-            <Icon className="w-6 h-6" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">Export to {type}</h3>
-            <p className="text-sm text-gray-500 mt-1">Confirm export action</p>
-          </div>
-        </div>
-        
-        <div className="mt-4">
-          <p className="text-gray-700">
-            You are about to export class results to <strong>{type}</strong> format.
-          </p>
-          <p className="text-gray-600 text-sm mt-2">
-            The file will be downloaded to your device. Do you want to continue?
-          </p>
-        </div>
-
-        <div className="flex gap-3 mt-6 justify-end">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="px-6"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={onConfirm}
-            className={`${buttonColors[type]} text-white px-6 flex items-center gap-2`}
-          >
-            <Download className="w-4 h-4" />
-            Export {type}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Send Results Panel Component
-function SendResultsPanel({
-  isOpen,
-  onClose,
-  className,
-  students,
-  onSend
-}: {
+interface SendResultsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   className: string;
   students: StudentResult[];
   onSend: () => void;
-}) {
+  examTitle?: string;
+  subject?: string;
+  passingThreshold: number;
+  instructorName?: string;
+  instructorEmail?: string;
+}
+
+interface DeliveryResult {
+  to: string;
+  success: boolean;
+  error?: string | null;
+}
+
+function SendResultsPanel({
+  isOpen,
+  onClose,
+  className,
+  students,
+  onSend,
+  examTitle,
+  subject,
+  passingThreshold,
+  instructorName,
+  instructorEmail,
+}: SendResultsPanelProps) {
   const [emails, setEmails] = useState<{ [studentId: string]: string }>({});
   const [isSending, setIsSending] = useState(false);
-  const [isSent, setIsSent] = useState(false);
+  const [sendProgress, setSendProgress] = useState<{ sent: number; failed: number; total: number } | null>(null);
+  const [deliveryResults, setDeliveryResults] = useState<DeliveryResult[] | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Pre-populate with default emails format
     const defaultEmails: { [studentId: string]: string } = {};
     students.forEach(student => {
       defaultEmails[student.studentId] = student.email || `${student.studentId}@gordoncollege.edu.ph`;
@@ -187,29 +156,83 @@ function SendResultsPanel({
     setEmails(defaultEmails);
   }, [students]);
 
+  // Reset state when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      setDeliveryResults(null);
+      setSendProgress(null);
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
+
   const handleSend = async () => {
     setIsSending(true);
-    // Simulate sending emails
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSending(false);
-    setIsSent(true);
-    setTimeout(() => {
-      onSend();
-      setIsSent(false);
-    }, 2000);
+    setErrorMessage(null);
+    setSendProgress({ sent: 0, failed: 0, total: students.length });
+
+    try {
+      const payload = {
+        className,
+        examTitle: examTitle || 'Exam',
+        passingThreshold,
+        subject,
+        instructorName,
+        instructorEmail,
+        students: students.map((s) => ({
+          studentId: s.studentId,
+          studentName: s.studentName,
+          email: emails[s.studentId] || `${s.studentId}@gordoncollege.edu.ph`,
+          score: s.score,
+          totalQuestions: s.totalQuestions,
+          percentage: s.percentage,
+          grade: s.grade,
+          date: s.date,
+        })),
+      };
+
+      const res = await fetch('/api/send-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.error || 'Failed to send emails.');
+        setIsSending(false);
+        return;
+      }
+
+      setSendProgress({ sent: data.sent, failed: data.failed, total: data.total });
+      setDeliveryResults(data.results || []);
+      setIsSending(false);
+
+      if (data.failed === 0) {
+        setTimeout(() => { onSend(); }, 3000);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Network error';
+      setErrorMessage(msg);
+      setIsSending(false);
+    }
   };
 
   if (!isOpen) return null;
 
+  const sentCount = sendProgress?.sent ?? 0;
+  const failedCount = sendProgress?.failed ?? 0;
+  const isDone = deliveryResults !== null;
+
   return (
-    <div className="fixed inset-y-0 right-0 w-full md:max-w-md bg-[#1a472a] shadow-xl z-50 flex flex-col">
+    <div className="fixed inset-y-0 right-0 w-full max-w-md bg-[#1a472a] shadow-xl z-50 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-green-800 flex items-center justify-between">
         <div className="flex items-center gap-3 text-white">
           <Mail className="w-5 h-5" />
           <div>
             <h2 className="font-semibold">Send Results via Email</h2>
-            <p className="text-sm text-green-200">{className} Results</p>
+            <p className="text-sm text-green-200">{className} — {examTitle || 'Exam'}</p>
           </div>
         </div>
         <button onClick={onClose} className="text-white hover:text-green-200">
@@ -217,29 +240,102 @@ function SendResultsPanel({
         </button>
       </div>
 
-      {/* Content */} 
+      {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {isSent ? (
-          <div className="flex flex-col items-center justify-center h-full">
-            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-              <Check className="w-8 h-8 text-green-600" />
+        {/* Error banner */}
+        {errorMessage && (
+          <div className="bg-red-900/40 border border-red-700 rounded-lg p-3 mb-4">
+            <p className="text-sm text-red-200 font-medium">Failed to send</p>
+            <p className="text-xs text-red-300 mt-1">{errorMessage}</p>
+          </div>
+        )}
+
+        {isDone ? (
+          /* Delivery report */
+          <div className="space-y-4">
+            <div className="flex flex-col items-center text-center py-4">
+              {failedCount === 0 ? (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                    <Check className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">All Emails Sent!</h3>
+                  <p className="text-green-200 mt-1">
+                    Results delivered to {sentCount} student{sentCount !== 1 ? 's' : ''}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
+                    <Info className="w-8 h-8 text-yellow-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">Delivery Complete</h3>
+                  <p className="text-green-200 mt-1">
+                    {sentCount} sent &bull; {failedCount} failed
+                  </p>
+                </>
+              )}
             </div>
-            <h3 className="text-xl font-semibold text-white">Emails Sent!</h3>
-            <p className="text-green-200 mt-2">Results sent to {students.length} students</p>
+
+            {/* Per-student results */}
+            {deliveryResults && deliveryResults.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-green-300 font-medium">Delivery Details</p>
+                {deliveryResults.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2">
+                    <span className="text-sm text-white truncate mr-2">{r.to}</span>
+                    {r.success ? (
+                      <span className="text-xs text-green-300 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Sent
+                      </span>
+                    ) : (
+                      <span className="text-xs text-red-300 flex items-center gap-1" title={r.error || ''}>
+                        <X className="w-3 h-3" /> Failed
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              onClick={onClose}
+              className="w-full bg-white text-green-800 hover:bg-gray-100 font-semibold py-3 mt-4"
+            >
+              Close
+            </Button>
           </div>
         ) : (
+          /* Email form — each student gets their own score email */
           <>
             <div className="bg-blue-900/30 rounded-lg p-3 mb-4 flex items-start gap-2">
               <Info className="w-4 h-4 text-blue-300 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-blue-100">
-                Enter Gmail addresses for each student. Scores will be sent automatically to their inboxes.
+                Each student will receive a personalized email with their individual exam score and grade.
               </p>
             </div>
 
+            {/* Sending progress */}
+            {isSending && sendProgress && (
+              <div className="bg-white/10 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  <p className="text-sm text-white font-medium">Sending emails to students...</p>
+                </div>
+                <Progress
+                  value={((sentCount + failedCount) / (sendProgress.total || 1)) * 100}
+                  className="h-2"
+                />
+                <p className="text-xs text-green-200 mt-2">
+                  {sentCount + failedCount} of {sendProgress.total} processed
+                </p>
+              </div>
+            )}
+
             <div className="space-y-3">
               {students.map(student => (
-                <div 
-                  key={student.studentId} 
+                <div
+                  key={student.studentId}
                   className="bg-white rounded-lg p-3"
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -255,8 +351,9 @@ function SendResultsPanel({
                     type="email"
                     value={emails[student.studentId] || ''}
                     onChange={(e) => setEmails(prev => ({ ...prev, [student.studentId]: e.target.value }))}
-                    placeholder="Enter email address"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50"
+                    placeholder="Enter student email address"
+                    disabled={isSending}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 disabled:opacity-50"
                   />
                 </div>
               ))}
@@ -266,7 +363,7 @@ function SendResultsPanel({
       </div>
 
       {/* Footer */}
-      {!isSent && (
+      {!isDone && (
         <div className="p-4 border-t border-green-800">
           <Button
             onClick={handleSend}
@@ -276,7 +373,7 @@ function SendResultsPanel({
             {isSending ? (
               <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-green-800 border-t-transparent rounded-full animate-spin" />
-                Sending...
+                Sending to students...
               </span>
             ) : (
               <span className="flex items-center gap-2">
@@ -293,6 +390,10 @@ function SendResultsPanel({
 
 export default function Results() {
   const { user } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<Class[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -305,9 +406,195 @@ export default function Results() {
   const [studentResults, setStudentResults] = useState<StudentResult[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
 
+  // Passing threshold
+  const [passingThreshold, setPassingThreshold] = useState(60);
+
+  // Update threshold when instructor changes it inline
+  const handleThresholdChange = useCallback(
+    (newThreshold: number) => {
+      setPassingThreshold(newThreshold);
+    },
+    []
+  );
+
   // Modal states
   const [exportModalType, setExportModalType] = useState<'PDF' | 'Excel' | 'CSV' | null>(null);
   const [showSendPanel, setShowSendPanel] = useState(false);
+
+  // ── Batch export state (SS4 2.5) ────────────────────────────────────────
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set());
+  const [batchExporting, setBatchExporting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchExportProgress | null>(null);
+  const [batchFormatPicker, setBatchFormatPicker] = useState(false);
+
+  const toggleExamSelection = useCallback((examId: string) => {
+    setSelectedExamIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(examId)) next.delete(examId);
+      else next.add(examId);
+      return next;
+    });
+  }, []);
+
+  const toggleAllExams = useCallback(() => {
+    if (!classExamsList.length) return;
+    setSelectedExamIds((prev) => {
+      const allIds = classExamsList.map((e) => e.id);
+      const allSelected = allIds.every((id) => prev.has(id));
+      if (allSelected) {
+        return new Set<string>();
+      }
+      return new Set(allIds);
+    });
+  }, [classExamsList]);
+
+  const handleBatchExport = useCallback(async (format: BatchExportFormat) => {
+    if (!selectedClass || selectedExamIds.size === 0) return;
+    const fullClass = classes.find((c) => c.id === selectedClass.classId);
+    if (!fullClass) return;
+
+    const selectedExams = classExamsList.filter((e) => selectedExamIds.has(e.id));
+    if (selectedExams.length === 0) return;
+
+    setBatchExporting(true);
+    setBatchFormatPicker(false);
+    setBatchProgress({ total: selectedExams.length, completed: 0, currentExamTitle: '', step: 'Starting...', percent: 0 });
+
+    try {
+      await batchExportExams({
+        classId: selectedClass.classId,
+        className: selectedClass.className,
+        students: fullClass.students || [],
+        exams: selectedExams,
+        format,
+        passingThreshold,
+        metadata: {
+          instructorName: user?.displayName || undefined,
+          section: selectedClass.schedule || undefined,
+        },
+        onProgress: (p) => setBatchProgress({ ...p }),
+      });
+      // Log to report history
+      if (user?.instructorId) {
+        ReportHistoryService.logReport({
+          instructorId: user.instructorId,
+          reportType: 'batch-export',
+          format: 'Batch',
+          title: `Batch Export — ${selectedClass.className} (${selectedExams.length} exams)`,
+          className: selectedClass.className,
+          studentCount: fullClass.students?.length || 0,
+          description: `${format.toUpperCase()} batch export of ${selectedExams.length} exams`,
+        }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Batch export failed:', err);
+    } finally {
+      setBatchExporting(false);
+      // Keep progress visible briefly so the user sees "Done!"
+      setTimeout(() => setBatchProgress(null), 1500);
+    }
+  }, [selectedClass, selectedExamIds, classExamsList, classes, passingThreshold, user?.displayName]);
+
+  // ── Filter state ────────────────────────────────────────────────────────
+  // Class list filters
+  const [classSearch, setClassSearch] = useState(searchParams.get('cs') || '');
+  const [classMinAvg, setClassMinAvg] = useState(searchParams.get('cmin') || '');
+  const [classMaxAvg, setClassMaxAvg] = useState(searchParams.get('cmax') || '');
+
+  // Exam list filters
+  const [examSearch, setExamSearch] = useState(searchParams.get('es') || '');
+  const [subjectFilter, setSubjectFilter] = useState(searchParams.get('subj') || 'all');
+
+  // Show/hide filter panels
+  const [showClassFilters, setShowClassFilters] = useState(false);
+
+  // ── URL state sync helper ───────────────────────────────────────────────
+  const updateURL = useCallback((params: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    Object.entries(params).forEach(([key, value]) => {
+      if (value && value !== 'all') {
+        current.set(key, value);
+      } else {
+        current.delete(key);
+      }
+    });
+    const qs = current.toString();
+    router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+  }, [searchParams, router, pathname]);
+
+  // ── Filtered class results ──────────────────────────────────────────────
+  const debouncedClassSearch = useDebounce(classSearch, 200);
+  const filteredClassResults = useMemo(() => {
+    let results = classResults;
+    if (debouncedClassSearch.trim()) {
+      const q = debouncedClassSearch.toLowerCase();
+      results = results.filter(r =>
+        r.className.toLowerCase().includes(q) ||
+        r.schedule.toLowerCase().includes(q)
+      );
+    }
+    if (classMinAvg !== '') {
+      const min = Number(classMinAvg);
+      if (!isNaN(min)) results = results.filter(r => r.averageScore >= min);
+    }
+    if (classMaxAvg !== '') {
+      const max = Number(classMaxAvg);
+      if (!isNaN(max)) results = results.filter(r => r.averageScore <= max);
+    }
+    return results;
+  }, [classResults, debouncedClassSearch, classMinAvg, classMaxAvg]);
+
+  // ── Unique subjects for exam filter ───────────────────────────────────
+  const availableSubjects = useMemo(() => {
+    const subjects = new Set(classExamsList.map(e => e.subject).filter(Boolean));
+    return Array.from(subjects).sort();
+  }, [classExamsList]);
+
+  // ── Filtered exams list ────────────────────────────────────────────────
+  const debouncedExamSearch = useDebounce(examSearch, 200);
+  const filteredExamsList = useMemo(() => {
+    let list = classExamsList;
+    if (debouncedExamSearch.trim()) {
+      const q = debouncedExamSearch.toLowerCase();
+      list = list.filter(e =>
+        e.title.toLowerCase().includes(q) ||
+        (e.subject && e.subject.toLowerCase().includes(q))
+      );
+    }
+    if (subjectFilter !== 'all') {
+      list = list.filter(e => e.subject === subjectFilter);
+    }
+    return list;
+  }, [classExamsList, examSearch, subjectFilter]);
+
+  // ── Active filter counts ──────────────────────────────────────────────
+  const classFilterCount = useMemo(() => {
+    let n = 0;
+    if (classSearch.trim()) n++;
+    if (classMinAvg !== '') n++;
+    if (classMaxAvg !== '') n++;
+    return n;
+  }, [classSearch, classMinAvg, classMaxAvg]);
+
+  const examFilterCount = useMemo(() => {
+    let n = 0;
+    if (examSearch.trim()) n++;
+    if (subjectFilter !== 'all') n++;
+    return n;
+  }, [examSearch, subjectFilter]);
+
+  const clearClassFilters = useCallback(() => {
+    setClassSearch('');
+    setClassMinAvg('');
+    setClassMaxAvg('');
+    updateURL({ cs: null, cmin: null, cmax: null });
+  }, [updateURL]);
+
+  const clearExamFilters = useCallback(() => {
+    setExamSearch('');
+    setSubjectFilter('all');
+    updateURL({ es: null, subj: null });
+  }, [updateURL]);
 
   // Fetch classes and exams
   const fetchData = useCallback(async () => {
@@ -404,6 +691,7 @@ export default function Results() {
     setSelectedClass(classResult);
     setSelectedExam(null);
     setStudentResults([]);
+    setSelectedExamIds(new Set());
     setExamStats({});
 
     // Find exams linked to this class
@@ -564,145 +852,187 @@ export default function Results() {
     }
   }, [classes]);
 
-  // Export functions
-  const exportToPDF = () => {
-    if (!selectedClass || studentResults.length === 0) return;
-    
-    const doc = new jsPDF();
-    // Using doc dimensions internally
-    
-    // Title
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${selectedClass.className} - Results`, 14, 20);
-    
-    // Subtitle
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, 28);
-    doc.text(`Total Students: ${studentResults.length}`, 14, 34);
-    
-    // Table headers
-    const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Grade', 'Date'];
-    const columnWidths = [10, 30, 50, 25, 20, 35];
-    let startX = 14;
-    let y = 45;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    headers.forEach((header, i) => {
-      doc.text(header, startX, y);
-      startX += columnWidths[i];
-    });
-    
-    // Table rows
-    doc.setFont('helvetica', 'normal');
-    y += 8;
-    
-    studentResults.forEach((result, index) => {
-      if (y > 270) {
-        doc.addPage();
-        y = 20;
+  // ── Filtered export handler (SS4 3.1) ──────────────────────────────────
+  // Receives only the filtered rows from ExportFilterPanel and exports them.
+  const handleFilteredExport = useCallback(
+    async (filteredRows: ExportDataRow[], format: ExportFormat) => {
+      if (!selectedClass || filteredRows.length === 0) return;
+
+      const meta: ExportMetadata = {
+        instructorName: user?.displayName || undefined,
+        subject: selectedExam?.subject || undefined,
+        section: selectedClass?.schedule || undefined,
+        numItems: selectedExam?.num_items || undefined,
+        choicesPerItem: selectedExam?.choices_per_item || undefined,
+        examDate: selectedExam?.created_at || undefined,
+        examCode: selectedExam?.examCode || undefined,
+      };
+
+      const rows = filteredRows.map((r) => ({
+        studentId: r.studentId,
+        studentName: r.studentName,
+        score: r.score,
+        totalQuestions: r.totalQuestions,
+        percentage: r.percentage,
+        grade: r.grade,
+        date: r.date,
+        email: r.email,
+      }));
+
+      switch (format) {
+        case 'PDF':
+          await generateClassResultsPdf(
+            selectedClass.className,
+            selectedExam?.title || 'Exam',
+            rows,
+            passingThreshold,
+            meta,
+          );
+          // Log to report history
+          if (user?.instructorId) {
+            ReportHistoryService.logReport({
+              instructorId: user.instructorId,
+              reportType: 'class-results',
+              format: 'PDF',
+              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              className: selectedClass.className,
+              examTitle: selectedExam?.title,
+              studentCount: filteredRows.length,
+              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+            }).catch(() => {});
+          }
+          break;
+
+        case 'Excel':
+          exportClassResultsToExcel(
+            selectedClass.className,
+            rows,
+            passingThreshold,
+            meta,
+          );
+          // Log to report history
+          if (user?.instructorId) {
+            ReportHistoryService.logReport({
+              instructorId: user.instructorId,
+              reportType: 'class-results',
+              format: 'Excel',
+              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              className: selectedClass.className,
+              examTitle: selectedExam?.title,
+              studentCount: filteredRows.length,
+              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+            }).catch(() => {});
+          }
+          break;
+
+        case 'CSV': {
+          const percentages = filteredRows.map((r) => r.percentage);
+          const avg = Math.round(
+            percentages.reduce((a, b) => a + b, 0) / percentages.length,
+          );
+          const passCount = percentages.filter(
+            (p) => p >= passingThreshold,
+          ).length;
+
+          const headers = [
+            '#',
+            'Student ID',
+            'Student Name',
+            'Score',
+            'Total',
+            'Percentage',
+            'Grade',
+            'Date',
+          ];
+          const csvRows = filteredRows.map((result, index) => [
+            index + 1,
+            result.studentId,
+            `"${result.studentName}"`,
+            result.score,
+            result.totalQuestions,
+            `${result.percentage}%`,
+            result.grade,
+            result.date,
+          ]);
+
+          const metaLines: string[] = [];
+          if (user?.displayName)
+            metaLines.push(`Instructor,${user.displayName}`);
+          if (selectedExam?.subject)
+            metaLines.push(`Subject,${selectedExam.subject}`);
+          if (selectedClass?.schedule)
+            metaLines.push(`Section,"${selectedClass.schedule}"`);
+          if (selectedExam?.num_items)
+            metaLines.push(`No. of Items,${selectedExam.num_items}`);
+          if (selectedExam?.choices_per_item)
+            metaLines.push(
+              `Choices per Item,${selectedExam.choices_per_item}`,
+            );
+          if (selectedExam?.examCode)
+            metaLines.push(`Exam Code,${selectedExam.examCode}`);
+          if (selectedExam?.created_at)
+            metaLines.push(`Exam Date,${selectedExam.created_at}`);
+
+          const statsBlk = [
+            [],
+            ['Statistics Summary'],
+            ['Class Average', `${avg}%`],
+            ['Highest Score', `${Math.max(...percentages)}%`],
+            ['Lowest Score', `${Math.min(...percentages)}%`],
+            [`Passed (\u2265${passingThreshold}%)`, passCount],
+            [
+              `Failed (<${passingThreshold}%)`,
+              percentages.length - passCount,
+            ],
+          ];
+
+          const csvContent = [
+            ...metaLines,
+            '',
+            headers.join(','),
+            ...csvRows.map((r) => r.join(',')),
+            ...statsBlk.map((r) => r.join(',')),
+          ].join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${selectedClass.className}_results.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+          // Log to report history
+          if (user?.instructorId) {
+            ReportHistoryService.logReport({
+              instructorId: user.instructorId,
+              reportType: 'class-results',
+              format: 'CSV',
+              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              className: selectedClass.className,
+              examTitle: selectedExam?.title,
+              studentCount: filteredRows.length,
+              fileSizeBytes: blob.size,
+              fileName: `${selectedClass.className}_results.csv`,
+              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+            }).catch(() => {});
+          }
+          break;
+        }
       }
-      
-      startX = 14;
-      const row = [
-        (index + 1).toString(),
-        result.studentId,
-        result.studentName,
-        `${result.score}/${result.totalQuestions}`,
-        result.grade,
-        result.date
-      ];
-      
-      row.forEach((cell, i) => {
-        const text = cell.length > 20 ? cell.substring(0, 18) + '...' : cell;
-        doc.text(text, startX, y);
-        startX += columnWidths[i];
-      });
-      y += 7;
-    });
-    
-    doc.save(`${selectedClass.className}_results.pdf`);
-    setExportModalType(null);
-  };
 
-  const exportToExcel = () => {
-    if (!selectedClass || studentResults.length === 0) return;
-    
-    // Create CSV content (Excel compatible)
-    const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Total', 'Percentage', 'Grade', 'Date'];
-    const rows = studentResults.map((result, index) => [
-      index + 1,
-      result.studentId,
-      `"${result.studentName}"`,
-      result.score,
-      result.totalQuestions,
-      `${result.percentage}%`,
-      result.grade,
-      result.date
-    ]);
-    
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedClass.className}_results.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setExportModalType(null);
-  };
-
-  const exportToCSV = () => {
-    if (!selectedClass || studentResults.length === 0) return;
-    
-    const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Total', 'Percentage', 'Grade', 'Date'];
-    const rows = studentResults.map((result, index) => [
-      index + 1,
-      result.studentId,
-      `"${result.studentName}"`,
-      result.score,
-      result.totalQuestions,
-      `${result.percentage}%`,
-      result.grade,
-      result.date
-    ]);
-    
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedClass.className}_results.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setExportModalType(null);
-  };
-
-  const handleExportConfirm = () => {
-    switch (exportModalType) {
-      case 'PDF':
-        exportToPDF();
-        break;
-      case 'Excel':
-        exportToExcel();
-        break;
-      case 'CSV':
-        exportToCSV();
-        break;
-    }
-  };
+      setExportModalType(null);
+    },
+    [selectedClass, selectedExam, passingThreshold, user],
+  );
 
   // Render loading state
   if (loading) {
     return (
-      <div className="space-y-4 md:space-y-6">
+      <div className="space-y-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-sm md:text-base text-gray-600 mt-1">View and export grading results by class</p>
+          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+          <p className="text-gray-600 mt-1">View and export grading results by class</p>
         </div>
-        <div className="flex items-center justify-center py-12 md:py-20">
+        <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-4 border-[#1a472a] border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
@@ -714,29 +1044,190 @@ export default function Results() {
     return (
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-sm md:text-base text-gray-600 mt-1">View and export grading results by class</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+            <p className="text-gray-600 mt-1">View and export grading results by class</p>
+          </div>
         </div>
 
         {/* Class Info Bar */}
-        <div className="flex items-center gap-3 md:gap-4">
+        <div className="flex items-center gap-4">
           <button 
             onClick={() => {
               setSelectedClass(null);
               setClassExamsList([]);
+              setSelectedExamIds(new Set());
             }}
             className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg md:text-xl font-bold text-[#1a472a] truncate">{selectedClass.className}</h2>
-            <p className="text-gray-600 text-xs md:text-sm truncate">
+          <div className="flex-1">
+            <h2 className="text-xl font-bold text-[#1a472a]">{selectedClass.className}</h2>
+            <p className="text-gray-600 text-sm">
               {selectedClass.totalStudents} students • {selectedClass.schedule}
             </p>
           </div>
         </div>
+
+        {/* Batch Export Action Bar */}
+        {classExamsList.length > 0 && (
+          <div className="flex items-center justify-between bg-gray-50 border rounded-lg px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Checkbox
+                checked={classExamsList.length > 0 && classExamsList.every((e) => selectedExamIds.has(e.id))}
+                onCheckedChange={toggleAllExams}
+                aria-label="Select all exams"
+              />
+              <span className="text-sm text-gray-700">
+                {selectedExamIds.size > 0
+                  ? `${selectedExamIds.size} exam${selectedExamIds.size > 1 ? 's' : ''} selected`
+                  : 'Select exams for batch export'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 relative">
+              {selectedExamIds.size > 0 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedExamIds(new Set())}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-[#1a472a] hover:bg-[#2d6b47] text-white"
+                    onClick={() => setBatchFormatPicker((v) => !v)}
+                    disabled={batchExporting}
+                  >
+                    <Archive className="w-4 h-4 mr-2" />
+                    Export {selectedExamIds.size} Exam{selectedExamIds.size > 1 ? 's' : ''} as ZIP
+                  </Button>
+                  {/* Format picker dropdown */}
+                  {batchFormatPicker && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[180px]">
+                      <button
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => handleBatchExport('pdf')}
+                      >
+                        <FileText className="w-4 h-4 text-red-500" />
+                        PDF Reports
+                      </button>
+                      <button
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => handleBatchExport('excel')}
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                        Excel Spreadsheets
+                      </button>
+                      <button
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => handleBatchExport('both')}
+                      >
+                        <Download className="w-4 h-4 text-blue-600" />
+                        Both (PDF + Excel)
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Batch Export Progress Modal */}
+        {batchProgress && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <Card className="w-full max-w-md p-6 mx-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#1a472a] flex items-center justify-center">
+                  {batchProgress.percent < 100 ? (
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  ) : (
+                    <Check className="w-5 h-5 text-white" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-[#1a472a]">Batch Export</h3>
+                  <p className="text-sm text-gray-500">
+                    {batchProgress.completed} of {batchProgress.total} exams
+                  </p>
+                </div>
+              </div>
+              <Progress value={batchProgress.percent} className="h-3" />
+              <p className="text-sm text-gray-600 truncate">{batchProgress.step}</p>
+              {batchProgress.percent >= 100 && (
+                <p className="text-sm text-green-600 font-medium">
+                  Download complete!
+                </p>
+              )}
+            </Card>
+          </div>
+        )}
+
+        {/* Exam Search & Filter Bar */}
+        {classExamsList.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search exams..."
+                  value={examSearch}
+                  onChange={(e) => {
+                    setExamSearch(e.target.value);
+                    updateURL({ es: e.target.value || null });
+                  }}
+                  className="pl-9"
+                />
+              </div>
+              {/* Subject filter */}
+              {availableSubjects.length > 1 && (
+                <Select
+                  value={subjectFilter}
+                  onValueChange={(v) => {
+                    setSubjectFilter(v);
+                    updateURL({ subj: v === 'all' ? null : v });
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="All Subjects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Subjects</SelectItem>
+                    {availableSubjects.map((subj) => (
+                      <SelectItem key={subj} value={subj}>{subj}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {/* Clear filters */}
+              {examFilterCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearExamFilters}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9 text-xs"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Clear ({examFilterCount})
+                </Button>
+              )}
+            </div>
+
+            {/* Result count */}
+            {examFilterCount > 0 && (
+              <p className="text-sm text-muted-foreground">
+                Showing {filteredExamsList.length} of {classExamsList.length} exams
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Exams List */}
         {classExamsList.length === 0 ? (
@@ -745,52 +1236,78 @@ export default function Results() {
             <h3 className="text-lg font-semibold text-gray-700">No Exams Found</h3>
             <p className="text-gray-500 mt-2">No exams are linked to this class yet.</p>
           </Card>
+        ) : filteredExamsList.length === 0 ? (
+          <Card className="p-12 border text-center">
+            <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-semibold text-gray-700">No Matching Exams</h3>
+            <p className="text-gray-500 mt-2">Try adjusting your search or subject filter.</p>
+            <Button variant="outline" className="mt-4" onClick={clearExamFilters}>
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Clear Filters
+            </Button>
+          </Card>
         ) : (
           <div className="space-y-3">
-            {classExamsList.map((exam) => {
+            {filteredExamsList.map((exam) => {
               const stats = examStats[exam.id];
               const scanned = stats?.scannedCount || 0;
               const avg = stats?.averageScore || 0;
               const total = selectedClass.totalStudents;
               const progressPercent = total > 0 ? Math.round((scanned / total) * 100) : 0;
+              const isSelected = selectedExamIds.has(exam.id);
 
               return (
                 <Card
                   key={exam.id}
-                  className="p-4 md:p-5 border hover:shadow-md transition-shadow cursor-pointer hover:border-[#1a472a]/30"
+                  className={`p-5 border hover:shadow-md transition-shadow cursor-pointer ${
+                    isSelected ? 'border-[#1a472a] bg-green-50/30 ring-1 ring-[#1a472a]/20' : 'hover:border-[#1a472a]/30'
+                  }`}
                   onClick={() => fetchStudentResults(selectedClass, exam)}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                      <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <FileText className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {/* Checkbox for multi-select */}
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="flex items-center"
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleExamSelection(exam.id)}
+                          aria-label={`Select ${exam.title}`}
+                        />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-base md:text-lg font-bold text-[#1a472a] truncate">{exam.title}</h3>
-                        <p className="text-xs md:text-sm text-gray-600 truncate">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-[#1a472a]">{exam.title}</h3>
+                        <p className="text-sm text-gray-600">
                           {exam.num_items} items • {exam.choices_per_item} choices • {exam.subject}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 md:w-5 md:h-5 text-gray-400 flex-shrink-0" />
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
                   </div>
 
-                  <div className="mt-3 md:mt-4 grid grid-cols-3 gap-2 md:gap-4">
-                    <div className="bg-gray-50 rounded-lg p-2 md:p-3">
-                      <p className="text-[10px] md:text-xs text-gray-500">Scanned</p>
-                      <p className="text-sm md:text-lg font-bold text-[#1a472a]">
+                  <div className="mt-4 grid grid-cols-3 gap-4">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">Scanned</p>
+                      <p className="text-lg font-bold text-[#1a472a]">
                         {scanned} / {total}
                       </p>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-2 md:p-3">
-                      <p className="text-[10px] md:text-xs text-gray-500">Average Score</p>
-                      <p className="text-sm md:text-lg font-bold text-[#1a472a]">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">Average Score</p>
+                      <p className="text-lg font-bold text-[#1a472a]">
                         {avg}%
                       </p>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-2 md:p-3">
-                      <p className="text-[10px] md:text-xs text-gray-500">Completion</p>
-                      <p className="text-sm md:text-lg font-bold text-[#1a472a]">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">Completion</p>
+                      <p className="text-lg font-bold text-[#1a472a]">
                         {progressPercent}%
                       </p>
                     </div>
@@ -816,171 +1333,93 @@ export default function Results() {
   // Render student results for selected exam
   if (selectedClass && selectedExam) {
     return (
-      <div className="space-y-4 md:space-y-6">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-            <p className="text-sm md:text-base text-gray-600 mt-1">View and export grading results by class</p>
+            <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+            <p className="text-gray-600 mt-1">View and export grading results by class</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-gray-600 text-xs md:text-sm hidden md:inline">Export as:</span>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600 text-sm">Export as:</span>
             <Button
               variant="outline"
               onClick={() => setExportModalType('PDF')}
-              className="border-red-300 text-red-600 hover:bg-red-50 text-xs md:text-sm"
-              size="sm"
+              className="border-red-300 text-red-600 hover:bg-red-50"
             >
-              <FileText className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+              <FileText className="w-4 h-4 mr-2" />
               PDF
             </Button>
             <Button
               variant="outline"
               onClick={() => setExportModalType('Excel')}
-              className="border-green-300 text-green-600 hover:bg-green-50 text-xs md:text-sm"
-              size="sm"
+              className="border-green-300 text-green-600 hover:bg-green-50"
             >
-              <FileSpreadsheet className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
               Excel
             </Button>
             <Button
               variant="outline"
               onClick={() => setExportModalType('CSV')}
-              className="border-green-400 text-green-700 hover:bg-green-50 text-xs md:text-sm"
-              size="sm"
+              className="border-green-400 text-green-700 hover:bg-green-50"
             >
-              <Table2 className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+              <Table2 className="w-4 h-4 mr-2" />
               CSV
             </Button>
           </div>
         </div>
 
         {/* Class / Exam Info Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
-          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <button 
               onClick={() => {
                 setSelectedExam(null);
                 setStudentResults([]);
               }}
-              className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors flex-shrink-0"
+              className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-lg md:text-xl font-bold text-[#1a472a] truncate">{selectedExam.title}</h2>
-              <p className="text-gray-600 text-xs md:text-sm truncate">
+            <div>
+              <h2 className="text-xl font-bold text-[#1a472a]">{selectedExam.title}</h2>
+              <p className="text-gray-600 text-sm">
                 {selectedClass.className} • {selectedExam.num_items} items • {selectedExam.subject}
               </p>
             </div>
           </div>
           <Button
             onClick={() => setShowSendPanel(true)}
-            className="bg-[#1a472a] hover:bg-[#2d6b47] text-white text-sm w-full md:w-auto"
-            size="sm"
+            className="bg-[#1a472a] hover:bg-[#2d6b47] text-white"
           >
             <Mail className="w-4 h-4 mr-2" />
             Send Results
           </Button>
         </div>
 
-        {/* Results — Mobile Cards + Desktop Table */}
-        {loadingStudents ? (
-          <Card className="border p-8 md:p-12">
-            <div className="flex flex-col items-center justify-center text-gray-500">
-              <div className="w-6 h-6 border-2 border-[#1a472a] border-t-transparent rounded-full animate-spin mb-2" />
-              <p className="text-sm">Loading results...</p>
-            </div>
-          </Card>
-        ) : studentResults.length === 0 ? (
-          <Card className="border p-8 md:p-12 text-center text-gray-500">
-            <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p className="text-sm md:text-base">No results found for this class yet.</p>
-            <p className="text-xs md:text-sm">Scan answer sheets to generate grades.</p>
-          </Card>
-        ) : (
-          <>
-            {/* Mobile Cards */}
-            <div className="space-y-2.5 md:hidden">
-              {studentResults.map((result, index) => (
-                <Card key={result.studentId} className="p-3 border">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-xs text-gray-400 w-5">{index + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[#1a472a] truncate">{result.studentName}</p>
-                        <p className="text-[11px] text-gray-500">{result.studentId}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-gray-900">{result.score}/{result.totalQuestions}</p>
-                        <p className="text-[10px] text-gray-400">{result.date}</p>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getGradeColorClass(result.grade)}`}>
-                        {result.grade}
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
+        {/* Sortable Results Table with Pagination */}
+        <ExamScoresTable
+          data={studentResults}
+          loading={loadingStudents}
+          examTitle={selectedExam.title}
+          passingThreshold={passingThreshold}
+          onThresholdChange={handleThresholdChange}
+          onViewStudent={(row) => {
+            // placeholder — can be wired to a detail view later
+            console.log('View student:', row.studentId);
+          }}
+        />
 
-            {/* Desktop Table */}
-            <Card className="border overflow-hidden hidden md:block">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-[#fffde7]">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">#</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Student ID</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Student Name</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Score</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Grade</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Date</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-[#1a472a]">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {studentResults.map((result, index) => (
-                      <tr 
-                        key={result.studentId} 
-                        className="border-b hover:bg-gray-50 transition-colors"
-                      >
-                        <td className="px-4 py-4 text-sm text-gray-600">{index + 1}</td>
-                        <td className="px-4 py-4 text-sm text-gray-900">{result.studentId}</td>
-                        <td className="px-4 py-4 text-sm font-medium text-[#1a472a]">{result.studentName}</td>
-                        <td className="px-4 py-4 text-sm font-semibold text-gray-900">
-                          {result.score} / {result.totalQuestions}
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getGradeColorClass(result.grade)}`}>
-                            {result.grade}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-sm text-gray-600">{result.date}</td>
-                        <td className="px-4 py-4">
-                          <Button variant="outline" size="sm" className="text-gray-600 text-sm">
-                            <Download className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </>
-        )}
-
-        {/* Export Modal */}
-        <ConfirmationModal
+        {/* Export Filter Panel (SS4 3.1) */}
+        <ExportFilterPanel
           isOpen={exportModalType !== null}
           onClose={() => setExportModalType(null)}
-          onConfirm={handleExportConfirm}
-          type={exportModalType || 'PDF'}
+          format={exportModalType}
+          data={studentResults}
+          passingThreshold={passingThreshold}
+          onExport={handleFilteredExport}
           className={selectedClass.className}
+          examTitle={selectedExam?.title}
         />
 
         {/* Send Results Panel */}
@@ -989,7 +1428,26 @@ export default function Results() {
           onClose={() => setShowSendPanel(false)}
           className={selectedClass.className}
           students={studentResults}
-          onSend={() => setShowSendPanel(false)}
+          onSend={() => {
+            setShowSendPanel(false);
+            // Log email delivery to report history
+            if (user?.instructorId) {
+              ReportHistoryService.logReport({
+                instructorId: user.instructorId,
+                reportType: 'email-delivery',
+                format: 'Email',
+                title: `Email Delivery — ${selectedClass.className}`,
+                className: selectedClass.className,
+                examTitle: selectedExam?.title,
+                studentCount: studentResults.length,
+              }).catch(() => {});
+            }
+          }}
+          examTitle={selectedExam?.title}
+          subject={selectedExam?.subject}
+          passingThreshold={passingThreshold}
+          instructorName={user?.displayName || undefined}
+          instructorEmail={user?.email || undefined}
         />
       </div>
     );
@@ -997,12 +1455,168 @@ export default function Results() {
 
   // Render class list view
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-        <p className="text-sm md:text-base text-gray-600 mt-1">View and export grading results by class</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
+          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+        </div>
+        {classResults.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-red-300 text-red-600 hover:bg-red-50"
+            onClick={async () => {
+              const meta: ExportMetadata = {
+                instructorName: user?.displayName || undefined,
+              };
+              await generateClassSummaryPdf(
+                classResults.map((c) => ({
+                  className: c.className,
+                  schedule: c.schedule,
+                  totalStudents: c.totalStudents,
+                  scannedCount: c.scannedCount,
+                  averageScore: c.averageScore,
+                })),
+                undefined,
+                meta,
+              );
+              // Log to report history
+              if (user?.instructorId) {
+                ReportHistoryService.logReport({
+                  instructorId: user.instructorId,
+                  reportType: 'class-summary',
+                  format: 'PDF',
+                  title: 'Class Summary Report',
+                  studentCount: classResults.reduce((sum, c) => sum + c.totalStudents, 0),
+                }).catch(() => {});
+              }
+            }}
+          >
+            <FileText className="w-4 h-4 mr-1.5" />
+            PDF Summary
+          </Button>
+        )}
       </div>
+
+      {/* Class Search & Filter Bar */}
+      {classResults.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search classes..."
+                value={classSearch}
+                onChange={(e) => {
+                  setClassSearch(e.target.value);
+                  updateURL({ cs: e.target.value || null });
+                }}
+                className="pl-9"
+              />
+            </div>
+            {/* Filters toggle */}
+            <Button
+              variant={showClassFilters ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowClassFilters(!showClassFilters)}
+              className={showClassFilters ? 'bg-[#1a472a] hover:bg-[#2d6b47] text-white' : ''}
+            >
+              <Filter className="h-4 w-4 mr-1.5" />
+              Filters
+              {classFilterCount > 0 && (
+                <Badge className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0 h-4 min-w-[16px] rounded-full">
+                  {classFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </div>
+
+          {/* Collapsible class filter panel */}
+          {showClassFilters && (
+            <Card className="p-4 border">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-[#1a472a]">Filter by Average Score</h4>
+                {classFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearClassFilters}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 text-xs"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Min Average %</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="0"
+                    value={classMinAvg}
+                    onChange={(e) => {
+                      setClassMinAvg(e.target.value);
+                      updateURL({ cmin: e.target.value || null });
+                    }}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Max Average %</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="100"
+                    value={classMaxAvg}
+                    onChange={(e) => {
+                      setClassMaxAvg(e.target.value);
+                      updateURL({ cmax: e.target.value || null });
+                    }}
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+              {/* Active filter badges */}
+              {classFilterCount > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {classSearch.trim() && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Search: &ldquo;{classSearch}&rdquo;
+                      <button onClick={() => { setClassSearch(''); updateURL({ cs: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                    </Badge>
+                  )}
+                  {classMinAvg !== '' && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Min: {classMinAvg}%
+                      <button onClick={() => { setClassMinAvg(''); updateURL({ cmin: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                    </Badge>
+                  )}
+                  {classMaxAvg !== '' && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Max: {classMaxAvg}%
+                      <button onClick={() => { setClassMaxAvg(''); updateURL({ cmax: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Result count */}
+          {classFilterCount > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Showing {filteredClassResults.length} of {classResults.length} classes
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Class Cards */}
       {classResults.length === 0 ? (
@@ -1011,45 +1625,56 @@ export default function Results() {
           <h3 className="text-lg font-semibold text-gray-700">No Classes Found</h3>
           <p className="text-gray-500 mt-2">Create a class and add students to start grading exams.</p>
         </Card>
+      ) : filteredClassResults.length === 0 ? (
+        <Card className="p-12 border text-center">
+          <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <h3 className="text-lg font-semibold text-gray-700">No Matching Classes</h3>
+          <p className="text-gray-500 mt-2">Try adjusting your search or filters.</p>
+          <Button variant="outline" className="mt-4" onClick={clearClassFilters}>
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Clear Filters
+          </Button>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-          {classResults.map((classResult) => {
+        <div className="space-y-4">
+          {filteredClassResults.map((classResult) => {
             return (
               <Card
                 key={classResult.classId}
-                className="p-3 md:p-5 border hover:shadow-md transition-shadow cursor-pointer hover:border-[#1a472a]/30"
+                className="p-6 border hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => handleClassClick(classResult)}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5 md:gap-3 flex-1 min-w-0">
-                    <div className="w-9 h-9 md:w-11 md:h-11 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Folder className="w-4 h-4 md:w-5 md:h-5 text-amber-600" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+                      <Folder className="w-6 h-6 text-amber-600" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm md:text-base font-bold text-[#1a472a] truncate">{classResult.className}</h3>
-                      <p className="text-[11px] md:text-xs text-gray-500 truncate">
+                    <div>
+                      <h3 className="text-lg font-bold text-[#1a472a]">{classResult.className}</h3>
+                      <p className="text-sm text-gray-600 flex items-center gap-1">
                         📅 {classResult.schedule}
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <ChevronRight className="w-5 h-5 text-gray-400" />
                 </div>
 
-                <div className="mt-2.5 md:mt-3 grid grid-cols-2 gap-2">
-                  <div className="bg-gray-50 rounded-lg p-2 md:p-2.5">
-                    <p className="text-[10px] md:text-xs text-gray-500">Students</p>
-                    <p className="text-sm md:text-base font-bold text-[#1a472a] flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" />
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Total Students</p>
+                    <p className="text-lg font-bold text-[#1a472a] flex items-center gap-1">
+                      <Users className="w-4 h-4" />
                       {classResult.totalStudents}
                     </p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-2 md:p-2.5">
-                    <p className="text-[10px] md:text-xs text-gray-500">Scanned</p>
-                    <p className="text-sm md:text-base font-bold text-[#1a472a]">
-                      {classResult.scannedCount}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Class Average</p>
+                    <p className="text-lg font-bold text-[#1a472a]">
+                      {classResult.scannedCount > 0 ? `${classResult.averageScore}%` : '—'}
                     </p>
                   </div>
                 </div>
+
               </Card>
             );
           })}

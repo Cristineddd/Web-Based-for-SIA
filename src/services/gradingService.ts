@@ -20,6 +20,11 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { RecordValidationGuardService, ValidationError } from './recordValidationGuardService';
+import {
+  DuplicateScoreDetectionService,
+  DuplicateScoreMatch,
+} from './duplicateScoreDetectionService';
+import { GradeAuditService } from './gradeAuditService';
 
 
 export interface StudentGrade {
@@ -90,6 +95,10 @@ export interface GradeInputData {
   rubric_details?: Record<string, number>;
   is_final?: boolean;
   graded_by: string;
+  /** When true, allows overriding an existing duplicate grade (faculty override) */
+  force_override?: boolean;
+  /** Reason for overriding a duplicate — required when force_override is true */
+  override_reason?: string;
 }
 
 const GRADES_COLLECTION = 'studentGrades';
@@ -104,6 +113,8 @@ export class GradingService {
     data?: StudentGrade;
     error?: string;
     validation_errors?: ValidationError[];
+    duplicate_match?: DuplicateScoreMatch;
+    is_duplicate?: boolean;
   }> {
     try {
       // Validate the grade record using validation guard
@@ -112,6 +123,7 @@ export class GradingService {
         exam_id: gradeData.exam_id,
         class_id: gradeData.class_id,
         score: gradeData.score,
+        max_score: gradeData.max_score,
         grade_letter: gradeData.letter_grade,
         recorded_by: gradeData.graded_by,
       });
@@ -124,6 +136,36 @@ export class GradingService {
           validation_errors: validationResult.errors,
         };
       }
+
+      // ── Duplicate Score Detection ──────────────────────────────────────
+      const duplicateCheck = await DuplicateScoreDetectionService.checkForDuplicateGrade(
+        gradeData.student_id,
+        gradeData.exam_id
+      );
+
+      if (duplicateCheck.isDuplicate && duplicateCheck.duplicateMatch) {
+        // Block unless the caller explicitly requested an override
+        if (!gradeData.force_override) {
+          return {
+            success: false,
+            error: DuplicateScoreDetectionService.formatDuplicateError(
+              duplicateCheck.duplicateMatch
+            ),
+            is_duplicate: true,
+            duplicate_match: duplicateCheck.duplicateMatch,
+          };
+        }
+
+        // Faculty override — delete the old grade and log the override
+        console.log(
+          `[GradingService] Faculty override: replacing grade ${duplicateCheck.duplicateMatch.existingGradeId}`
+        );
+        const oldId = duplicateCheck.duplicateMatch.existingGradeId;
+        await deleteDoc(doc(db, GRADES_COLLECTION, oldId));
+
+        // Log will be recorded after the new grade is saved (see below)
+      }
+      // ── End Duplicate Detection ────────────────────────────────────────
 
       const now = new Date().toISOString();
       const percentage = Math.round((gradeData.score / gradeData.max_score) * 100);
@@ -155,6 +197,54 @@ export class GradingService {
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       });
+
+      // If this was a faculty override, record the override audit trail
+      if (
+        gradeData.force_override &&
+        duplicateCheck.isDuplicate &&
+        duplicateCheck.duplicateMatch
+      ) {
+        await DuplicateScoreDetectionService.recordOverride({
+          studentId: gradeData.student_id,
+          examId: gradeData.exam_id,
+          classId: gradeData.class_id,
+          originalGradeId: duplicateCheck.duplicateMatch.existingGradeId,
+          newGradeId: gradeId,
+          originalScore: duplicateCheck.duplicateMatch.existingScore,
+          newScore: gradeData.score,
+          overriddenBy: gradeData.graded_by,
+          overrideReason: gradeData.override_reason || 'Faculty override — no reason provided',
+        });
+
+        // Audit: grade override
+        await GradeAuditService.logGradeOverride(
+          {
+            userId: gradeData.graded_by,
+            userEmail: gradeData.graded_by,
+            gradeId,
+            studentId: gradeData.student_id,
+            examId: gradeData.exam_id,
+            classId: gradeData.class_id,
+          },
+          duplicateCheck.duplicateMatch.existingGradeId,
+          { score: duplicateCheck.duplicateMatch.existingScore },
+          GradeAuditService.buildSnapshot(grade),
+          gradeData.override_reason || 'Faculty override — no reason provided'
+        );
+      } else {
+        // Audit: new grade created
+        await GradeAuditService.logGradeCreated(
+          {
+            userId: gradeData.graded_by,
+            userEmail: gradeData.graded_by,
+            gradeId,
+            studentId: gradeData.student_id,
+            examId: gradeData.exam_id,
+            classId: gradeData.class_id,
+          },
+          GradeAuditService.buildSnapshot(grade)
+        );
+      }
 
       return { success: true, data: grade };
     } catch (error) {
@@ -425,6 +515,7 @@ export class GradingService {
         exam_id: updates.exam_id || existingData.exam_id,
         class_id: updates.class_id || existingData.class_id,
         score: updates.score ?? existingData.score,
+        max_score: updates.max_score ?? existingData.max_score,
         grade_letter: updates.letter_grade || existingData.letter_grade,
         recorded_by: updates.updated_by,
       });
@@ -468,6 +559,30 @@ export class GradingService {
       const updatedDoc = await getDoc(gradeRef);
       const data = updatedDoc.data() as StudentGrade;
 
+      // Audit: grade updated — capture before/after diff
+      const beforeSnapshot = GradeAuditService.buildSnapshot(existingData);
+      const afterSnapshot = GradeAuditService.buildSnapshot({
+        score: data.score,
+        max_score: data.max_score,
+        percentage: data.percentage,
+        letter_grade: data.letter_grade,
+        status: data.status,
+        is_final: data.is_final,
+        comments: data.comments,
+      });
+      await GradeAuditService.logGradeUpdated(
+        {
+          userId: updates.updated_by,
+          userEmail: updates.updated_by,
+          gradeId,
+          studentId: existingData.student_id,
+          examId: existingData.exam_id,
+          classId: existingData.class_id,
+        },
+        beforeSnapshot,
+        afterSnapshot
+      );
+
       return { success: true, data };
     } catch (error) {
       console.error('Error updating grade:', error);
@@ -478,7 +593,7 @@ export class GradingService {
   /**
    * Delete a grade record
    */
-  static async deleteGrade(gradeId: string): Promise<{
+  static async deleteGrade(gradeId: string, deletedBy?: string): Promise<{
     success: boolean;
     error?: string;
   }> {
@@ -490,7 +605,24 @@ export class GradingService {
         return { success: false, error: `Grade with ID ${gradeId} not found` };
       }
 
+      const existingData = gradeDoc.data() as StudentGrade;
+
       await deleteDoc(gradeRef);
+
+      // Audit: grade deleted — capture the values at time of deletion
+      const userId = deletedBy || existingData.graded_by || 'unknown';
+      await GradeAuditService.logGradeDeleted(
+        {
+          userId,
+          userEmail: userId,
+          gradeId,
+          studentId: existingData.student_id,
+          examId: existingData.exam_id,
+          classId: existingData.class_id,
+        },
+        GradeAuditService.buildSnapshot(existingData)
+      );
+
       return { success: true };
     } catch (error) {
       console.error('Error deleting grade:', error);

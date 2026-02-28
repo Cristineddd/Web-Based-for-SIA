@@ -381,177 +381,126 @@ export default function Exams() {
         </CardContent>
       </Card>
 
-      {/* Loading / Empty State */}
-      {loading ? (
-        <Card className="py-12">
-          <div className="flex items-center justify-center gap-2">
-            <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            Loading exams...
-          </div>
-        </Card>
-      ) : filteredExams.length === 0 ? (
-        <Card className="py-12">
-          <div className="text-center">
-            <FileText className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
-            <p className="text-muted-foreground">
-              {search
-                ? "No exams found matching your search"
-                : "No exams created yet"}
-            </p>
-            {!search && (
-              <Button
-                variant="link"
-                className="mt-2"
-                onClick={() => setShowCreateModal(true)}
-              >
-                Create your first exam
-              </Button>
-            )}
-          </div>
-        </Card>
-      ) : (
-        <>
-          {/* Mobile Cards */}
-          <div className="space-y-3 md:hidden">
-            {filteredExams.map((exam) => (
-              <Card key={exam.id} className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm truncate">{exam.title}</h3>
-                    <p className="text-xs text-muted-foreground truncate">{exam.subject}</p>
-                    {exam.className && (
-                      <p className="text-xs text-muted-foreground truncate">Class: {exam.className}</p>
-                    )}
+      {/* Table */}
+      <Card className="table-container overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-table-header hover:bg-table-header">
+              <TableHead>Title</TableHead>
+              <TableHead className="hidden sm:table-cell">Subject</TableHead>
+              <TableHead className="hidden lg:table-cell">Class</TableHead>
+              <TableHead className="text-center">Items</TableHead>
+              <TableHead className="text-center hidden md:table-cell">
+                Choices
+              </TableHead>
+              <TableHead className="text-center hidden sm:table-cell">
+                Answer Key
+              </TableHead>
+              <TableHead className="text-center hidden lg:table-cell">
+                Template
+              </TableHead>
+              <TableHead className="text-center">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-12">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    Loading exams...
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <Link href={`/exams/${exam.id}`}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                    </Link>
+                </TableCell>
+              </TableRow>
+            ) : filteredExams.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-12">
+                  <FileText className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
+                  <p className="text-muted-foreground">
+                    {search
+                      ? "No exams found matching your search"
+                      : "No exams created yet"}
+                  </p>
+                  {!search && (
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => setArchiveId(exam.id)}
+                      variant="link"
+                      className="mt-2"
+                      onClick={() => setShowCreateModal(true)}
                     >
-                      <Archive className="w-4 h-4" />
+                      Create your first exam
                     </Button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 mt-3 text-xs">
-                  <span className="bg-muted px-2 py-0.5 rounded-full">{exam.num_items} items</span>
-                  <span className="bg-muted px-2 py-0.5 rounded-full">{exam.choices_per_item} choices</span>
-                  {exam.answerKeyStatus?.hasAnswerKey ? (
-                    exam.answerKeyStatus.completed === exam.answerKeyStatus.total ? (
-                      <span className="px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
-                        Key: Complete
+                  )}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredExams.map((exam) => (
+                <TableRow key={exam.id} className="hover:bg-table-row-hover">
+                  <TableCell className="font-medium">{exam.title}</TableCell>
+                  <TableCell className="text-muted-foreground hidden sm:table-cell">
+                    {exam.subject}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground hidden lg:table-cell">
+                    {exam.className || "—"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {exam.num_items}
+                  </TableCell>
+                  <TableCell className="text-center hidden md:table-cell">
+                    {exam.choices_per_item}
+                  </TableCell>
+                  <TableCell className="text-center hidden sm:table-cell">
+                    {exam.answerKeyStatus?.hasAnswerKey ? (
+                      exam.answerKeyStatus.completed ===
+                      exam.answerKeyStatus.total ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+                          Complete
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
+                          {exam.answerKeyStatus.completed}/
+                          {exam.answerKeyStatus.total}
+                        </span>
+                      )
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
+                        Not started
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center hidden lg:table-cell">
+                    {exam.hasTemplate ? (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+                        Yes
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-warning/10 text-warning font-medium">
-                        Key: {exam.answerKeyStatus.completed}/{exam.answerKeyStatus.total}
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
+                        No
                       </span>
-                    )
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
-                      Key: Not started
-                    </span>
-                  )}
-                  {exam.hasTemplate && (
-                    <span className="px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
-                      Template
-                    </span>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {/* Desktop Table */}
-          <Card className="table-container overflow-x-auto hidden md:block">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-table-header hover:bg-table-header">
-                  <TableHead>Title</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead className="hidden lg:table-cell">Class</TableHead>
-                  <TableHead className="text-center">Items</TableHead>
-                  <TableHead className="text-center">Choices</TableHead>
-                  <TableHead className="text-center">Answer Key</TableHead>
-                  <TableHead className="text-center hidden lg:table-cell">Template</TableHead>
-                  <TableHead className="text-center">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredExams.map((exam) => (
-                  <TableRow key={exam.id} className="hover:bg-table-row-hover">
-                    <TableCell className="font-medium">{exam.title}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {exam.subject}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden lg:table-cell">
-                      {exam.className || "—"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {exam.num_items}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {exam.choices_per_item}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {exam.answerKeyStatus?.hasAnswerKey ? (
-                        exam.answerKeyStatus.completed ===
-                        exam.answerKeyStatus.total ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
-                            Complete
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
-                            {exam.answerKeyStatus.completed}/
-                            {exam.answerKeyStatus.total}
-                          </span>
-                        )
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
-                          Not started
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center hidden lg:table-cell">
-                      {exam.hasTemplate ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
-                          Yes
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
-                          No
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-center gap-1">
-                        <Link href={`/exams/${exam.id}`}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setArchiveId(exam.id)}
-                        >
-                          <Archive className="w-4 h-4" />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-1">
+                      <Link href={`/exams/${exam.id}`}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Eye className="w-4 h-4" />
                         </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </>
-      )}
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => setArchiveId(exam.id)}
+                      >
+                        <Archive className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
 
       {/* Create Exam Modal */}
       <CreateExamModal
@@ -611,13 +560,20 @@ export default function Exams() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">Choices per Question</label>
-                <div className="grid grid-cols-1 gap-2">
-                  <button
-                    onClick={() => setEditForm({ ...editForm, choices_per_item: 5 })}
-                    className="py-2 rounded-md font-semibold text-sm border-2 transition-all bg-primary text-primary-foreground border-primary cursor-default"
-                  >
-                    5 Choices (A–E)
-                  </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{ label: "4 Choices (A–D)", value: 4 }, { label: "5 Choices (A–E)", value: 5 }].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                        editForm.choices_per_item === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-muted hover:border-primary"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="space-y-1">

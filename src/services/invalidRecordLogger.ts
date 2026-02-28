@@ -106,20 +106,13 @@ export class InvalidRecordLogger {
       // Generate rejection reason
       const rejectionReason = this.generateRejectionReason(recordType, validationErrors);
 
-      // Sanitize record data — Firestore does not allow undefined values
-      const sanitizedRecordData = this.removeUndefinedFields(recordData);
-
       const logData = {
         record_type: recordType,
         entity_id: entityId,
         user_id: userId,
         ...(options?.user_email && { user_email: options.user_email }),
-        record_data: sanitizedRecordData,
-        validation_errors: validationErrors.map(err => ({
-          field: err.field || '',
-          message: err.message || '',
-          ...(err.value !== undefined && { value: err.value }),
-        })),
+        record_data: recordData,
+        validation_errors: validationErrors,
         error_count: validationErrors.length,
         warning_count: 0, // Could be extracted from validation result if warnings are tracked
         rejection_reason: rejectionReason,
@@ -404,22 +397,6 @@ export class InvalidRecordLogger {
       console.error('Error cleaning up old records:', error);
       return { success: false, error: (error as Error).message };
     }
-  }
-
-  /**
-   * Helper: Recursively remove undefined fields from an object (Firestore rejects undefined values)
-   */
-  private static removeUndefinedFields(obj: Record<string, any>): Record<string, any> {
-    const cleaned: Record<string, any> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      if (value === undefined) continue;
-      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-        cleaned[key] = this.removeUndefinedFields(value);
-      } else {
-        cleaned[key] = value;
-      }
-    }
-    return cleaned;
   }
 
   /**

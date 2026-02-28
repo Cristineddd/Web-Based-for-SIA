@@ -217,10 +217,24 @@ export function CreateExamModal({
                 <span className="text-sm font-semibold text-foreground mb-3 block">
                   Number of Choices per Question
                 </span>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleInputChange("choicesPerItem", 4)}
+                    className={`py-3 px-4 rounded-md font-semibold text-sm transition-all border-2 ${
+                      formData.choicesPerItem === 4
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-muted hover:border-primary"
+                    }`}
+                  >
+                    4 Choices (A–D)
+                  </button>
                   <button
                     onClick={() => handleInputChange("choicesPerItem", 5)}
-                    className="py-3 px-4 rounded-md font-semibold text-sm transition-all border-2 bg-primary text-primary-foreground border-primary cursor-default"
+                    className={`py-3 px-4 rounded-md font-semibold text-sm transition-all border-2 ${
+                      formData.choicesPerItem === 5
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-muted hover:border-primary"
+                    }`}
                   >
                     5 Choices (A–E)
                   </button>

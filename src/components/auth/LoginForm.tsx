@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -78,8 +77,11 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
       <div className="w-full">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center">
-            <Image src="/Sia.png" alt="SIA Logo" width={64} height={64} className="w-16 h-16" priority />
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-[#166534]">
+              <span className="text-2xl font-bold text-white">S</span>
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900">SIA</h1>
           </div>
         </div>
 
