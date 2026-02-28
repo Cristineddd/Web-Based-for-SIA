@@ -55,6 +55,39 @@ export interface GeneratedSheet {
   created_at: string;
 }
 
+// ── Exam Edit Business Rules ──────────────────────────────────────────────
+
+/**
+ * Message shown to users when editing is blocked.
+ */
+export const EDIT_RESTRICTION_MESSAGE =
+  "Editing is not allowed once the exam date has been reached.";
+
+/**
+ * Determines whether an exam can still be edited.
+ *
+ * Business rules:
+ *   1. Exams with status "final" cannot be edited.
+ *   2. Exams are editable only **before** their scheduled date (`created_at`).
+ *      Once today's date is equal to or past the exam date, all edits are blocked.
+ *
+ * @param exam - The exam (or any object with `created_at` and optional `status`).
+ * @returns `true` if the exam can be edited; `false` otherwise.
+ */
+export function canEditExam(
+  exam: Pick<Exam, "created_at"> & { status?: string },
+): boolean {
+  // Finalized exams are never editable
+  if (exam.status === "final") return false;
+
+  // Block editing once the exam date has been reached
+  const examDate = new Date(exam.created_at);
+  examDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today < examDate;
+}
+
 export interface ExamFormData {
   name: string;
   totalQuestions: number;
@@ -348,6 +381,15 @@ export async function updateExam(
   updates: Partial<Exam>,
 ): Promise<void> {
   try {
+    // Enforce edit restriction at the service layer
+    const examSnap = await getDoc(doc(db, "exams", examId));
+    if (examSnap.exists()) {
+      const examData = examSnap.data() as Exam;
+      if (!canEditExam(examData)) {
+        throw new Error(EDIT_RESTRICTION_MESSAGE);
+      }
+    }
+
     const docRef = doc(db, "exams", examId);
 
     // Strip undefined values — Firestore rejects them
@@ -360,6 +402,9 @@ export async function updateExam(
     await updateDoc(docRef, sanitized);
   } catch (error) {
     console.error("Error updating exam:", error);
+    if (error instanceof Error && error.message === EDIT_RESTRICTION_MESSAGE) {
+      throw error;
+    }
     throw new Error("Failed to update exam");
   }
 }

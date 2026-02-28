@@ -17,7 +17,7 @@ import {
   Pencil,
   RefreshCw,
 } from "lucide-react";
-import { getExamById, updateExam, Exam } from "@/services/examService";
+import { getExamById, updateExam, Exam, canEditExam, EDIT_RESTRICTION_MESSAGE } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
 import { ScanningService } from "@/services/scanningService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -200,6 +200,13 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   }
 
   const handleSaveEdit = async () => {
+    // Guard: block editing if exam date has been reached or exam is finalized
+    if (!canEditExam(exam)) {
+      toast.error(EDIT_RESTRICTION_MESSAGE);
+      setIsEditing(false);
+      return;
+    }
+
     if (!editForm.title.trim()) {
       toast.error("Exam name is required");
       return;
@@ -500,11 +507,22 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           </button>
         )}
 
-        {exam.status !== "final" && (
+        {exam.status !== "final" && canEditExam(exam) && (
           <button
             onClick={() => setIsEditing(true)}
             className="flex items-center gap-2 px-3 py-2 border-2 border-primary text-primary rounded-md font-semibold text-sm hover:bg-primary hover:text-primary-foreground transition-colors flex-shrink-0"
             title="Edit exam details"
+          >
+            <Pencil className="w-4 h-4" />
+            <span className="hidden sm:inline">Edit</span>
+          </button>
+        )}
+
+        {exam.status !== "final" && !canEditExam(exam) && (
+          <button
+            disabled
+            className="flex items-center gap-2 px-3 py-2 border-2 border-muted text-muted-foreground rounded-md font-semibold text-sm cursor-not-allowed opacity-50 flex-shrink-0"
+            title={EDIT_RESTRICTION_MESSAGE}
           >
             <Pencil className="w-4 h-4" />
             <span className="hidden sm:inline">Edit</span>
