@@ -46,6 +46,9 @@ import {
   Loader2,
   Download,
   AlertCircle,
+  Edit3,
+  Save,
+  X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { StudentService } from "@/services/studentService";
@@ -70,6 +73,8 @@ export default function Students() {
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<Partial<Student>[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -78,6 +83,15 @@ export default function Students() {
   const [exporting, setExporting] = useState(false);
 
   const [newStudent, setNewStudent] = useState({
+    student_id: "",
+    first_name: "",
+    last_name: "",
+    grade: "",
+    email: "",
+    section: "",
+  });
+
+  const [editStudent, setEditStudent] = useState({
     student_id: "",
     first_name: "",
     last_name: "",
@@ -244,6 +258,80 @@ export default function Students() {
     } finally {
       setDeleteId(null);
     }
+  };
+
+  const handleEditStudent = (student: Student) => {
+    setEditingStudent(student);
+    setEditStudent({
+      student_id: student.student_id,
+      first_name: student.first_name,
+      last_name: student.last_name,
+      grade: student.grade || "",
+      email: student.email || "",
+      section: student.section || "",
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleUpdateStudent = async () => {
+    if (
+      !editStudent.first_name ||
+      !editStudent.last_name ||
+      !editStudent.grade ||
+      !editStudent.section ||
+      !editingStudent
+    ) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      if (!user?.id) {
+        toast.error("You must be logged in to update students");
+        return;
+      }
+
+      // Note: Student ID cannot be changed due to it being the primary key
+      const updates = {
+        first_name: editStudent.first_name.trim(),
+        last_name: editStudent.last_name.trim(),
+        grade: editStudent.grade.trim(),
+        email: editStudent.email.trim() || undefined,
+        section: editStudent.section,
+      };
+
+      await StudentService.updateStudent(editingStudent.student_id, updates);
+
+      toast.success("Student updated successfully");
+      fetchStudents();
+      setShowEditDialog(false);
+      setEditingStudent(null);
+      setEditStudent({
+        student_id: "",
+        first_name: "",
+        last_name: "",
+        grade: "",
+        email: "",
+        section: "",
+      });
+    } catch (error) {
+      console.error("Error updating student:", error);
+      const errorMessage = error instanceof Error ? error.message : "An error occurred";
+      toast.error("Failed to update student: " + errorMessage);
+    }
+  };
+
+  const cancelEdit = () => {
+    setShowEditDialog(false);
+    setEditingStudent(null);
+    setEditStudent({
+      student_id: "",
+      first_name: "",
+      last_name: "",
+      grade: "",
+      email: "",
+      section: "",
+    });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -612,12 +700,22 @@ export default function Students() {
                   </TableCell>
                   <TableCell>{student.section || "—"}</TableCell>
                   <TableCell>
-                    <div className="flex items-center justify-center">
+                    <div className="flex items-center justify-center gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                        onClick={() => handleEditStudent(student)}
+                        title="Edit student"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => setDeleteId(student.id)}
+                        title="Delete student"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -725,6 +823,113 @@ export default function Students() {
             </Button>
             <Button onClick={handleAddStudent} className="gradient-primary">
               Add Student
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Student Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit3 className="w-5 h-5 text-primary" />
+              Edit Student
+            </DialogTitle>
+            <DialogDescription>
+              Update the student's information below. Note: Student ID cannot be changed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit_student_id">Student ID</Label>
+              <Input
+                id="edit_student_id"
+                value={editStudent.student_id}
+                disabled
+                className="bg-muted cursor-not-allowed font-mono"
+                title="Student ID cannot be changed as it's the primary key"
+              />
+              <p className="text-xs text-muted-foreground">
+                Student ID cannot be changed after creation
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit_first_name">First Name *</Label>
+                <Input
+                  id="edit_first_name"
+                  value={editStudent.first_name}
+                  onChange={(e) =>
+                    setEditStudent({ ...editStudent, first_name: e.target.value })
+                  }
+                  placeholder="John"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_last_name">Last Name *</Label>
+                <Input
+                  id="edit_last_name"
+                  value={editStudent.last_name}
+                  onChange={(e) =>
+                    setEditStudent({ ...editStudent, last_name: e.target.value })
+                  }
+                  placeholder="Doe"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_grade">Grade *</Label>
+              <Input
+                id="edit_grade"
+                value={editStudent.grade}
+                onChange={(e) =>
+                  setEditStudent({ ...editStudent, grade: e.target.value })
+                }
+                placeholder="e.g., 10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_email">Email</Label>
+              <Input
+                id="edit_email"
+                type="email"
+                value={editStudent.email}
+                onChange={(e) =>
+                  setEditStudent({ ...editStudent, email: e.target.value })
+                }
+                placeholder="john@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_section">Block *</Label>
+              <select
+                id="edit_section"
+                value={editStudent.section}
+                onChange={(e) =>
+                  setEditStudent({ ...editStudent, section: e.target.value })
+                }
+                className="w-full px-3 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Select a block...</option>
+                {Array.from({ length: 26 }, (_, i) =>
+                  String.fromCharCode(65 + i),
+                ).map((letter) => (
+                  <option key={letter} value={letter}>
+                    {letter}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelEdit}>
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateStudent} className="gradient-primary">
+              <Save className="w-4 h-4 mr-2" />
+              Update Student
             </Button>
           </DialogFooter>
         </DialogContent>
