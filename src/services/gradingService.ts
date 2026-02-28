@@ -13,6 +13,8 @@ import {
   query,
   where,
   getDocs,
+  onSnapshot,
+  Unsubscribe,
   Timestamp,
   serverTimestamp,
   deleteDoc,
@@ -485,6 +487,121 @@ export class GradingService {
       console.error('Error calculating class grade statistics:', error);
       return { success: false, error: (error as Error).message };
     }
+  }
+
+  /**
+   * Subscribe to real-time class grade statistics updates.
+   * Uses onSnapshot to push updated ClassGradeStatistics whenever the
+   * underlying grade documents for the given class change.
+   */
+  static subscribeToClassGradeStatistics(
+    classId: string,
+    callback: (stats: ClassGradeStatistics) => void
+  ): Unsubscribe {
+    const q = query(
+      collection(db, GRADES_COLLECTION),
+      where('class_id', '==', classId),
+      orderBy('graded_at', 'desc')
+    );
+
+    return onSnapshot(q, (snapshot) => {
+      const grades: StudentGrade[] = snapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          ...data,
+          graded_at:
+            (data.graded_at as Timestamp)?.toDate?.().toISOString?.() ||
+            data.graded_at,
+          created_at:
+            (data.created_at as Timestamp)?.toDate?.().toISOString?.() ||
+            data.created_at,
+          updated_at:
+            (data.updated_at as Timestamp)?.toDate?.().toISOString?.() ||
+            data.updated_at,
+        } as StudentGrade;
+      });
+
+      if (grades.length === 0) {
+        callback({
+          class_id: classId,
+          total_students: 0,
+          average_score: 0,
+          highest_score: 0,
+          lowest_score: 0,
+          grade_distribution: {
+            excellent: 0,
+            good: 0,
+            satisfactory: 0,
+            passing: 0,
+            failing: 0,
+          },
+          std_deviation: 0,
+        });
+        return;
+      }
+
+      const percentages = grades.map((g) => g.percentage);
+      const average =
+        percentages.reduce((a, b) => a + b, 0) / percentages.length;
+      const variance =
+        percentages.reduce((sum, val) => sum + Math.pow(val - average, 2), 0) /
+        percentages.length;
+      const stdDeviation = Math.sqrt(variance);
+
+      const distribution = {
+        excellent: percentages.filter((p) => p >= 90).length,
+        good: percentages.filter((p) => p >= 80 && p < 90).length,
+        satisfactory: percentages.filter((p) => p >= 70 && p < 80).length,
+        passing: percentages.filter((p) => p >= 60 && p < 70).length,
+        failing: percentages.filter((p) => p < 60).length,
+      };
+
+      const uniqueStudents = new Set(grades.map((g) => g.student_id)).size;
+
+      callback({
+        class_id: classId,
+        total_students: uniqueStudents,
+        average_score: Math.round(average),
+        highest_score: Math.max(...percentages),
+        lowest_score: Math.min(...percentages),
+        grade_distribution: distribution,
+        std_deviation: Math.round(stdDeviation * 100) / 100,
+      });
+    });
+  }
+
+  /**
+   * Subscribe to real-time grade updates for a class.
+   * Returns raw StudentGrade[] via callback whenever grades change.
+   */
+  static subscribeToClassGrades(
+    classId: string,
+    callback: (grades: StudentGrade[]) => void
+  ): Unsubscribe {
+    const q = query(
+      collection(db, GRADES_COLLECTION),
+      where('class_id', '==', classId),
+      orderBy('graded_at', 'desc')
+    );
+
+    return onSnapshot(q, (snapshot) => {
+      const grades: StudentGrade[] = snapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          ...data,
+          graded_at:
+            (data.graded_at as Timestamp)?.toDate?.().toISOString?.() ||
+            data.graded_at,
+          created_at:
+            (data.created_at as Timestamp)?.toDate?.().toISOString?.() ||
+            data.created_at,
+          updated_at:
+            (data.updated_at as Timestamp)?.toDate?.().toISOString?.() ||
+            data.updated_at,
+        } as StudentGrade;
+      });
+      callback(grades);
+    });
   }
 
   /**

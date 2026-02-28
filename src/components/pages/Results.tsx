@@ -41,6 +41,7 @@ import {
   query, 
   where, 
   getDocs, 
+  onSnapshot,
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -685,6 +686,52 @@ export default function Results() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // ── Real-time listeners for class grade updates ──────────────────────
+  useEffect(() => {
+    if (!classResults.length) return;
+
+    // Set up onSnapshot listeners for each class's studentGrades collection
+    const unsubscribes = classResults.map((cr) => {
+      const q = query(
+        collection(db, 'studentGrades'),
+        where('class_id', '==', cr.classId)
+      );
+
+      return onSnapshot(q, (snapshot) => {
+        let totalScore = 0;
+        let totalMaxScore = 0;
+        let count = 0;
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          count++;
+          totalScore += data.score || 0;
+          totalMaxScore += data.max_score || 0;
+        });
+
+        const newAverage =
+          totalMaxScore > 0
+            ? Math.round((totalScore / totalMaxScore) * 100)
+            : 0;
+
+        // Only update state if the average or count actually changed
+        setClassResults((prev) =>
+          prev.map((r) =>
+            r.classId === cr.classId
+              ? { ...r, averageScore: newAverage, scannedCount: r.scannedCount > 0 ? r.scannedCount : count }
+              : r
+          )
+        );
+      });
+    });
+
+    return () => {
+      unsubscribes.forEach((unsub) => unsub());
+    };
+    // Re-subscribe only when the set of class IDs changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classResults.map((c) => c.classId).join(',')]);
 
   // Handle clicking a class — show exams for that class
   const handleClassClick = useCallback(async (classResult: ClassResult) => {

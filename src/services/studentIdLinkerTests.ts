@@ -609,6 +609,112 @@ export class StatisticsTests {
       return { success: false, message: `ERROR: ${(error as Error).message}` };
     }
   };
+
+  /**
+   * Verify real-time updates work for class grade statistics.
+   *
+   * The test subscribes via GradingService.subscribeToClassGradeStatistics,
+   * records a new grade, waits for the listener to fire with updated stats,
+   * and then cleans up.
+   */
+  static testRealTimeClassStatisticsUpdate = async (classId: string): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    return new Promise((resolve) => {
+      const TIMEOUT_MS = 15_000; // generous timeout for Firestore propagation
+      let settled = false;
+      let unsubscribe: (() => void) | null = null;
+      let createdGradeId: string | null = null;
+
+      const cleanup = async () => {
+        if (unsubscribe) {
+          unsubscribe();
+          unsubscribe = null;
+        }
+        // Remove the temporary grade we inserted
+        if (createdGradeId) {
+          try {
+            await GradingService.deleteGrade(createdGradeId, 'test_cleanup');
+          } catch {
+            // best-effort cleanup
+          }
+        }
+      };
+
+      // Safety timeout — if the listener never fires, the test fails
+      const timer = setTimeout(async () => {
+        if (!settled) {
+          settled = true;
+          await cleanup();
+          resolve({
+            success: false,
+            message: 'FAIL: Real-time listener did not receive an update within timeout',
+          });
+        }
+      }, TIMEOUT_MS);
+
+      let callCount = 0;
+
+      // 1. Subscribe to real-time updates
+      unsubscribe = GradingService.subscribeToClassGradeStatistics(
+        classId,
+        async (stats) => {
+          callCount++;
+
+          // The first callback fires immediately with the current state.
+          // After that we insert a grade and expect a second callback.
+          if (callCount === 1) {
+            // Record initial state, then insert a new grade to trigger an update
+            const gradeData: GradeInputData = {
+              student_id: `rt_test_student_${Date.now()}`,
+              exam_id: `rt_test_exam_${Date.now()}`,
+              class_id: classId,
+              score: 85,
+              max_score: 100,
+              graded_by: 'test_runner',
+              force_override: true,
+              override_reason: 'Real-time update test — temporary grade',
+            };
+
+            const result = await GradingService.recordGrade(gradeData);
+            if (result.success && result.data) {
+              createdGradeId = result.data.id;
+            } else {
+              // If we can't even write a grade, fail immediately
+              if (!settled) {
+                settled = true;
+                clearTimeout(timer);
+                await cleanup();
+                resolve({
+                  success: false,
+                  message: `FAIL: Could not insert test grade — ${result.error}`,
+                });
+              }
+            }
+            return;
+          }
+
+          // callCount >= 2 — the listener fired in response to the new grade
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+
+            const ok =
+              stats.class_id === classId && typeof stats.average_score === 'number';
+
+            await cleanup();
+            resolve({
+              success: ok,
+              message: ok
+                ? `PASS: Real-time update received (callback #${callCount}): avg=${stats.average_score}%, students=${stats.total_students}, stdDev=${stats.std_deviation}`
+                : 'FAIL: Real-time callback returned unexpected data',
+            });
+          }
+        }
+      );
+    });
+  };
 }
 
 /**
@@ -647,6 +753,9 @@ export async function runAllTests(): Promise<void> {
   console.log(await StatisticsTests.testStudentGradeStatistics('sample_student_001'));
   console.log(await StatisticsTests.testClassGradeStatistics('class_001'));
   console.log(await StatisticsTests.testStudentAttendanceStatistics('sample_student_001', 'class_001'));
+
+  console.log('\n--- Real-Time Update Tests ---');
+  console.log(await StatisticsTests.testRealTimeClassStatisticsUpdate('class_001'));
 
   console.log('\n' + '='.repeat(60));
   console.log('TEST SUITE COMPLETED');
