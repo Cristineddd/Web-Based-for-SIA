@@ -309,14 +309,14 @@ export default function Dashboard() {
           return (
             <Card key={stat.title} className={`stat-card animate-slide-up border-2 ${stat.borderColor} hover:border-[#B38B00] transition-colors duration-200`}>
               <CardContent className="p-3 md:p-6">
-                <div className="flex flex-col items-center text-center md:flex-row md:text-left md:justify-between gap-2">
-                  <div className="order-2 md:order-1">
+                <div className="flex flex-col items-center text-center justify-center h-full min-h-[100px] md:min-h-0 md:flex-row md:text-left md:justify-between gap-2">
+                  <div className="order-2 md:order-1 flex-1 md:flex-none">
                     <p className="text-xs md:text-sm font-medium text-[#166534]">{stat.title}</p>
-                    <p className="text-xl md:text-3xl font-bold mt-0.5 md:mt-1 text-[#166534]">
-                      {loading ? '-' : stat.value}
+                    <p className="text-2xl md:text-3xl font-bold mt-1 text-[#166534] font-mono tabular-nums">
+                      {loading ? '—' : stat.value}
                     </p>
                   </div>
-                  <div className={`order-1 md:order-2 w-9 h-9 md:w-12 md:h-12 rounded-lg ${stat.bgColor} flex items-center justify-center`}>
+                  <div className={`order-1 md:order-2 w-8 h-8 md:w-12 md:h-12 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}>
                     <Icon className={`w-4 h-4 md:w-6 md:h-6 ${stat.color}`} />
                   </div>
                 </div>

@@ -173,6 +173,7 @@ export class StudentService {
       created_at: now,
       updated_at: now,
       created_by,
+      validation_status: 'unvalidated',
     };
 
     try {
