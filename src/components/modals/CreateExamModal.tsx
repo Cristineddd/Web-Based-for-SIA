@@ -13,6 +13,15 @@ interface CreateExamModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateExam: (data: ExamFormData) => Promise<void>;
+  /** Pre-fill the form from an existing template (reuse flow). */
+  fromTemplate?: {
+    name: string;
+    totalQuestions: number;
+    choicesPerItem: number;
+    description: string;
+    classId?: string;
+    className?: string;
+  } | null;
 }
 
 interface ExamFormData {
@@ -31,6 +40,7 @@ export function CreateExamModal({
   isOpen,
   onClose,
   onCreateExam,
+  fromTemplate,
 }: CreateExamModalProps) {
   const { user } = useAuth();
   const router = useRouter();
@@ -51,6 +61,24 @@ export function CreateExamModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsPicked, setQuestionsPicked] = useState(false);
   const [examTypePicked, setExamTypePicked] = useState(false);
+
+  // Pre-fill form when opening from a template reuse flow
+  useEffect(() => {
+    if (isOpen && fromTemplate) {
+      setFormData((prev) => ({
+        ...prev,
+        name: `${fromTemplate.name} (Copy)`,
+        totalQuestions: fromTemplate.totalQuestions,
+        choicesPerItem: fromTemplate.choicesPerItem,
+        folder: fromTemplate.description || "General",
+        className: fromTemplate.className || "",
+        classId: fromTemplate.classId,
+      }));
+      setQuestionsPicked(true);
+      // Jump straight to step 1 (name) so the user can rename
+      setStep(1);
+    }
+  }, [isOpen, fromTemplate]);
 
   useEffect(() => {
     const fetchClassesData = async () => {
@@ -153,7 +181,16 @@ export function CreateExamModal({
       <Card className="w-full max-w-md border-2 border-primary">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-bold text-foreground">Create New Exam</h2>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">
+              {fromTemplate ? "Create Exam from Template" : "Create New Exam"}
+            </h2>
+            {fromTemplate && (
+              <p className="text-xs text-primary mt-1">
+                Pre-filled from template: {fromTemplate.name}
+              </p>
+            )}
+          </div>
           <button onClick={onClose} className="p-1 hover:bg-muted rounded-md">
             <X className="w-5 h-5" />
           </button>

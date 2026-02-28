@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Copy,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -72,6 +74,16 @@ interface Template {
   isArchived?: boolean;
   archivedAt?: string;
   archivedBy?: string;
+  version?: number;
+  versionHistory?: Array<{
+    version: number;
+    name: string;
+    description: string;
+    numQuestions: number;
+    choicesPerQuestion: number;
+    updatedBy: string;
+    updatedAt: string;
+  }>;
 }
 
 interface Class {
@@ -132,6 +144,7 @@ const formatDate = (dateValue: unknown): string => {
 
 export default function Templates() {
   const { user } = useAuth();
+  const router = useRouter();
   const [showPreview, setShowPreview] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -440,6 +453,20 @@ export default function Templates() {
     }
   };
 
+  const handleReuse = (template: Template) => {
+    // Navigate to Exams page with template data as query params
+    const params = new URLSearchParams({
+      fromTemplate: "true",
+      templateName: template.name,
+      templateQuestions: String(template.numQuestions),
+      templateChoices: String(template.choicesPerQuestion),
+      templateDescription: template.description || "",
+    });
+    if (template.classId) params.set("templateClassId", template.classId);
+    if (template.className) params.set("templateClassName", template.className);
+    router.push(`/exams?${params.toString()}`);
+  };
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -640,6 +667,11 @@ export default function Templates() {
                     <FileText className="w-6 h-6 text-blue-600" />
                   </div>
                   <div className="flex items-center gap-2">
+                    {template.version && template.version > 1 && (
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
+                        v{template.version}
+                      </span>
+                    )}
                     {template.isArchived && (
                       <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">
                         Archived
@@ -728,6 +760,21 @@ export default function Templates() {
                     Download
                   </Button>
                 </div>
+
+                {/* Reuse Button */}
+                {!template.isArchived && (
+                  <div className="mb-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-primary hover:text-primary hover:bg-primary/10 border-primary/30"
+                      onClick={() => handleReuse(template)}
+                    >
+                      <Copy className="w-4 h-4 mr-1" />
+                      Reuse for New Exam
+                    </Button>
+                  </div>
+                )}
 
                 {/* Archive/Restore Buttons */}
                 <div className="flex gap-2">
@@ -1235,6 +1282,12 @@ export default function Templates() {
             <span>
               Archived templates are preserved for audit purposes and log
               integrity
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="text-blue-600 font-bold">•</span>
+            <span>
+              Use the <strong>&quot;Reuse for New Exam&quot;</strong> button to create a new exam pre-filled with an existing template&apos;s settings
             </span>
           </li>
         </ul>

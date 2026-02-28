@@ -86,6 +86,39 @@ export default function Exams() {
     logoUrl: "",
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [templateData, setTemplateData] = useState<{
+    name: string;
+    totalQuestions: number;
+    choicesPerItem: number;
+    description: string;
+    classId?: string;
+    className?: string;
+  } | null>(null);
+
+  // Handle template reuse flow from query params
+  useEffect(() => {
+    if (searchParams.get("fromTemplate") === "true") {
+      const tplName = searchParams.get("templateName") || "";
+      const tplQuestions = Number(searchParams.get("templateQuestions")) || 50;
+      const tplChoices = Number(searchParams.get("templateChoices")) || 4;
+      const tplDesc = searchParams.get("templateDescription") || "";
+      const tplClassId = searchParams.get("templateClassId") || undefined;
+      const tplClassName = searchParams.get("templateClassName") || undefined;
+
+      setTemplateData({
+        name: tplName,
+        totalQuestions: tplQuestions,
+        choicesPerItem: tplChoices,
+        description: tplDesc,
+        classId: tplClassId,
+        className: tplClassName,
+      });
+      setShowCreateModal(true);
+
+      // Clean up URL
+      window.history.replaceState(null, "", "/exams");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const title = searchParams.get("title");
@@ -660,8 +693,12 @@ export default function Exams() {
       {/* Create Exam Modal */}
       <CreateExamModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false);
+          setTemplateData(null);
+        }}
         onCreateExam={handleCreateExam}
+        fromTemplate={templateData}
       />
 
       {/* Edit Exam Dialog */}

@@ -25,7 +25,7 @@ export interface InstructorSettings {
 
 const DEFAULT_SETTINGS: InstructorSettings = {
   passingThreshold: 60,
-  institutionName: "University of Science and Technology",
+  institutionName: "Gordon College",
   timezone: "UTC-8:00 (Philippine Time)",
 };
 

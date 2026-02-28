@@ -22,7 +22,7 @@ export default function Settings() {
 
   const [settings, setSettings] = useState<InstructorSettings>({
     passingThreshold: 60,
-    institutionName: "University of Science and Technology",
+    institutionName: "Gordon College",
     timezone: "UTC-8:00 (Philippine Time)",
   });
   const [loading, setLoading] = useState(true);

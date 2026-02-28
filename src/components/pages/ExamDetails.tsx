@@ -24,7 +24,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import {
   collection,
-  addDoc,
   serverTimestamp,
   query,
   where,
@@ -35,6 +34,7 @@ import { toast } from "sonner";
 import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
+import { TemplateService } from "@/services/templateService";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -355,7 +355,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         uid: currentUser?.uid,
       });
 
-      const templateData = {
+      await TemplateService.create({
         name: exam.title,
         description: exam.subject || "Answer Sheet Template",
         numQuestions: exam.num_items,
@@ -367,11 +367,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         instructorId: user.instructorId,
         examId: params.id,
         examName: exam.title,
-        examCode: exam.examCode, // Use stored exam code for template validation
-        createdAt: serverTimestamp(),
-      };
-
-      await addDoc(collection(db, "templates"), templateData);
+        examCode: exam.examCode,
+      });
 
       // Use the exam's stored exam code (unique identifier for this exam)
       const examCode = exam.examCode || params.id.substring(0, 8).toUpperCase();
