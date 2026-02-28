@@ -18,6 +18,7 @@ export interface Student {
   first_name: string;
   last_name: string;
   email?: string;
+  validation_status?: 'official' | 'unvalidated';
 }
 
 export interface Class {

@@ -458,14 +458,35 @@ export default function ClassManagement() {
             return;
           }
 
-          // Show success message with valid count
-          if (invalidStudents.length > 0) {
-            toast.success(`${validStudents.length} valid student(s) ready to import. ${invalidStudents.length} invalid student(s) were logged and skipped.`);
-          } else {
-            toast.success(`All ${validStudents.length} student(s) validated successfully.`);
+          // Check for duplicates against current class roster
+          const existingIds = new Set(students.map((s) => s.student_id));
+          const duplicates = validStudents.filter((s) => existingIds.has(s.student_id));
+          const newStudents = validStudents.filter((s) => !existingIds.has(s.student_id));
+
+          // Also check for duplicates within the file itself
+          const seenIds = new Set<string>();
+          const uniqueNewStudents: Student[] = [];
+          for (const s of newStudents) {
+            if (!seenIds.has(s.student_id)) {
+              seenIds.add(s.student_id);
+              uniqueNewStudents.push(s);
+            }
           }
 
-          setImportPreview(validStudents);
+          if (uniqueNewStudents.length === 0) {
+            toast.warning(`All ${validStudents.length} student(s) already exist in this class. Nothing to import.`);
+            return;
+          }
+
+          if (duplicates.length > 0) {
+            toast.warning(`${duplicates.length} student(s) already in this class and will be skipped.`);
+          }
+
+          if (invalidStudents.length > 0) {
+            toast.info(`${uniqueNewStudents.length} new student(s) ready to import. ${invalidStudents.length} invalid and ${duplicates.length} duplicate(s) skipped.`);
+          }
+
+          setImportPreview(uniqueNewStudents);
           setShowImportDialog(true);
 
           if (fileInputRef.current) {
@@ -484,10 +505,27 @@ export default function ClassManagement() {
   };
 
   const confirmImport = () => {
-    setStudents((prev) => [...prev, ...importPreview]);
+    // Final duplicate check before adding
+    const existingIds = new Set(students.map((s) => s.student_id));
+    const newOnly = importPreview.filter((s) => !existingIds.has(s.student_id));
+
+    if (newOnly.length === 0) {
+      toast.warning('All students already exist in this class. Nothing to import.');
+      setImportPreview([]);
+      setShowImportDialog(false);
+      return;
+    }
+
+    const skipped = importPreview.length - newOnly.length;
+    setStudents((prev) => [...prev, ...newOnly]);
     setImportPreview([]);
     setShowImportDialog(false);
-    toast.success(`Imported ${importPreview.length} students`);
+
+    if (skipped > 0) {
+      toast.success(`Imported ${newOnly.length} students. ${skipped} duplicate(s) skipped.`);
+    } else {
+      toast.success(`Imported ${newOnly.length} students`);
+    }
 
     // If we're not currently adding or editing a class, assume this is a new class creation
     // triggered from the main page upload button.
@@ -675,7 +713,7 @@ export default function ClassManagement() {
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">
                       Total Students
@@ -683,6 +721,22 @@ export default function ClassManagement() {
                     <p className="text-sm font-medium flex items-center gap-1">
                       <GraduationCap className="w-4 h-4 text-yellow-600" />
                       {classItem.students.length}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-1">Created</p>
+                    <p className="text-xs text-muted-foreground">
+                      {classItem.created_at
+                        ? new Date(classItem.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          }) + ' • ' + new Date(classItem.created_at).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
+                        : '—'}
                     </p>
                   </div>
                 </div>
@@ -1621,11 +1675,11 @@ export default function ClassManagement() {
 
       {/* View Class Dialog */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{selectedClass?.class_name}</DialogTitle>
-            <DialogDescription>
-              {selectedClass?.course_subject} - Section{" "}
+        <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-3 sm:p-6">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-lg sm:text-xl">{selectedClass?.class_name}</DialogTitle>
+            <DialogDescription className="text-sm">
+              {selectedClass?.course_subject} - Block{" "}
               {selectedClass?.section_block}
             </DialogDescription>
           </DialogHeader>
@@ -1639,29 +1693,55 @@ export default function ClassManagement() {
               </div>
 
               <div>
-                <h4 className="font-medium mb-3">
-                  Students ({selectedClass.students.length})
-                </h4>
+                <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <h4 className="font-medium text-sm sm:text-base">
+                    Students ({selectedClass.students.length})
+                  </h4>
+                </div>
                 {selectedClass.students.length > 0 ? (
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Student ID</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedClass.students.map((student, idx) => (
-                          <TableRow key={`${selectedClass.id}-view-${idx}`}>
-                            <TableCell>{student.student_id}</TableCell>
-                            <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                            <TableCell>{student.email || "—"}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                <div className="space-y-4">
+                    {/* Mobile Card Layout */}
+                    <div className="block sm:hidden space-y-3">
+                      {selectedClass.students.map((student, idx) => (
+                        <div key={`${selectedClass.id}-mobile-${idx}`} className="bg-card border rounded-lg p-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-mono text-sm font-medium">{student.student_id}</div>
+                            <div className="text-sm font-medium truncate">{`${student.first_name} ${student.last_name}`}</div>
+                            <div className="text-xs text-muted-foreground truncate">{student.email || "No email"}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop Table Layout */}
+                    <div className="hidden sm:block">
+                      <div className="border rounded-lg overflow-hidden">
+                        <div className="max-h-[40vh] sm:max-h-[50vh] overflow-y-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="min-w-[70px] sm:min-w-[80px] text-xs sm:text-sm px-1 sm:px-3 w-[100px]">ID</TableHead>
+                                <TableHead className="min-w-[80px] sm:min-w-[100px] text-xs sm:text-sm px-1 sm:px-3 w-[120px]">Name</TableHead>
+                                <TableHead className="min-w-[100px] text-xs sm:text-sm px-1 sm:px-3">Email</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {selectedClass.students.map((student, idx) => (
+                                <TableRow key={`${selectedClass.id}-view-${idx}`} className="hover:bg-muted/50">
+                                  <TableCell className="font-mono text-xs sm:text-sm p-1 sm:p-2 w-[100px] max-w-[100px]">
+                                    <div className="truncate">{student.student_id}</div>
+                                  </TableCell>
+                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2 w-[120px] max-w-[120px]">
+                                    <div className="truncate font-medium text-xs sm:text-sm">{`${student.first_name} ${student.last_name}`}</div>
+                                  </TableCell>
+                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2">{student.email || "—"}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-center py-4">
@@ -1671,8 +1751,13 @@ export default function ClassManagement() {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button onClick={() => setShowViewDialog(false)}>Close</Button>
+          <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
+            <Button 
+              onClick={() => setShowViewDialog(false)}
+              className="w-full sm:w-auto"
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
