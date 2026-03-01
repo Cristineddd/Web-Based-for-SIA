@@ -74,6 +74,14 @@ export default function ClassManagement() {
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadSummary, setUploadSummary] = useState<{
+    total: number;
+    successful: number;
+    failed: number;
+    duplicates: number;
+    invalidEntries: Array<{student: Student, errors: string[]}>;
+  } | null>(null);
+  const [showUploadSummary, setShowUploadSummary] = useState(false);
 
   const [newClass, setNewClass] = useState({
     class_name: "",
@@ -440,24 +448,6 @@ export default function ClassManagement() {
             }
           }
 
-          // Show feedback to admin about invalid entries
-          if (invalidStudents.length > 0) {
-            const errorMessage = `${invalidStudents.length} student(s) have invalid Student IDs and will be skipped. Expected format: YYYY-XXXX (e.g., 2026-0001)`;
-            toast.error(errorMessage, { duration: 5000 });
-            
-            // Show detailed errors in console for admin review
-            console.error('Invalid Student IDs detected during bulk upload:', invalidStudents.map(s => ({
-              student_id: s.student.student_id,
-              name: `${s.student.first_name} ${s.student.last_name}`,
-              errors: s.errors
-            })));
-          }
-
-          if (validStudents.length === 0) {
-            toast.error("No valid students to import after validation");
-            return;
-          }
-
           // Check for duplicates against current class roster
           const existingIds = new Set(students.map((s) => s.student_id));
           const duplicates = validStudents.filter((s) => existingIds.has(s.student_id));
@@ -473,17 +463,35 @@ export default function ClassManagement() {
             }
           }
 
+          // Create upload summary for Task 4.4
+          const summary = {
+            total: rawStudents.length,
+            successful: uniqueNewStudents.length,
+            failed: invalidStudents.length,
+            duplicates: duplicates.length + (validStudents.length - newStudents.length),
+            invalidEntries: invalidStudents
+          };
+
+          setUploadSummary(summary);
+
+          // Show appropriate feedback
           if (uniqueNewStudents.length === 0) {
-            toast.warning(`All ${validStudents.length} student(s) already exist in this class. Nothing to import.`);
+            if (invalidStudents.length > 0) {
+              toast.error(`Upload failed: All ${rawStudents.length} entries are invalid. Click 'View Summary' to download invalid entries.`);
+            } else {
+              toast.warning(`All ${validStudents.length} student(s) already exist in this class. Nothing to import.`);
+            }
+            setShowUploadSummary(true);
             return;
           }
 
-          if (duplicates.length > 0) {
-            toast.warning(`${duplicates.length} student(s) already in this class and will be skipped.`);
-          }
-
-          if (invalidStudents.length > 0) {
-            toast.info(`${uniqueNewStudents.length} new student(s) ready to import. ${invalidStudents.length} invalid and ${duplicates.length} duplicate(s) skipped.`);
+          // Success case with mixed results
+          if (invalidStudents.length > 0 || duplicates.length > 0) {
+            toast.info(`Upload completed with issues. ${uniqueNewStudents.length} will be imported. Click 'View Summary' for details.`);
+            setShowUploadSummary(true);
+          } else {
+            toast.success(`Upload successful! ${uniqueNewStudents.length} new student(s) ready to import.`);
+            setShowUploadSummary(true);
           }
 
           setImportPreview(uniqueNewStudents);
@@ -502,6 +510,48 @@ export default function ClassManagement() {
       console.error("Error reading file:", error);
       toast.error("Failed to read file");
     }
+  };
+
+  const downloadInvalidEntries = () => {
+    if (!uploadSummary?.invalidEntries.length) {
+      toast.error("No invalid entries to download");
+      return;
+    }
+
+    const headers = [
+      "Student ID",
+      "First Name", 
+      "Last Name",
+      "Email",
+      "Error Messages"
+    ];
+    
+    const invalidData = uploadSummary.invalidEntries.map(entry => [
+      entry.student.student_id,
+      entry.student.first_name,
+      entry.student.last_name,
+      entry.student.email || "",
+      entry.errors.join("; ")
+    ]);
+
+    const worksheetData = [headers, ...invalidData];
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+
+    // Set column widths for better readability
+    ws["!cols"] = [
+      { wch: 15 }, // Student ID
+      { wch: 15 }, // First Name
+      { wch: 15 }, // Last Name
+      { wch: 25 }, // Email
+      { wch: 40 }, // Error Messages
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Invalid Entries");
+    XLSX.writeFile(wb, `invalid_entries_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    toast.success(`Downloaded ${uploadSummary.invalidEntries.length} invalid entries`);
   };
 
   const confirmImport = () => {
@@ -620,6 +670,60 @@ export default function ClassManagement() {
           </Button>
         </div>
       </div>
+
+      {/* Upload Summary Dialog */}
+      {showUploadSummary && uploadSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Upload Summary</h3>
+            
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between">
+                <span>Total Records:</span>
+                <span className="font-semibold">{uploadSummary.total}</span>
+              </div>
+              
+              <div className="flex justify-between text-green-600">
+                <span>Successfully Added:</span>
+                <span className="font-semibold">{uploadSummary.successful}</span>
+              </div>
+              
+              {uploadSummary.duplicates > 0 && (
+                <div className="flex justify-between text-yellow-600">
+                  <span>Duplicates Skipped:</span>
+                  <span className="font-semibold">{uploadSummary.duplicates}</span>
+                </div>
+              )}
+              
+              {uploadSummary.failed > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>Failed/Invalid:</span>
+                  <span className="font-semibold">{uploadSummary.failed}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              {uploadSummary.invalidEntries.length > 0 && (
+                <Button 
+                  onClick={downloadInvalidEntries}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Download Invalid Entries
+                </Button>
+              )}
+              
+              <Button 
+                onClick={() => setShowUploadSummary(false)}
+                className="flex-1"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card className="card-elevated mb-6">
         <CardContent className="p-4">
