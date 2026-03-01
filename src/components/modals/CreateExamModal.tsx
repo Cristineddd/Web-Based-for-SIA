@@ -442,12 +442,6 @@ export function CreateExamModal({
               {isSubmitting ? "Creating..." : "Create Exam"}
             </button>
           )}
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
-          >
-            Cancel
-          </button>
         </div>
       </Card>
     </div>

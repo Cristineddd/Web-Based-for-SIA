@@ -18,6 +18,9 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [roomWarning, setRoomWarning] = useState(false);
+  const [classNameWarning, setClassNameWarning] = useState(false);
+  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
   const [formData, setFormData] = useState({
     class_name: '',
     course_subject: '',
@@ -45,10 +48,28 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
       return;
     }
 
+    if (formData.class_name.trim().length < 5) {
+      toast({
+        title: 'Error',
+        description: 'Class Name must be at least 5 characters long',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!formData.course_subject.trim()) {
       toast({
         title: 'Error',
         description: 'Course Subject is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (formData.course_subject.trim().length < 5) {
+      toast({
+        title: 'Error',
+        description: 'Course Subject must be at least 5 characters long',
         variant: 'destructive',
       });
       return;
@@ -143,15 +164,28 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                 type="text"
                 placeholder="Enter class name"
                 value={formData.class_name}
-                onChange={(e) => handleInputChange('class_name', e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  handleInputChange('class_name', value);
+                  
+                  // Show warning if length exceeds 0 but is less than 5
+                  if (value.trim().length > 0 && value.trim().length < 5) {
+                    setClassNameWarning(true);
+                    setTimeout(() => setClassNameWarning(false), 2000);
+                  } else {
+                    setClassNameWarning(false);
+                  }
+                }}
                 disabled={loading}
                 className={`w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                  formData.class_name.trim() 
+                  formData.class_name.trim() && formData.class_name.trim().length >= 5
                     ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
+                    : formData.class_name.trim() && formData.class_name.trim().length < 5
+                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
                     : 'border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100'
                 }`}
               />
-              {formData.class_name.trim() && (
+              {formData.class_name.trim() && formData.class_name.trim().length >= 5 && (
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                   <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">✓</span>
@@ -159,10 +193,16 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                 </div>
               )}
             </div>
-            {formData.class_name.trim() && (
+            {formData.class_name.trim() && formData.class_name.trim().length >= 5 && (
               <div className="flex items-center gap-2 text-xs text-green-600">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span>Valid class name</span>
+              </div>
+            )}
+            {classNameWarning && (
+              <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
+                <span className="text-red-500">⚠</span>
+                <span>Class Name must be at least 5 characters long</span>
               </div>
             )}
           </div>
@@ -178,15 +218,28 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                 type="text"
                 placeholder="Enter course subject"
                 value={formData.course_subject}
-                onChange={(e) => handleInputChange('course_subject', e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  handleInputChange('course_subject', value);
+                  
+                  // Show warning if length exceeds 0 but is less than 5
+                  if (value.trim().length > 0 && value.trim().length < 5) {
+                    setCourseSubjectWarning(true);
+                    setTimeout(() => setCourseSubjectWarning(false), 2000);
+                  } else {
+                    setCourseSubjectWarning(false);
+                  }
+                }}
                 disabled={loading}
                 className={`w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                  formData.course_subject.trim() 
+                  formData.course_subject.trim() && formData.course_subject.trim().length >= 5
                     ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
+                    : formData.course_subject.trim() && formData.course_subject.trim().length < 5
+                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
                     : 'border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100'
                 }`}
               />
-              {formData.course_subject.trim() && (
+              {formData.course_subject.trim() && formData.course_subject.trim().length >= 5 && (
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                   <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">✓</span>
@@ -194,10 +247,16 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                 </div>
               )}
             </div>
-            {formData.course_subject.trim() && (
+            {formData.course_subject.trim() && formData.course_subject.trim().length >= 5 && (
               <div className="flex items-center gap-2 text-xs text-green-600">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span>Valid course subject</span>
+              </div>
+            )}
+            {courseSubjectWarning && (
+              <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
+                <span className="text-red-500">⚠</span>
+                <span>Course Subject must be at least 5 characters long</span>
               </div>
             )}
           </div>
@@ -245,25 +304,41 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
             </label>
             <div className="relative">
               <Input
-                type="text"
-                placeholder="Enter room number or location"
+                type="number"
+                placeholder="Enter room number (exactly 3 digits)"
                 value={formData.room}
-                onChange={(e) => handleInputChange('room', e.target.value)}
+                onChange={(e) => {
+                  // Only allow exactly 3 numbers
+                  const inputValue = e.target.value.replace(/[^0-9]/g, '');
+                  if (inputValue.length > 3) {
+                    setRoomWarning(true);
+                    setTimeout(() => setRoomWarning(false), 3000);
+                    return;
+                  }
+                  const value = inputValue.slice(0, 3);
+                  handleInputChange('room', value);
+                }}
                 disabled={loading}
                 className="w-full transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
               />
               {formData.room.trim() && (
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">✓</span>
+                  <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">&#x2713;</span>
                   </div>
                 </div>
               )}
             </div>
             {formData.room.trim() && (
-              <div className="flex items-center gap-2 text-xs text-blue-600">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              <div className="flex items-center gap-2 text-xs text-green-600">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span>Room specified</span>
+              </div>
+            )}
+            {roomWarning && (
+              <div className="flex items-center gap-2 text-xs text-red-600 animate-pulse">
+                <div className="w-2 h-2 bg-red-500 rounded-full" />
+                <span>Room number must be exactly 3 digits only</span>
               </div>
             )}
           </div>
@@ -272,7 +347,7 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-5">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-green-600 text-lg font-bold">📋</span>
+                <span className="text-green-600 text-lg font-bold">✓</span>
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-green-900 mb-2">Form Progress</h4>
@@ -280,19 +355,19 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-green-700">Required fields completed:</span>
                     <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full transition-all ${
-                        formData.class_name.trim() && formData.course_subject.trim() && formData.section_block.trim()
-                          ? 'bg-green-500 scale-110'
-                          : 'bg-gray-300'
-                      }`} />
-                      <span className={`text-sm font-medium ${
-                        formData.class_name.trim() && formData.course_subject.trim() && formData.section_block.trim()
-                          ? 'text-green-600'
-                          : 'text-gray-500'
-                      }`}>
-                        {formData.class_name.trim() && formData.course_subject.trim() && formData.section_block.trim()
-                          ? 'Complete ✓'
-                          : 'Incomplete'}
+                    <div className={`w-4 h-4 rounded-full transition-all ${
+                      formData.class_name.trim().length >= 5 && formData.course_subject.trim().length >= 5 && formData.section_block.trim()
+                        ? 'bg-green-500 scale-110'
+                        : 'bg-gray-300'
+                    }`} />
+                    <span className={`text-sm font-medium ${
+                      formData.class_name.trim().length >= 5 && formData.course_subject.trim().length >= 5 && formData.section_block.trim()
+                        ? 'text-green-600'
+                        : 'text-gray-500'
+                    }`}>
+                      {formData.class_name.trim().length >= 5 && formData.course_subject.trim().length >= 5 && formData.section_block.trim()
+                        ? 'Complete'
+                        : 'Incomplete'}
                       </span>
                     </div>
                   </div>
@@ -301,8 +376,8 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                       className="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full transition-all duration-500 ease-out"
                       style={{ 
                         width: `${[
-                          formData.class_name.trim(),
-                          formData.course_subject.trim(), 
+                          formData.class_name.trim().length >= 5,
+                          formData.course_subject.trim().length >= 5, 
                           formData.section_block.trim()
                         ].filter(Boolean).length * 33.33}%` 
                       }}

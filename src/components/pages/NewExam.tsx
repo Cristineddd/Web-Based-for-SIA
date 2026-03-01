@@ -389,14 +389,6 @@ export default function NewExam() {
             {/* Actions */}
             <div className="flex gap-3 pt-4">
               <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push("/exams")}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
                 type="submit"
                 className="flex-1 gradient-primary"
                 disabled={loading}
@@ -409,6 +401,14 @@ export default function NewExam() {
                 ) : (
                   "Create Exam"
                 )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push("/exams")}
+                className="flex-1"
+              >
+                Cancel
               </Button>
             </div>
           </form>

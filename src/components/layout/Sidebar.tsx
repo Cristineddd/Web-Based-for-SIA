@@ -55,7 +55,7 @@ export function Sidebar() {
   };
 
   const handleNavClick = () => {
-    // Don't auto-close sidebar on nav click — user must toggle it manually
+    // Don't auto-close sidebar on nav click - user must toggle it manually
   };
 
   const getEmailInitial = () => {

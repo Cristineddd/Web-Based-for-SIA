@@ -74,6 +74,9 @@ export default function ClassManagement() {
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [roomWarning, setRoomWarning] = useState(false);
+  const [classNameWarning, setClassNameWarning] = useState(false);
+  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
   const [uploadSummary, setUploadSummary] = useState<{
     total: number;
     successful: number;
@@ -142,6 +145,18 @@ export default function ClassManagement() {
       !newClass.section_block
     ) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    // Validate Class Name minimum length
+    if (newClass.class_name.trim().length < 5) {
+      toast.error("Class Name must be at least 5 characters long");
+      return;
+    }
+
+    // Validate Course/Subject minimum length
+    if (newClass.course_subject.trim().length < 5) {
+      toast.error("Course/Subject must be at least 5 characters long");
       return;
     }
 
@@ -236,6 +251,18 @@ export default function ClassManagement() {
       !newClass.section_block
     ) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    // Validate Class Name minimum length
+    if (newClass.class_name.trim().length < 5) {
+      toast.error("Class Name must be at least 5 characters long");
+      return;
+    }
+
+    // Validate Course/Subject minimum length
+    if (newClass.course_subject.trim().length < 5) {
+      toast.error("Course/Subject must be at least 5 characters long");
       return;
     }
 
@@ -639,7 +666,7 @@ export default function ClassManagement() {
           <Button
             onClick={downloadTemplate}
             variant="outline"
-            className="gap-2 flex-shrink-0"
+            className="gap-2 flex-shrink-0 border-primary/20 hover:bg-transparent hover:text-current"
           >
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Download Template</span>
@@ -648,7 +675,7 @@ export default function ClassManagement() {
           <Button
             onClick={() => fileInputRef.current?.click()}
             variant="outline"
-            className="gap-2 flex-shrink-0"
+            className="gap-2 flex-shrink-0 border-primary/20 hover:bg-transparent hover:text-current"
           >
             <Upload className="w-4 h-4" />
             <span className="hidden sm:inline">Import Excel</span>
@@ -774,7 +801,7 @@ export default function ClassManagement() {
                         {classItem.class_name}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {classItem.course_subject} • {classItem.section_block}
+                        {classItem.course_subject} &bull; {classItem.section_block}
                       </p>
                     </div>
                   </div>
@@ -835,12 +862,12 @@ export default function ClassManagement() {
                             month: 'short',
                             day: 'numeric',
                             year: 'numeric',
-                          }) + ' • ' + new Date(classItem.created_at).toLocaleTimeString('en-US', {
+                          }) + ' &bull; ' + new Date(classItem.created_at).toLocaleTimeString('en-US', {
                             hour: 'numeric',
                             minute: '2-digit',
                             hour12: true,
                           })
-                        : '—'}
+                        : '---'}
                     </p>
                   </div>
                 </div>
@@ -904,28 +931,51 @@ export default function ClassManagement() {
                     <Input
                       id="class_name"
                       value={newClass.class_name}
-                      onChange={(e) =>
-                        setNewClass({ ...newClass, class_name: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewClass({ ...newClass, class_name: value });
+                        
+                        // Show warning if length exceeds 0 but is less than 5
+                        if (value.trim().length > 0 && value.trim().length < 5) {
+                          setClassNameWarning(true);
+                          setTimeout(() => setClassNameWarning(false), 2000);
+                        } else {
+                          setClassNameWarning(false);
+                        }
+                      }}
                       placeholder="Enter class name"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.class_name.trim() 
+                        newClass.class_name.trim() && newClass.class_name.trim().length >= 5
                           ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
+                          : newClass.class_name.trim() && newClass.class_name.trim().length < 5
+                          ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
                           : 'border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100'
                       }`}
                     />
-                    {newClass.class_name.trim() && (
+                    {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">✓</span>
+                          <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
-                  {newClass.class_name.trim() && (
+                  {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && (
                     <div className="flex items-center gap-2 text-xs text-green-600">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                       <span>Valid class name</span>
+                    </div>
+                  )}
+                  {newClass.class_name.trim() && newClass.class_name.trim().length < 5 && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                      <span>{newClass.class_name.trim().length}/5 characters minimum</span>
+                    </div>
+                  )}
+                  {classNameWarning && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>Class Name must be at least 5 characters long</span>
                     </div>
                   )}
                 </div>
@@ -937,31 +987,54 @@ export default function ClassManagement() {
                     <Input
                       id="course_subject"
                       value={newClass.course_subject}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const value = e.target.value;
                         setNewClass({
                           ...newClass,
-                          course_subject: e.target.value,
-                        })
-                      }
+                          course_subject: value,
+                        });
+                        
+                        // Show warning if length exceeds 0 but is less than 5
+                        if (value.trim().length > 0 && value.trim().length < 5) {
+                          setCourseSubjectWarning(true);
+                          setTimeout(() => setCourseSubjectWarning(false), 2000);
+                        } else {
+                          setCourseSubjectWarning(false);
+                        }
+                      }}
                       placeholder="Enter course subject"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.course_subject.trim() 
+                        newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5
                           ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
+                          : newClass.course_subject.trim() && newClass.course_subject.trim().length < 5
+                          ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
                           : 'border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100'
                       }`}
                     />
-                    {newClass.course_subject.trim() && (
+                    {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">✓</span>
+                          <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
-                  {newClass.course_subject.trim() && (
+                  {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 && (
                     <div className="flex items-center gap-2 text-xs text-green-600">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                       <span>Valid course subject</span>
+                    </div>
+                  )}
+                  {newClass.course_subject.trim() && newClass.course_subject.trim().length < 5 && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                      <span>{newClass.course_subject.trim().length}/5 characters minimum</span>
+                    </div>
+                  )}
+                  {courseSubjectWarning && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>Course/Subject must be at least 5 characters long</span>
                     </div>
                   )}
                 </div>
@@ -997,7 +1070,7 @@ export default function ClassManagement() {
                     {newClass.section_block.trim() && (
                       <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
                         <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">✓</span>
+                          <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
@@ -1016,25 +1089,40 @@ export default function ClassManagement() {
                   <div className="relative">
                     <Input
                       id="room"
+                      type="number"
                       value={newClass.room}
-                      onChange={(e) =>
-                        setNewClass({ ...newClass, room: e.target.value })
-                      }
-                      placeholder="Enter room number"
+                      onChange={(e) => {
+                        // Only allow exactly 3 numbers
+                        const inputValue = e.target.value.replace(/[^0-9]/g, '');
+                        if (inputValue.length > 3) {
+                          setRoomWarning(true);
+                          setTimeout(() => setRoomWarning(false), 3000);
+                          return;
+                        }
+                        const value = inputValue.slice(0, 3);
+                        setNewClass({ ...newClass, room: value });
+                      }}
+                      placeholder="Enter room number (exactly 3 digits)"
                       className="transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
                     />
                     {newClass.room.trim() && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">✓</span>
+                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
                   {newClass.room.trim() && (
-                    <div className="flex items-center gap-2 text-xs text-blue-600">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                    <div className="flex items-center gap-2 text-xs text-green-600">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                       <span>Room specified</span>
+                    </div>
+                  )}
+                  {roomWarning && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 animate-pulse">
+                      <div className="w-2 h-2 bg-red-500 rounded-full" />
+                      <span>Room number must be exactly 3 digits only</span>
                     </div>
                   )}
                 </div>
@@ -1237,7 +1325,7 @@ export default function ClassManagement() {
                         <TableRow key={`add-class-${idx}`}>
                           <TableCell className="min-w-[100px]">{student.student_id}</TableCell>
                           <TableCell className="min-w-[120px]">{`${student.first_name} ${student.last_name}`}</TableCell>
-                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "—"}</TableCell>
+                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "---"}</TableCell>
                           <TableCell className="text-right min-w-[80px]">
                             <Button
                               variant="ghost"
@@ -1365,11 +1453,20 @@ export default function ClassManagement() {
                   <Label htmlFor="edit_room">Room</Label>
                   <Input
                     id="edit_room"
+                    type="number"
                     value={newClass.room}
-                    onChange={(e) =>
-                      setNewClass({ ...newClass, room: e.target.value })
-                    }
-                    placeholder="e.g., Room 301"
+                    onChange={(e) => {
+                      // Only allow exactly 3 numbers
+                      const inputValue = e.target.value.replace(/[^0-9]/g, '');
+                      if (inputValue.length > 3) {
+                        setRoomWarning(true);
+                        setTimeout(() => setRoomWarning(false), 3000);
+                        return;
+                      }
+                      const value = inputValue.slice(0, 3);
+                      setNewClass({ ...newClass, room: value });
+                    }}
+                    placeholder="e.g., 101 (exactly 3 digits)"
                   />
                 </div>
               </div>
@@ -1553,7 +1650,7 @@ export default function ClassManagement() {
                         <TableRow key={`edit-class-${idx}`}>
                           <TableCell className="min-w-[100px]">{student.student_id}</TableCell>
                           <TableCell className="min-w-[120px]">{`${student.first_name} ${student.last_name}`}</TableCell>
-                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "—"}</TableCell>
+                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "---"}</TableCell>
                           <TableCell className="text-right min-w-[80px]">
                             <Button
                               variant="ghost"
@@ -1731,7 +1828,7 @@ export default function ClassManagement() {
                       <TableRow key={`cm-import-${idx}`}>
                         <TableCell>{student.student_id}</TableCell>
                         <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                        <TableCell>{student.email || "—"}</TableCell>
+                        <TableCell>{student.email || "---"}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1792,7 +1889,7 @@ export default function ClassManagement() {
               <div className="p-4 bg-muted rounded-lg">
                 <div>
                   <p className="text-sm text-muted-foreground">Room</p>
-                  <p className="font-medium">{selectedClass.room || "—"}</p>
+                  <p className="font-medium">{selectedClass.room || "---"}</p>
                 </div>
               </div>
 
@@ -1838,7 +1935,7 @@ export default function ClassManagement() {
                                   <TableCell className="text-xs sm:text-sm p-1 sm:p-2 w-[120px] max-w-[120px]">
                                     <div className="truncate font-medium text-xs sm:text-sm">{`${student.first_name} ${student.last_name}`}</div>
                                   </TableCell>
-                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2">{student.email || "—"}</TableCell>
+                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2">{student.email || "---"}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>

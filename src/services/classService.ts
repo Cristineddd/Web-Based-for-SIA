@@ -46,13 +46,13 @@ export async function createClass(
   instructorId?: string // Add instructorId parameter
 ): Promise<Class> {
   try {
-    console.log('📚 Creating class...');
+    console.log('[CREATE] Creating class...');
     console.log('  - Class data:', classData);
     console.log('  - User ID:', userId);
     console.log('  - Instructor ID:', instructorId);
     
     if (!instructorId) {
-      console.warn('⚠️ WARNING: instructorId is undefined or null!');
+      console.warn('[WARNING] WARNING: instructorId is undefined or null!');
     }
     
     const newClassData = {
@@ -63,9 +63,9 @@ export async function createClass(
       updatedAt: serverTimestamp(),
     };
 
-    console.log('📤 Sending to Firestore:', newClassData);
+    console.log('[SEND] Sending to Firestore:', newClassData);
     const docRef = await addDoc(collection(db, CLASSES_COLLECTION), newClassData);
-    console.log('✅ Class created successfully with ID:', docRef.id);
+    console.log('[SUCCESS] Class created successfully with ID:', docRef.id);
     
     // Return the class with the generated ID (include instructorId)
     const newClass: Class = {

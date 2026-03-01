@@ -601,7 +601,7 @@ export default function Students() {
         toast.success(`Imported ${result.created.length} new students`);
         toast.warning(`${totalSkipped} duplicate student(s) were skipped`);
       } else if (result.created.length === 0 && totalSkipped > 0) {
-        toast.warning(`No new students imported — all ${totalSkipped} student(s) already exist in the system.`);
+        toast.warning(`No new students imported - all ${totalSkipped} student(s) already exist in the system.`);
       }
 
       if (otherErrors.length > 0) {
@@ -833,11 +833,11 @@ export default function Students() {
                   <TableCell className="font-medium">
                     {student.last_name}, {student.first_name}
                   </TableCell>
-                  <TableCell>{student.grade || "—"}</TableCell>
+                  <TableCell>{student.grade || "-"}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {student.email || "—"}
+                    {student.email || "-"}
                   </TableCell>
-                  <TableCell>{student.section || "—"}</TableCell>
+                  <TableCell>{student.section || "-"}</TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
                       <Button
@@ -1114,9 +1114,9 @@ export default function Students() {
                     </TableCell>
                     <TableCell>{student.grade || "-"}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {student.email || "—"}
+                      {student.email || "-"}
                     </TableCell>
-                    <TableCell>{student.section || "—"}</TableCell>
+                    <TableCell>{student.section || "-"}</TableCell>
                   </TableRow>
                   );
                 })}
@@ -1132,7 +1132,7 @@ export default function Students() {
             <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
               <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
               <p className="text-sm text-red-600">
-                <strong>{duplicateIds.size} duplicate(s) found</strong> — these students already exist and will be <strong>skipped</strong> during import.
+                <strong>{duplicateIds.size} duplicate(s) found</strong> - these students already exist and will be <strong>skipped</strong> during import.
               </p>
             </div>
           )}

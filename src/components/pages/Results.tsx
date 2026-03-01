@@ -1180,10 +1180,10 @@ export default function Results() {
   // Render loading state
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+      <div className="page-container">
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
         </div>
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-4 border-[#1a472a] border-t-transparent rounded-full animate-spin" />
@@ -1195,12 +1195,12 @@ export default function Results() {
   // Render exam list for selected class
   if (selectedClass && !selectedExam) {
     return (
-      <div className="space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-            <p className="text-gray-600 mt-1">View and export grading results by class</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
+            <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
           </div>
         </div>
 
@@ -1486,15 +1486,15 @@ export default function Results() {
   // Render student results for selected exam
   if (selectedClass && selectedExam) {
     return (
-      <div className="space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-            <p className="text-gray-600 mt-1">View and export grading results by class</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
+            <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-gray-600 text-sm">Export as:</span>
+            <span className="text-muted-foreground text-sm">Export as:</span>
             <Button
               variant="outline"
               onClick={() => setExportModalType('PDF')}
@@ -1608,12 +1608,12 @@ export default function Results() {
 
   // Render class list view
   return (
-    <div className="space-y-6">
+    <div className="page-container">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
         </div>
         {classResults.length > 0 && (
           <Button

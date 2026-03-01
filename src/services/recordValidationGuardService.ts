@@ -518,7 +518,7 @@ export class RecordValidationGuardService {
     if (errors.length === 0) return '';
 
     const errorList = errors
-      .map((e) => `• ${e.field}: ${e.message}`)
+      .map((e) => `- ${e.field}: ${e.message}`)
       .join('\n');
 
     return `${recordType} record validation failed:\n${errorList}`;

@@ -210,18 +210,18 @@ export default function Dashboard() {
         return;
       }
 
-      console.log('🔍 User object:', user);
-      console.log('🔍 User.instructorId:', user?.instructorId);
+      console.log('[SEARCH] User object:', user);
+      console.log('[SEARCH] User.instructorId:', user?.instructorId);
       
       if (!user?.instructorId) {
-        toast.error('⚠️ Instructor ID not found. Please log out and log back in, or contact support.');
+        toast.error('[WARNING] Instructor ID not found. Please log out and log back in, or contact support.');
         return;
       }
 
       // Pass instructorId when creating exam
-      console.log('📝 Creating exam with instructorId:', user.instructorId);
+      console.log('[CREATE] Creating exam with instructorId:', user.instructorId);
       const newExam = await createExam(formData, user.id, user.instructorId);
-      console.log('✅ Exam saved:', newExam);
+      console.log('[SUCCESS] Exam saved:', newExam);
 
       // OPTIMIZATION 4: Update stats without refetching
       setStats(prev => {
@@ -313,7 +313,7 @@ export default function Dashboard() {
                   <div className="order-2 md:order-1 flex-1 md:flex-none">
                     <p className="text-xs md:text-sm font-medium text-[#166534]">{stat.title}</p>
                     <p className="text-2xl md:text-3xl font-bold mt-1 text-[#166534] font-mono tabular-nums">
-                      {loading ? '—' : stat.value}
+                      {loading ? '-' : stat.value}
                     </p>
                   </div>
                   <div className={`order-1 md:order-2 w-8 h-8 md:w-12 md:h-12 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}>
