@@ -673,13 +673,38 @@ export default function Students() {
     XLSX.writeFile(wb, "student_import_template.xlsx");
   };
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.student_id.toLowerCase().includes(search.toLowerCase()) ||
-      student.first_name.toLowerCase().includes(search.toLowerCase()) ||
-      student.last_name.toLowerCase().includes(search.toLowerCase()) ||
-      student.section?.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filteredStudents = students.filter((student) => {
+    const query = search.toLowerCase().trim();
+    if (!query) return true;
+
+    const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
+    const reverseFullName = `${student.last_name} ${student.first_name}`.toLowerCase();
+    const studentId = student.student_id.toLowerCase();
+    const section = student.section?.toLowerCase() || '';
+
+    // Check if the entire query matches any single field or the combined full name
+    if (
+      studentId.includes(query) ||
+      fullName.includes(query) ||
+      reverseFullName.includes(query) ||
+      section.includes(query)
+    ) {
+      return true;
+    }
+
+    // Split by spaces and check if ALL terms match at least one field
+    const terms = query.split(/\s+/).filter(Boolean);
+    if (terms.length > 1) {
+      return terms.every((term) =>
+        studentId.includes(term) ||
+        student.first_name.toLowerCase().includes(term) ||
+        student.last_name.toLowerCase().includes(term) ||
+        section.includes(term)
+      );
+    }
+
+    return false;
+  });
 
   return (
     <div className="page-container">

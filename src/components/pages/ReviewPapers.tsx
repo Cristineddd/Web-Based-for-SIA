@@ -148,10 +148,25 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
     // Filter by search query (Student ID or Name)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(p =>
-        p.studentId.toLowerCase().includes(query) ||
-        p.studentName.toLowerCase().includes(query)
-      );
+      result = result.filter(p => {
+        const studentId = p.studentId.toLowerCase();
+        const studentName = p.studentName.toLowerCase();
+
+        // Check if the entire query matches any field
+        if (studentId.includes(query) || studentName.includes(query)) {
+          return true;
+        }
+
+        // Split by spaces and check if ALL terms match at least one field
+        const terms = query.split(/\s+/).filter(Boolean);
+        if (terms.length > 1) {
+          return terms.every(term =>
+            studentId.includes(term) || studentName.includes(term)
+          );
+        }
+
+        return false;
+      });
     }
 
     // Sort
