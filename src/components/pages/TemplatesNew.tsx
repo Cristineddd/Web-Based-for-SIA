@@ -42,6 +42,7 @@ interface Template {
   className?: string;
   examId?: string;
   examName?: string;
+  examCode?: string;
   createdAt: string;
   updatedAt?: string;
   updatedBy?: string;
@@ -276,6 +277,7 @@ export default function Templates() {
         choicesPerQuestion: template.choicesPerQuestion,
         examName: template.examName,
         className: template.className,
+        examCode: template.examCode, // Include exam code on template
       });
       toast.success(`✅ Downloaded ${template.name}`);
     } catch (error) {
@@ -772,10 +774,17 @@ export default function Templates() {
                   <div className="absolute bottom-[4px] right-[4px] w-[5px] h-[5px] bg-black"></div>
 
                   {/* Header */}
-                  <div className="flex items-center justify-center gap-1 mb-1">
+                  <div className="flex items-center justify-center gap-1 mb-0.5">
                     <div className="w-[10px] h-[10px] bg-green-700 rounded-full flex items-center justify-center text-white text-[5px] font-bold">G</div>
                     <span className="text-[7px] font-bold">Gordon College</span>
                   </div>
+                  
+                  {/* Exam Code */}
+                  {previewTemplate?.examCode && (
+                    <div className="text-center text-[5px] text-gray-600 mb-0.5">
+                      Exam Code: {previewTemplate.examCode}
+                    </div>
+                  )}
 
                   {/* Name/Date */}
                   <div className="flex gap-1 mb-1 text-[5px]">
