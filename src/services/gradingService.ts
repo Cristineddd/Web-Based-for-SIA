@@ -229,7 +229,11 @@ export class GradingService {
             classId: gradeData.class_id,
           },
           duplicateCheck.duplicateMatch.existingGradeId,
-          { score: duplicateCheck.duplicateMatch.existingScore },
+          {
+            score: duplicateCheck.duplicateMatch.existingScore,
+            max_score: duplicateCheck.duplicateMatch.existingMaxScore,
+            percentage: duplicateCheck.duplicateMatch.existingPercentage,
+          },
           GradeAuditService.buildSnapshot(grade),
           gradeData.override_reason || 'Faculty override — no reason provided'
         );

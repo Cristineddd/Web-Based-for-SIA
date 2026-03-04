@@ -274,38 +274,36 @@ export class GradeAuditService {
 
   /**
    * Retrieve all grade-related audit logs for a given student.
+   * Uses server-side entityType filter for efficiency, then narrows by studentId.
    */
   static async getGradeAuditLogsForStudent(studentId: string): Promise<AuditLog[]> {
-    // The entityType for grade logs is 'grade' and metadata contains studentId
-    // We use the generic AuditLogger.getActivityByEntity with a broad search,
-    // then filter client-side on metadata.studentId.
-    const allGradeLogs = await AuditLogger.getLogs();
-    return allGradeLogs.filter(
+    const gradeLogs = await AuditLogger.getLogs({ entityType: 'grade' });
+    return gradeLogs.filter(
       (log) =>
-        (log.activity === 'grade_created' ||
-          log.activity === 'grade_updated' ||
-          log.activity === 'grade_deleted' ||
-          log.activity === 'grade_override' ||
-          log.activity === 'score_submitted' ||
-          log.activity === 'score_override') &&
         (log.metadata as Record<string, unknown>)?.studentId === studentId
     );
   }
 
   /**
    * Retrieve all grade-related audit logs for a given exam.
+   * Uses server-side entityType filter for efficiency, then narrows by examId.
    */
   static async getGradeAuditLogsForExam(examId: string): Promise<AuditLog[]> {
-    const allGradeLogs = await AuditLogger.getLogs();
-    return allGradeLogs.filter(
+    const gradeLogs = await AuditLogger.getLogs({ entityType: 'grade' });
+    return gradeLogs.filter(
       (log) =>
-        (log.activity === 'grade_created' ||
-          log.activity === 'grade_updated' ||
-          log.activity === 'grade_deleted' ||
-          log.activity === 'grade_override' ||
-          log.activity === 'score_submitted' ||
-          log.activity === 'score_override') &&
         (log.metadata as Record<string, unknown>)?.examId === examId
+    );
+  }
+
+  /**
+   * Retrieve all grade-related audit logs (any entity type: grade or scannedResult).
+   */
+  static async getAllGradeAuditLogs(): Promise<AuditLog[]> {
+    const gradeLogs = await AuditLogger.getLogs({ entityType: 'grade' });
+    const scanLogs = await AuditLogger.getLogs({ entityType: 'scannedResult' });
+    return [...gradeLogs, ...scanLogs].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
   }
 

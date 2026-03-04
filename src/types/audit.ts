@@ -70,6 +70,7 @@ export interface AuditLog {
 export interface AuditLogQuery {
   adminId?: string;
   activity?: ActivityType;
+  entityType?: string;
   status?: 'success' | 'failed' | 'pending';
   startDate?: string;
   endDate?: string;

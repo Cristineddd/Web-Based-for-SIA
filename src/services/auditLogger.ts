@@ -96,6 +96,8 @@ export class AuditLogger {
         status: options?.status || 'success',
         errorMessage: options?.errorMessage,
         metadata: options?.metadata,
+        beforeValues: options?.beforeValues || null,
+        afterValues: options?.afterValues || null,
         createdAt: new Date().toISOString(),
       } as unknown as AuditLog;
     } catch (error) {
@@ -262,6 +264,10 @@ export class AuditLogger {
 
       if (queryOpts?.activity) {
         constraints.push(where('activity', '==', queryOpts.activity));
+      }
+
+      if (queryOpts?.entityType) {
+        constraints.push(where('entityType', '==', queryOpts.entityType));
       }
 
       if (queryOpts?.status) {
