@@ -50,6 +50,8 @@ import {
   FileText,
   BarChart3,
   FileSpreadsheet,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -99,6 +101,8 @@ export default function AuditLogsViewer() {
   const [exportType, setExportType] = useState<"csv" | "xlsx">("xlsx");
   const [selectedReviewer, setSelectedReviewer] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const uniqueReviewers = React.useMemo(() => {
     const reviewers = new Set(
@@ -166,6 +170,7 @@ export default function AuditLogsViewer() {
     }
 
     setFilteredLogs(filtered);
+    setCurrentPage(1); // Reset to first page when any filter changes
   }, [
     logs,
     searchQuery,
@@ -174,6 +179,16 @@ export default function AuditLogsViewer() {
     selectedReviewer,
     dateFilter,
   ]);
+
+  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+  const currentLogs = filteredLogs.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -714,7 +729,7 @@ export default function AuditLogsViewer() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredLogs.map((log) => (
+                currentLogs.map((log) => (
                   <TableRow key={log.id} className="hover:bg-table-row-hover">
                     <TableCell className="text-sm">
                       <div className="font-medium">
@@ -769,6 +784,103 @@ export default function AuditLogsViewer() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {!loading && filteredLogs.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-slate-100 bg-white gap-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="text-sm text-muted-foreground font-medium whitespace-nowrap">
+                Showing{" "}
+                <span className="text-foreground">
+                  {(currentPage - 1) * itemsPerPage + 1}
+                </span>{" "}
+                to{" "}
+                <span className="text-foreground">
+                  {Math.min(currentPage * itemsPerPage, filteredLogs.length)}
+                </span>{" "}
+                of{" "}
+                <span className="text-foreground">{filteredLogs.length}</span>{" "}
+                results
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  Show:
+                </span>
+                <Select
+                  value={String(itemsPerPage)}
+                  onValueChange={(value) => {
+                    setItemsPerPage(Number(value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[70px] text-xs">
+                    <SelectValue placeholder={String(itemsPerPage)} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="h-9 w-9 p-0 rounded-lg hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00] transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`h-9 w-9 p-0 rounded-lg transition-all ${
+                        currentPage === pageNum
+                          ? "bg-[#166534] hover:bg-[#1a7a3e] text-white shadow-sm"
+                          : "hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00]"
+                      }`}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="h-9 w-9 p-0 rounded-lg hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00] transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Export Confirmation Dialog */}
