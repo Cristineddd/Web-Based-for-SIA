@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +76,17 @@ export default function ClassManagement() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [roomWarning, setRoomWarning] = useState(false);
+  const [classNameWarning, setClassNameWarning] = useState(false);
+  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
+  const [uploadSummary, setUploadSummary] = useState<{
+    total: number;
+    successful: number;
+    failed: number;
+    duplicates: number;
+    invalidEntries: Array<{student: Student, errors: string[]}>;
+  } | null>(null);
+  const [showUploadSummary, setShowUploadSummary] = useState(false);
 
   const [newClass, setNewClass] = useState({
     class_name: "",
@@ -92,11 +103,7 @@ export default function ClassManagement() {
     email: "",
   });
 
-  useEffect(() => {
-    fetchClasses();
-  }, []);
-
-  const fetchClasses = async () => {
+  const fetchClasses = useCallback(async () => {
     try {
       setLoading(true);
       const userId = user?.id;
@@ -108,7 +115,11 @@ export default function ClassManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchClasses();
+  }, [fetchClasses]);
 
   const handleCloseAddDialog = () => {
     setShowAddDialog(false);
@@ -136,6 +147,18 @@ export default function ClassManagement() {
       !newClass.section_block
     ) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    // Validate Class Name minimum length
+    if (newClass.class_name.trim().length < 5) {
+      toast.error("Class Name must be at least 5 characters long");
+      return;
+    }
+
+    // Validate Course/Subject minimum length
+    if (newClass.course_subject.trim().length < 5) {
+      toast.error("Course/Subject must be at least 5 characters long");
       return;
     }
 
@@ -259,6 +282,18 @@ export default function ClassManagement() {
       !newClass.section_block
     ) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    // Validate Class Name minimum length
+    if (newClass.class_name.trim().length < 5) {
+      toast.error("Class Name must be at least 5 characters long");
+      return;
+    }
+
+    // Validate Course/Subject minimum length
+    if (newClass.course_subject.trim().length < 5) {
+      toast.error("Course/Subject must be at least 5 characters long");
       return;
     }
 
@@ -539,39 +574,53 @@ export default function ClassManagement() {
             }
           }
 
-          // Show feedback to admin about invalid entries
-          if (invalidStudents.length > 0) {
-            const errorMessage = `${invalidStudents.length} student(s) have invalid Student IDs and will be skipped. Expected format: YYYY-XXXX (e.g., 2026-0001)`;
-            toast.error(errorMessage, { duration: 5000 });
+          // Check for duplicates against current class roster
+          const existingIds = new Set(students.map((s) => s.student_id));
+          const duplicates = validStudents.filter((s) => existingIds.has(s.student_id));
+          const newStudents = validStudents.filter((s) => !existingIds.has(s.student_id));
 
-            // Show detailed errors in console for admin review
-            console.error(
-              "Invalid Student IDs detected during bulk upload:",
-              invalidStudents.map((s) => ({
-                student_id: s.student.student_id,
-                name: `${s.student.first_name} ${s.student.last_name}`,
-                errors: s.errors,
-              })),
-            );
+          // Also check for duplicates within the file itself
+          const seenIds = new Set<string>();
+          const uniqueNewStudents: Student[] = [];
+          for (const s of newStudents) {
+            if (!seenIds.has(s.student_id)) {
+              seenIds.add(s.student_id);
+              uniqueNewStudents.push(s);
+            }
           }
 
-          if (validStudents.length === 0) {
-            toast.error("No valid students to import after validation");
+          // Create upload summary for Task 4.4
+          const summary = {
+            total: rawStudents.length,
+            successful: uniqueNewStudents.length,
+            failed: invalidStudents.length,
+            duplicates: duplicates.length + (validStudents.length - newStudents.length),
+            invalidEntries: invalidStudents
+          };
+
+          setUploadSummary(summary);
+
+          // Show appropriate feedback
+          if (uniqueNewStudents.length === 0) {
+            if (invalidStudents.length > 0) {
+              toast.error(`Upload failed: All ${rawStudents.length} entries are invalid. Click 'View Summary' to download invalid entries.`);
+            } else {
+              toast.warning(`All ${validStudents.length} student(s) already exist in this class. Nothing to import.`);
+            }
+            setShowUploadSummary(true);
             return;
           }
 
-          // Show success message with valid count
-          if (invalidStudents.length > 0) {
-            toast.success(
-              `${validStudents.length} valid student(s) ready to import. ${invalidStudents.length} invalid student(s) were logged and skipped.`,
-            );
+          // Success case with mixed results
+          if (invalidStudents.length > 0 || duplicates.length > 0) {
+            toast.info(`Upload completed with issues. ${uniqueNewStudents.length} will be imported. Click 'View Summary' for details.`);
+            setShowUploadSummary(true);
           } else {
-            toast.success(
-              `All ${validStudents.length} student(s) validated successfully.`,
-            );
+            toast.success(`Upload successful! ${uniqueNewStudents.length} new student(s) ready to import.`);
+            setShowUploadSummary(true);
           }
 
-          setImportPreview(validStudents);
+          setImportPreview(uniqueNewStudents);
           setShowImportDialog(true);
 
           if (fileInputRef.current) {
@@ -589,11 +638,70 @@ export default function ClassManagement() {
     }
   };
 
+  const downloadInvalidEntries = () => {
+    if (!uploadSummary?.invalidEntries.length) {
+      toast.error("No invalid entries to download");
+      return;
+    }
+
+    const headers = [
+      "Student ID",
+      "First Name", 
+      "Last Name",
+      "Email",
+      "Error Messages"
+    ];
+    
+    const invalidData = uploadSummary.invalidEntries.map(entry => [
+      entry.student.student_id,
+      entry.student.first_name,
+      entry.student.last_name,
+      entry.student.email || "",
+      entry.errors.join("; ")
+    ]);
+
+    const worksheetData = [headers, ...invalidData];
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+
+    // Set column widths for better readability
+    ws["!cols"] = [
+      { wch: 15 }, // Student ID
+      { wch: 15 }, // First Name
+      { wch: 15 }, // Last Name
+      { wch: 25 }, // Email
+      { wch: 40 }, // Error Messages
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Invalid Entries");
+    XLSX.writeFile(wb, `invalid_entries_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    toast.success(`Downloaded ${uploadSummary.invalidEntries.length} invalid entries`);
+  };
+
   const confirmImport = () => {
-    setStudents((prev) => [...prev, ...importPreview]);
+    // Final duplicate check before adding
+    const existingIds = new Set(students.map((s) => s.student_id));
+    const newOnly = importPreview.filter((s) => !existingIds.has(s.student_id));
+
+    if (newOnly.length === 0) {
+      toast.warning('All students already exist in this class. Nothing to import.');
+      setImportPreview([]);
+      setShowImportDialog(false);
+      return;
+    }
+
+    const skipped = importPreview.length - newOnly.length;
+    setStudents((prev) => [...prev, ...newOnly]);
     setImportPreview([]);
     setShowImportDialog(false);
-    toast.success(`Imported ${importPreview.length} students`);
+
+    if (skipped > 0) {
+      toast.success(`Imported ${newOnly.length} students. ${skipped} duplicate(s) skipped.`);
+    } else {
+      toast.success(`Imported ${newOnly.length} students`);
+    }
 
     // Log student import
     if (user?.id) {
@@ -674,7 +782,7 @@ export default function ClassManagement() {
           <Button
             onClick={downloadTemplate}
             variant="outline"
-            className="gap-2 flex-shrink-0"
+            className="gap-2 flex-shrink-0 border-primary/20 hover:bg-transparent hover:text-current"
           >
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Download Template</span>
@@ -683,7 +791,7 @@ export default function ClassManagement() {
           <Button
             onClick={() => fileInputRef.current?.click()}
             variant="outline"
-            className="gap-2 flex-shrink-0"
+            className="gap-2 flex-shrink-0 border-primary/20 hover:bg-transparent hover:text-current"
           >
             <Upload className="w-4 h-4" />
             <span className="hidden sm:inline">Import Excel</span>
@@ -705,6 +813,60 @@ export default function ClassManagement() {
           </Button>
         </div>
       </div>
+
+      {/* Upload Summary Dialog */}
+      {showUploadSummary && uploadSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Upload Summary</h3>
+            
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between">
+                <span>Total Records:</span>
+                <span className="font-semibold">{uploadSummary.total}</span>
+              </div>
+              
+              <div className="flex justify-between text-green-600">
+                <span>Successfully Added:</span>
+                <span className="font-semibold">{uploadSummary.successful}</span>
+              </div>
+              
+              {uploadSummary.duplicates > 0 && (
+                <div className="flex justify-between text-yellow-600">
+                  <span>Duplicates Skipped:</span>
+                  <span className="font-semibold">{uploadSummary.duplicates}</span>
+                </div>
+              )}
+              
+              {uploadSummary.failed > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>Failed/Invalid:</span>
+                  <span className="font-semibold">{uploadSummary.failed}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              {uploadSummary.invalidEntries.length > 0 && (
+                <Button 
+                  onClick={downloadInvalidEntries}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Download Invalid Entries
+                </Button>
+              )}
+              
+              <Button 
+                onClick={() => setShowUploadSummary(false)}
+                className="flex-1"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card className="card-elevated mb-6">
         <CardContent className="p-4">
@@ -755,7 +917,7 @@ export default function ClassManagement() {
                         {classItem.class_name}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {classItem.course_subject} • {classItem.section_block}
+                        {classItem.course_subject} &bull; {classItem.section_block}
                       </p>
                     </div>
                   </div>
@@ -798,7 +960,7 @@ export default function ClassManagement() {
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">
                       Total Students
@@ -806,6 +968,22 @@ export default function ClassManagement() {
                     <p className="text-sm font-medium flex items-center gap-1">
                       <GraduationCap className="w-4 h-4 text-yellow-600" />
                       {classItem.students.length}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-1">Created</p>
+                    <p className="text-xs text-muted-foreground">
+                      {classItem.created_at
+                        ? new Date(classItem.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          }) + ' &bull; ' + new Date(classItem.created_at).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
+                        : '---'}
                     </p>
                   </div>
                 </div>
@@ -879,30 +1057,51 @@ export default function ClassManagement() {
                     <Input
                       id="class_name"
                       value={newClass.class_name}
-                      onChange={(e) =>
-                        setNewClass({ ...newClass, class_name: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewClass({ ...newClass, class_name: value });
+                        
+                        // Show warning if length exceeds 0 but is less than 5
+                        if (value.trim().length > 0 && value.trim().length < 5) {
+                          setClassNameWarning(true);
+                          setTimeout(() => setClassNameWarning(false), 2000);
+                        } else {
+                          setClassNameWarning(false);
+                        }
+                      }}
                       placeholder="Enter class name"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.class_name.trim()
-                          ? "border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30"
-                          : "border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100"
+                        newClass.class_name.trim() && newClass.class_name.trim().length >= 5
+                          ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
+                          : newClass.class_name.trim() && newClass.class_name.trim().length < 5
+                          ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
+                          : 'border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100'
                       }`}
                     />
-                    {newClass.class_name.trim() && (
+                    {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">
-                            ✓
-                          </span>
+                          <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
-                  {newClass.class_name.trim() && (
+                  {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && (
                     <div className="flex items-center gap-2 text-xs text-green-600">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                       <span>Valid class name</span>
+                    </div>
+                  )}
+                  {newClass.class_name.trim() && newClass.class_name.trim().length < 5 && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                      <span>{newClass.class_name.trim().length}/5 characters minimum</span>
+                    </div>
+                  )}
+                  {classNameWarning && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>Class Name must be at least 5 characters long</span>
                     </div>
                   )}
                 </div>
@@ -917,33 +1116,54 @@ export default function ClassManagement() {
                     <Input
                       id="course_subject"
                       value={newClass.course_subject}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const value = e.target.value;
                         setNewClass({
                           ...newClass,
-                          course_subject: e.target.value,
-                        })
-                      }
+                          course_subject: value,
+                        });
+                        
+                        // Show warning if length exceeds 0 but is less than 5
+                        if (value.trim().length > 0 && value.trim().length < 5) {
+                          setCourseSubjectWarning(true);
+                          setTimeout(() => setCourseSubjectWarning(false), 2000);
+                        } else {
+                          setCourseSubjectWarning(false);
+                        }
+                      }}
                       placeholder="Enter course subject"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.course_subject.trim()
-                          ? "border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30"
-                          : "border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100"
+                        newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5
+                          ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
+                          : newClass.course_subject.trim() && newClass.course_subject.trim().length < 5
+                          ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
+                          : 'border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100'
                       }`}
                     />
-                    {newClass.course_subject.trim() && (
+                    {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">
-                            ✓
-                          </span>
+                          <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
-                  {newClass.course_subject.trim() && (
+                  {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 && (
                     <div className="flex items-center gap-2 text-xs text-green-600">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                       <span>Valid course subject</span>
+                    </div>
+                  )}
+                  {newClass.course_subject.trim() && newClass.course_subject.trim().length < 5 && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                      <span>{newClass.course_subject.trim().length}/5 characters minimum</span>
+                    </div>
+                  )}
+                  {courseSubjectWarning && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>Course/Subject must be at least 5 characters long</span>
                     </div>
                   )}
                 </div>
@@ -982,9 +1202,7 @@ export default function ClassManagement() {
                     {newClass.section_block.trim() && (
                       <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
                         <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">
-                            ✓
-                          </span>
+                          <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
@@ -1007,27 +1225,40 @@ export default function ClassManagement() {
                   <div className="relative">
                     <Input
                       id="room"
+                      type="number"
                       value={newClass.room}
-                      onChange={(e) =>
-                        setNewClass({ ...newClass, room: e.target.value })
-                      }
-                      placeholder="Enter room number"
+                      onChange={(e) => {
+                        // Only allow exactly 3 numbers
+                        const inputValue = e.target.value.replace(/[^0-9]/g, '');
+                        if (inputValue.length > 3) {
+                          setRoomWarning(true);
+                          setTimeout(() => setRoomWarning(false), 3000);
+                          return;
+                        }
+                        const value = inputValue.slice(0, 3);
+                        setNewClass({ ...newClass, room: value });
+                      }}
+                      placeholder="Enter room number (exactly 3 digits)"
                       className="transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
                     />
                     {newClass.room.trim() && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">
-                            ✓
-                          </span>
+                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
                   {newClass.room.trim() && (
-                    <div className="flex items-center gap-2 text-xs text-blue-600">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                    <div className="flex items-center gap-2 text-xs text-green-600">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                       <span>Room specified</span>
+                    </div>
+                  )}
+                  {roomWarning && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 animate-pulse">
+                      <div className="w-2 h-2 bg-red-500 rounded-full" />
+                      <span>Room number must be exactly 3 digits only</span>
                     </div>
                   )}
                 </div>
@@ -1106,7 +1337,7 @@ export default function ClassManagement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       Student ID
                       <span className="text-destructive">*</span>
                     </label>
@@ -1134,7 +1365,7 @@ export default function ClassManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       First Name
                       <span className="text-destructive">*</span>
                     </label>
@@ -1162,7 +1393,7 @@ export default function ClassManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       Last Name
                       <span className="text-destructive">*</span>
                     </label>
@@ -1263,9 +1494,7 @@ export default function ClassManagement() {
                             {student.student_id}
                           </TableCell>
                           <TableCell className="min-w-[120px]">{`${student.first_name} ${student.last_name}`}</TableCell>
-                          <TableCell className="hidden sm:table-cell min-w-[150px]">
-                            {student.email || "—"}
-                          </TableCell>
+                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "---"}</TableCell>
                           <TableCell className="text-right min-w-[80px]">
                             <Button
                               variant="ghost"
@@ -1393,11 +1622,20 @@ export default function ClassManagement() {
                   <Label htmlFor="edit_room">Room</Label>
                   <Input
                     id="edit_room"
+                    type="number"
                     value={newClass.room}
-                    onChange={(e) =>
-                      setNewClass({ ...newClass, room: e.target.value })
-                    }
-                    placeholder="e.g., Room 301"
+                    onChange={(e) => {
+                      // Only allow exactly 3 numbers
+                      const inputValue = e.target.value.replace(/[^0-9]/g, '');
+                      if (inputValue.length > 3) {
+                        setRoomWarning(true);
+                        setTimeout(() => setRoomWarning(false), 3000);
+                        return;
+                      }
+                      const value = inputValue.slice(0, 3);
+                      setNewClass({ ...newClass, room: value });
+                    }}
+                    placeholder="e.g., 101 (exactly 3 digits)"
                   />
                 </div>
               </div>
@@ -1448,7 +1686,7 @@ export default function ClassManagement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       Student ID
                       <span className="text-destructive">*</span>
                     </label>
@@ -1476,7 +1714,7 @@ export default function ClassManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       First Name
                       <span className="text-destructive">*</span>
                     </label>
@@ -1504,7 +1742,7 @@ export default function ClassManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       Last Name
                       <span className="text-destructive">*</span>
                     </label>
@@ -1605,9 +1843,7 @@ export default function ClassManagement() {
                             {student.student_id}
                           </TableCell>
                           <TableCell className="min-w-[120px]">{`${student.first_name} ${student.last_name}`}</TableCell>
-                          <TableCell className="hidden sm:table-cell min-w-[150px]">
-                            {student.email || "—"}
-                          </TableCell>
+                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "---"}</TableCell>
                           <TableCell className="text-right min-w-[80px]">
                             <Button
                               variant="ghost"
@@ -1785,7 +2021,7 @@ export default function ClassManagement() {
                       <TableRow key={`cm-import-${idx}`}>
                         <TableCell>{student.student_id}</TableCell>
                         <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                        <TableCell>{student.email || "—"}</TableCell>
+                        <TableCell>{student.email || "---"}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1833,11 +2069,11 @@ export default function ClassManagement() {
 
       {/* View Class Dialog */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{selectedClass?.class_name}</DialogTitle>
-            <DialogDescription>
-              {selectedClass?.course_subject} - Section{" "}
+        <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-3 sm:p-6">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-lg sm:text-xl">{selectedClass?.class_name}</DialogTitle>
+            <DialogDescription className="text-sm">
+              {selectedClass?.course_subject} - Block{" "}
               {selectedClass?.section_block}
             </DialogDescription>
           </DialogHeader>
@@ -1846,34 +2082,60 @@ export default function ClassManagement() {
               <div className="p-4 bg-muted rounded-lg">
                 <div>
                   <p className="text-sm text-muted-foreground">Room</p>
-                  <p className="font-medium">{selectedClass.room || "—"}</p>
+                  <p className="font-medium">{selectedClass.room || "---"}</p>
                 </div>
               </div>
 
               <div>
-                <h4 className="font-medium mb-3">
-                  Students ({selectedClass.students.length})
-                </h4>
+                <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <h4 className="font-medium text-sm sm:text-base">
+                    Students ({selectedClass.students.length})
+                  </h4>
+                </div>
                 {selectedClass.students.length > 0 ? (
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Student ID</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedClass.students.map((student, idx) => (
-                          <TableRow key={`${selectedClass.id}-view-${idx}`}>
-                            <TableCell>{student.student_id}</TableCell>
-                            <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                            <TableCell>{student.email || "—"}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                <div className="space-y-4">
+                    {/* Mobile Card Layout */}
+                    <div className="block sm:hidden space-y-3">
+                      {selectedClass.students.map((student, idx) => (
+                        <div key={`${selectedClass.id}-mobile-${idx}`} className="bg-card border rounded-lg p-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-mono text-sm font-medium">{student.student_id}</div>
+                            <div className="text-sm font-medium truncate">{`${student.first_name} ${student.last_name}`}</div>
+                            <div className="text-xs text-muted-foreground truncate">{student.email || "No email"}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop Table Layout */}
+                    <div className="hidden sm:block">
+                      <div className="border rounded-lg overflow-hidden">
+                        <div className="max-h-[40vh] sm:max-h-[50vh] overflow-y-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="min-w-[70px] sm:min-w-[80px] text-xs sm:text-sm px-1 sm:px-3 w-[100px]">ID</TableHead>
+                                <TableHead className="min-w-[80px] sm:min-w-[100px] text-xs sm:text-sm px-1 sm:px-3 w-[120px]">Name</TableHead>
+                                <TableHead className="min-w-[100px] text-xs sm:text-sm px-1 sm:px-3">Email</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {selectedClass.students.map((student, idx) => (
+                                <TableRow key={`${selectedClass.id}-view-${idx}`} className="hover:bg-muted/50">
+                                  <TableCell className="font-mono text-xs sm:text-sm p-1 sm:p-2 w-[100px] max-w-[100px]">
+                                    <div className="truncate">{student.student_id}</div>
+                                  </TableCell>
+                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2 w-[120px] max-w-[120px]">
+                                    <div className="truncate font-medium text-xs sm:text-sm">{`${student.first_name} ${student.last_name}`}</div>
+                                  </TableCell>
+                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2">{student.email || "---"}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-center py-4">
@@ -1883,8 +2145,13 @@ export default function ClassManagement() {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button onClick={() => setShowViewDialog(false)}>Close</Button>
+          <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
+            <Button 
+              onClick={() => setShowViewDialog(false)}
+              className="w-full sm:w-auto"
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

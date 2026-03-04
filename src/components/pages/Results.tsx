@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ import {
   query, 
   where, 
   getDocs, 
+  onSnapshot,
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -406,6 +407,10 @@ export default function Results() {
   const [studentResults, setStudentResults] = useState<StudentResult[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
 
+  // Refs for real-time listener cleanup
+  const examStatsUnsubs = useRef<(() => void)[]>([]);
+  const studentResultsUnsub = useRef<(() => void) | null>(null);
+
   // Passing threshold
   const [passingThreshold, setPassingThreshold] = useState(60);
 
@@ -686,8 +691,127 @@ export default function Results() {
     fetchData();
   }, [fetchData]);
 
+  // Cleanup exam-stats and student-results listeners on unmount
+  useEffect(() => {
+    return () => {
+      examStatsUnsubs.current.forEach((u) => u());
+      if (studentResultsUnsub.current) studentResultsUnsub.current();
+    };
+  }, []);
+
+  // ── Real-time listeners for class average updates ─────────────────────
+  // Listens to BOTH studentGrades AND scannedResults so averages update
+  // instantly when new scores arrive from either source.
+  useEffect(() => {
+    if (!classResults.length || !exams.length) return;
+
+    const unsubscribes: (() => void)[] = [];
+
+    classResults.forEach((cr) => {
+      // Accumulator shared across both listeners for this class
+      let gradesData = { totalScore: 0, totalMaxScore: 0, count: 0 };
+      let scannedData = { totalScore: 0, totalMaxScore: 0, count: 0 };
+
+      const recalculate = () => {
+        const combinedScore = gradesData.totalScore + scannedData.totalScore;
+        const combinedMax = gradesData.totalMaxScore + scannedData.totalMaxScore;
+        const combinedCount = gradesData.count + scannedData.count;
+        const newAverage = combinedMax > 0 ? Math.round((combinedScore / combinedMax) * 100) : 0;
+
+        setClassResults((prev) =>
+          prev.map((r) =>
+            r.classId === cr.classId
+              ? { ...r, averageScore: newAverage, scannedCount: combinedCount }
+              : r
+          )
+        );
+      };
+
+      // 1. Listen to studentGrades for this class
+      const gradesQ = query(
+        collection(db, 'studentGrades'),
+        where('class_id', '==', cr.classId)
+      );
+      unsubscribes.push(
+        onSnapshot(gradesQ, (snapshot) => {
+          let totalScore = 0, totalMaxScore = 0, count = 0;
+          snapshot.forEach((doc) => {
+            const d = doc.data();
+            count++;
+            totalScore += d.score || 0;
+            totalMaxScore += d.max_score || 0;
+          });
+          gradesData = { totalScore, totalMaxScore, count };
+          recalculate();
+        })
+      );
+
+      // 2. Listen to scannedResults for exams belonging to this class
+      const classExams = exams.filter(
+        (e) => e.className === cr.className || (e as any).classId === cr.classId
+      );
+      const examIds = classExams.map((e) => e.id);
+
+      if (examIds.length > 0) {
+        // Firestore 'in' supports max 30 values
+        const chunks: string[][] = [];
+        for (let i = 0; i < examIds.length; i += 10) {
+          chunks.push(examIds.slice(i, i + 10));
+        }
+
+        // Per-chunk accumulators that merge into scannedData
+        const chunkData: Record<number, { totalScore: number; totalMaxScore: number; count: number }> = {};
+
+        chunks.forEach((chunk, idx) => {
+          const scannedQ = query(
+            collection(db, 'scannedResults'),
+            where('examId', 'in', chunk)
+          );
+          unsubscribes.push(
+            onSnapshot(scannedQ, (snapshot) => {
+              let totalScore = 0, totalMaxScore = 0, count = 0;
+              snapshot.forEach((doc) => {
+                const d = doc.data();
+                if (!d.isNullId) {
+                  count++;
+                  totalScore += d.score || 0;
+                  totalMaxScore += d.totalQuestions || 0;
+                }
+              });
+              chunkData[idx] = { totalScore, totalMaxScore, count };
+
+              // Merge all chunks
+              let merged = { totalScore: 0, totalMaxScore: 0, count: 0 };
+              Object.values(chunkData).forEach((cd) => {
+                merged.totalScore += cd.totalScore;
+                merged.totalMaxScore += cd.totalMaxScore;
+                merged.count += cd.count;
+              });
+              scannedData = merged;
+              recalculate();
+            })
+          );
+        });
+      }
+    });
+
+    return () => {
+      unsubscribes.forEach((unsub) => unsub());
+    };
+    // Re-subscribe when the set of class IDs or exams changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classResults.map((c) => c.classId).join(','), exams.map((e) => e.id).join(',')]);
+
   // Handle clicking a class — show exams for that class
   const handleClassClick = useCallback(async (classResult: ClassResult) => {
+    // Clean up previous listeners
+    examStatsUnsubs.current.forEach((u) => u());
+    examStatsUnsubs.current = [];
+    if (studentResultsUnsub.current) {
+      studentResultsUnsub.current();
+      studentResultsUnsub.current = null;
+    }
+
     setSelectedClass(classResult);
     setSelectedExam(null);
     setStudentResults([]);
@@ -700,20 +824,19 @@ export default function Results() {
     );
     setClassExamsList(classExams);
 
-    // Fetch stats for each exam
-    const stats: Record<string, ExamStats> = {};
-    for (const exam of classExams) {
-      let scannedCount = 0;
-      let totalScore = 0;
-      let totalMaxScore = 0;
+    // Set up real-time listeners for each exam's scannedResults
+    classExams.forEach((exam) => {
+      const scannedQ = query(
+        collection(db, 'scannedResults'),
+        where('examId', '==', exam.id)
+      );
 
-      try {
-        const scannedResultsQuery = query(
-          collection(db, 'scannedResults'),
-          where('examId', '==', exam.id)
-        );
-        const scannedSnapshot = await getDocs(scannedResultsQuery);
-        scannedSnapshot.forEach(doc => {
+      const unsub = onSnapshot(scannedQ, (snapshot) => {
+        let scannedCount = 0;
+        let totalScore = 0;
+        let totalMaxScore = 0;
+
+        snapshot.forEach((doc) => {
           const data = doc.data();
           if (!data.isNullId) {
             scannedCount++;
@@ -721,18 +844,27 @@ export default function Results() {
             totalMaxScore += data.totalQuestions || 0;
           }
         });
-      } catch (err) {
-        console.error('Error fetching exam stats:', err);
-      }
 
-      const averageScore = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
-      stats[exam.id] = { examId: exam.id, scannedCount, averageScore };
-    }
-    setExamStats(stats);
+        const averageScore = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
+
+        setExamStats((prev) => ({
+          ...prev,
+          [exam.id]: { examId: exam.id, scannedCount, averageScore },
+        }));
+      });
+
+      examStatsUnsubs.current.push(unsub);
+    });
   }, [exams]);
 
-  // Fetch student results for a selected exam within a class
-  const fetchStudentResults = useCallback(async (classResult: ClassResult, exam: Exam) => {
+  // Fetch student results for a selected exam within a class (real-time)
+  const fetchStudentResults = useCallback((classResult: ClassResult, exam: Exam) => {
+    // Clean up previous student results listener
+    if (studentResultsUnsub.current) {
+      studentResultsUnsub.current();
+      studentResultsUnsub.current = null;
+    }
+
     setLoadingStudents(true);
     setSelectedExam(exam);
     
@@ -740,116 +872,137 @@ export default function Results() {
     const fullClass = classes.find(c => c.id === classResult.classId);
     setSelectedClassData(fullClass || null);
 
-    try {
-      const students = fullClass?.students || [];
-      const examIds = [exam.id];
+    const students = fullClass?.students || [];
 
-      // Build student results
+    // Helper to build StudentResult from scanned/graded data
+    const buildResults = (
+      scannedDocs: { id: string; data: Record<string, any> }[],
+      gradeDocs: { id: string; data: Record<string, any> }[]
+    ): StudentResult[] => {
       const results: StudentResult[] = [];
       const processedStudentIds = new Set<string>();
 
-      // First, check scannedResults
-      if (examIds.length > 0) {
-        try {
-          const scannedResultsQuery = query(
-            collection(db, 'scannedResults'),
-            where('examId', 'in', examIds.slice(0, 10))
-          );
-          const scannedSnapshot = await getDocs(scannedResultsQuery);
-          
-          scannedSnapshot.forEach(doc => {
-            const data = doc.data();
-            if (!data.isNullId && !processedStudentIds.has(data.studentId)) {
-              processedStudentIds.add(data.studentId);
-              const student = students.find(s => s.student_id === data.studentId);
-              const percentage = data.totalQuestions > 0 
-                ? Math.round((data.score / data.totalQuestions) * 100) 
-                : 0;
-              
-              let scannedDate = '';
-              if (data.scannedAt) {
-                const timestamp = data.scannedAt as Timestamp;
-                const date = timestamp?.toDate?.() || new Date(data.scannedAt);
-                scannedDate = date.toLocaleDateString('en-US', { 
-                  year: 'numeric', 
-                  month: 'short', 
-                  day: 'numeric' 
-                });
-              }
+      // Process scannedResults first
+      for (const doc of scannedDocs) {
+        const data = doc.data;
+        if (!data.isNullId && !processedStudentIds.has(data.studentId)) {
+          processedStudentIds.add(data.studentId);
+          const student = students.find(s => s.student_id === data.studentId);
+          const percentage = data.totalQuestions > 0 
+            ? Math.round((data.score / data.totalQuestions) * 100) 
+            : 0;
 
-              results.push({
-                studentId: data.studentId,
-                studentName: student 
-                  ? `${student.last_name}, ${student.first_name}`
-                  : data.studentId,
-                score: data.score || 0,
-                totalQuestions: data.totalQuestions || 0,
-                percentage,
-                grade: calculateLetterGrade(percentage),
-                date: scannedDate || 'N/A',
-                email: student?.email
-              });
-            }
+          let scannedDate = '';
+          if (data.scannedAt) {
+            const timestamp = data.scannedAt as Timestamp;
+            const date = timestamp?.toDate?.() || new Date(data.scannedAt);
+            scannedDate = date.toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric' 
+            });
+          }
+
+          results.push({
+            studentId: data.studentId,
+            studentName: student 
+              ? `${student.last_name}, ${student.first_name}`
+              : data.studentId,
+            score: data.score || 0,
+            totalQuestions: data.totalQuestions || 0,
+            percentage,
+            grade: calculateLetterGrade(percentage),
+            date: scannedDate || 'N/A',
+            email: student?.email
           });
-        } catch (err) {
-          console.error('Error fetching scanned results:', err);
         }
       }
 
-      // Also check studentGrades
-      try {
-        const gradesQuery = query(
-          collection(db, 'studentGrades'),
-          where('class_id', '==', classResult.classId)
-        );
-        const gradesSnapshot = await getDocs(gradesQuery);
-        
-        gradesSnapshot.forEach(doc => {
-          const data = doc.data();
-          if (!processedStudentIds.has(data.student_id)) {
-            processedStudentIds.add(data.student_id);
-            const student = students.find(s => s.student_id === data.student_id);
-            const percentage = data.percentage || (data.max_score > 0 
-              ? Math.round((data.score / data.max_score) * 100) 
-              : 0);
-            
-            let gradedDate = '';
-            if (data.graded_at) {
-              const timestamp = data.graded_at as Timestamp;
-              const date = timestamp?.toDate?.() || new Date(data.graded_at);
-              gradedDate = date.toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
-              });
-            }
+      // Then process studentGrades
+      for (const doc of gradeDocs) {
+        const data = doc.data;
+        if (!processedStudentIds.has(data.student_id)) {
+          processedStudentIds.add(data.student_id);
+          const student = students.find(s => s.student_id === data.student_id);
+          const percentage = data.percentage || (data.max_score > 0 
+            ? Math.round((data.score / data.max_score) * 100) 
+            : 0);
 
-            results.push({
-              studentId: data.student_id,
-              studentName: student 
-                ? `${student.last_name}, ${student.first_name}`
-                : data.student_id,
-              score: data.score || 0,
-              totalQuestions: data.max_score || 0,
-              percentage,
-              grade: data.letter_grade || calculateLetterGrade(percentage),
-              date: gradedDate || 'N/A',
-              email: student?.email
+          let gradedDate = '';
+          if (data.graded_at) {
+            const timestamp = data.graded_at as Timestamp;
+            const date = timestamp?.toDate?.() || new Date(data.graded_at);
+            gradedDate = date.toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric' 
             });
           }
-        });
-      } catch (err) {
-        console.error('Error fetching grades:', err);
+
+          results.push({
+            studentId: data.student_id,
+            studentName: student 
+              ? `${student.last_name}, ${student.first_name}`
+              : data.student_id,
+            score: data.score || 0,
+            totalQuestions: data.max_score || 0,
+            percentage,
+            grade: data.letter_grade || calculateLetterGrade(percentage),
+            date: gradedDate || 'N/A',
+            email: student?.email
+          });
+        }
       }
 
-      // Sort by student name
       results.sort((a, b) => a.studentName.localeCompare(b.studentName));
-      setStudentResults(results);
-    } catch (error) {
-      console.error('Error fetching student results:', error);
-    } finally {
-      setLoadingStudents(false);
-    }
+      return results;
+    };
+
+    // Accumulators for both data sources
+    let scannedDocs: { id: string; data: Record<string, any> }[] = [];
+    let gradeDocs: { id: string; data: Record<string, any> }[] = [];
+    let scannedReady = false;
+    let gradesReady = false;
+
+    const recalculate = () => {
+      if (scannedReady && gradesReady) {
+        setStudentResults(buildResults(scannedDocs, gradeDocs));
+        setLoadingStudents(false);
+      }
+    };
+
+    const unsubs: (() => void)[] = [];
+
+    // Listen to scannedResults for this exam
+    const scannedQ = query(
+      collection(db, 'scannedResults'),
+      where('examId', '==', exam.id)
+    );
+    unsubs.push(
+      onSnapshot(scannedQ, (snapshot) => {
+        scannedDocs = snapshot.docs.map(d => ({ id: d.id, data: d.data() }));
+        scannedReady = true;
+        recalculate();
+      })
+    );
+
+    // Listen to studentGrades for this class
+    const gradesQ = query(
+      collection(db, 'studentGrades'),
+      where('class_id', '==', classResult.classId)
+    );
+    unsubs.push(
+      onSnapshot(gradesQ, (snapshot) => {
+        gradeDocs = snapshot.docs.map(d => ({ id: d.id, data: d.data() }));
+        gradesReady = true;
+        recalculate();
+      })
+    );
+
+    // Store cleanup
+    studentResultsUnsub.current = () => {
+      unsubs.forEach(u => u());
+    };
   }, [classes]);
 
   // ── Filtered export handler (SS4 3.1) ──────────────────────────────────
@@ -1027,10 +1180,10 @@ export default function Results() {
   // Render loading state
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+      <div className="page-container">
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
         </div>
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-4 border-[#1a472a] border-t-transparent rounded-full animate-spin" />
@@ -1042,12 +1195,12 @@ export default function Results() {
   // Render exam list for selected class
   if (selectedClass && !selectedExam) {
     return (
-      <div className="space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-            <p className="text-gray-600 mt-1">View and export grading results by class</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
+            <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
           </div>
         </div>
 
@@ -1333,15 +1486,15 @@ export default function Results() {
   // Render student results for selected exam
   if (selectedClass && selectedExam) {
     return (
-      <div className="space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-            <p className="text-gray-600 mt-1">View and export grading results by class</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
+            <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-gray-600 text-sm">Export as:</span>
+            <span className="text-muted-foreground text-sm">Export as:</span>
             <Button
               variant="outline"
               onClick={() => setExportModalType('PDF')}
@@ -1455,12 +1608,12 @@ export default function Results() {
 
   // Render class list view
   return (
-    <div className="space-y-6">
+    <div className="page-container">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-[#1a472a]">Results & Analytics</h1>
-          <p className="text-gray-600 mt-1">View and export grading results by class</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
         </div>
         {classResults.length > 0 && (
           <Button

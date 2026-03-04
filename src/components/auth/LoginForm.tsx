@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, ArrowLeft, Mail, Lock, Eye, EyeOff, X } from 'lucide-react';
+import Image from 'next/image';
 
 interface LoginFormProps {
   onToggleMode: () => void;
@@ -29,7 +30,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   useEffect(() => {
     // Redirect when user is logged in and auth is not loading
     if (user && !authLoading) {
-      console.log('🚀 Redirecting to dashboard...', { user: user.email, authLoading });
+      console.log('[REDIRECT] Redirecting to dashboard...', { user: user.email, authLoading });
       router.push('/dashboard');
     }
   }, [user, authLoading, router]);
@@ -77,11 +78,8 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
       <div className="w-full">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-[#166534]">
-              <span className="text-2xl font-bold text-white">S</span>
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900">SIA</h1>
+          <div className="flex justify-center">
+            <Image src="/Sia.png" alt="SIA Logo" width={60} height={60} className="w-15 h-15 object-contain" />
           </div>
         </div>
 
@@ -172,8 +170,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                 <button
                   type="button"
                   onClick={onToggleMode}
-                  className="text-sm font-medium hover:underline transition-all"
-                  className="text-gray-600"
+                  className="text-sm font-medium hover:underline transition-all text-gray-600"
                 >
                   Create an account
                 </button>
@@ -183,8 +180,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
             <>
               <button
                 onClick={() => setShowPasswordField(false)}
-                className="flex items-center gap-2 text-sm font-medium hover:underline mb-6 transition-all"
-                className="text-gray-600"
+                className="flex items-center gap-2 text-sm font-medium hover:underline mb-6 transition-all text-gray-600"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back
@@ -274,7 +270,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
 
         <div className="mt-8 text-center text-sm text-gray-600">
           <a href="#" className="hover:underline transition-all">Terms of use</a>
-          <span> · </span>
+          <span> - </span>
           <a href="#" className="hover:underline transition-all">Privacy policy</a>
         </div>
       </div>

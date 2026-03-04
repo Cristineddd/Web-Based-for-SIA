@@ -18,6 +18,7 @@ export interface Student {
   first_name: string;
   last_name: string;
   email?: string;
+  validation_status?: 'official' | 'unvalidated';
 }
 
 export interface Class {
@@ -45,13 +46,13 @@ export async function createClass(
   instructorId?: string, // Add instructorId parameter
 ): Promise<Class> {
   try {
-    console.log("📚 Creating class...");
-    console.log("  - Class data:", classData);
-    console.log("  - User ID:", userId);
-    console.log("  - Instructor ID:", instructorId);
-
+    console.log('[CREATE] Creating class...');
+    console.log('  - Class data:', classData);
+    console.log('  - User ID:', userId);
+    console.log('  - Instructor ID:', instructorId);
+    
     if (!instructorId) {
-      console.warn("⚠️ WARNING: instructorId is undefined or null!");
+      console.warn('[WARNING] WARNING: instructorId is undefined or null!');
     }
 
     const newClassData = {
@@ -62,30 +63,10 @@ export async function createClass(
       updatedAt: serverTimestamp(),
     };
 
-    // Helper: Recursively remove undefined fields (Firebase doesn't accept undefined)
-    const removeUndefined = (obj: any): any => {
-      if (Array.isArray(obj)) {
-        return obj.map(removeUndefined);
-      } else if (obj !== null && typeof obj === "object") {
-        // Skip Firestore FieldValues (like serverTimestamp)
-        if (typeof obj.isEqual === "function" && obj.toMillis) {
-          return obj;
-        }
-        return Object.fromEntries(
-          Object.entries(obj)
-            .filter(([_, v]) => v !== undefined)
-            .map(([k, v]) => [k, removeUndefined(v)]),
-        );
-      }
-      return obj;
-    };
-
-    const cleanData = removeUndefined(newClassData);
-
-    console.log("📤 Sending to Firestore:", cleanData);
-    const docRef = await addDoc(collection(db, CLASSES_COLLECTION), cleanData);
-    console.log("✅ Class created successfully with ID:", docRef.id);
-
+    console.log('[SEND] Sending to Firestore:', newClassData);
+    const docRef = await addDoc(collection(db, CLASSES_COLLECTION), newClassData);
+    console.log('[SUCCESS] Class created successfully with ID:', docRef.id);
+    
     // Return the class with the generated ID (include instructorId)
     const newClass: Class = {
       id: docRef.id,

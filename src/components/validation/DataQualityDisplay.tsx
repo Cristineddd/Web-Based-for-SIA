@@ -51,7 +51,7 @@ export function DataQualityDisplay({
         <CheckCircle2 className="w-5 h-5 text-green-600" />
         <AlertTitle className="text-green-800">Data Quality Check Passed</AlertTitle>
         <AlertDescription className="text-green-700">
-          ✓ All records are clean with no duplicates or inconsistencies detected.
+          All records are clean with no duplicates or inconsistencies detected.
         </AlertDescription>
       </Alert>
     );
@@ -93,21 +93,21 @@ export function DataQualityDisplay({
 
             {result.summary.highSeverityCount > 0 && (
               <div className="flex justify-between text-red-600 font-semibold">
-                <span>🔴 High Severity:</span>
+                <span>HIGH SEVERITY:</span>
                 <span>{result.summary.highSeverityCount}</span>
               </div>
             )}
 
             {result.summary.mediumSeverityCount > 0 && (
               <div className="flex justify-between text-yellow-600">
-                <span>🟡 Medium Severity:</span>
+                <span>MEDIUM SEVERITY:</span>
                 <span>{result.summary.mediumSeverityCount}</span>
               </div>
             )}
 
             {result.summary.lowSeverityCount > 0 && (
               <div className="flex justify-between text-blue-600">
-                <span>🔵 Low Severity:</span>
+                <span>LOW SEVERITY:</span>
                 <span>{result.summary.lowSeverityCount}</span>
               </div>
             )}

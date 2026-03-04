@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { ValidationError } from '@/services/recordValidationGuardService';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// === Types ===
 
 interface GradeValidationFeedbackProps {
   /** Validation errors returned by RecordValidationGuardService */

@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CheckCircle, User, Mail, Lock, ArrowLeft } from 'lucide-react';
+import Image from 'next/image';
 
 interface SignUpFormProps {
   onToggleMode: () => void;
@@ -178,11 +179,8 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
     <div className="w-full">
       {/* Logo */}
       <div className="text-center mb-8">
-        <div className="flex items-center justify-center gap-3">
-          <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-[#166534]">
-            <span className="text-2xl font-bold text-white">S</span>
-          </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900">SIA</h1>
+        <div className="flex justify-center">
+          <Image src="/Sia.png" alt="SIA Logo" width={60} height={60} className="w-15 h-15 object-contain" />
         </div>
       </div>
 

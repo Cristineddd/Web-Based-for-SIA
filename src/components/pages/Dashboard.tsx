@@ -210,18 +210,18 @@ export default function Dashboard() {
         return;
       }
 
-      console.log('🔍 User object:', user);
-      console.log('🔍 User.instructorId:', user?.instructorId);
+      console.log('[SEARCH] User object:', user);
+      console.log('[SEARCH] User.instructorId:', user?.instructorId);
       
       if (!user?.instructorId) {
-        toast.error('⚠️ Instructor ID not found. Please log out and log back in, or contact support.');
+        toast.error('[WARNING] Instructor ID not found. Please log out and log back in, or contact support.');
         return;
       }
 
       // Pass instructorId when creating exam
-      console.log('📝 Creating exam with instructorId:', user.instructorId);
+      console.log('[CREATE] Creating exam with instructorId:', user.instructorId);
       const newExam = await createExam(formData, user.id, user.instructorId);
-      console.log('✅ Exam saved:', newExam);
+      console.log('[SUCCESS] Exam saved:', newExam);
 
       // OPTIMIZATION 4: Update stats without refetching
       setStats(prev => {
@@ -285,9 +285,9 @@ export default function Dashboard() {
 
   return (
     <div className="page-container">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#166534]">Dashboard</h1>
-        <p className="text-[#B38B00] mt-1">
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-[#166534]">Dashboard</h1>
+        <p className="text-sm md:text-base text-[#B38B00] mt-1">
           Welcome back! Here's an overview of your exam management system.
         </p>
       </div>
@@ -303,21 +303,21 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <div className="grid gap-6 md:grid-cols-3 mb-8">
+      <div className="grid grid-cols-3 gap-3 md:gap-6 mb-6 md:mb-8">
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.title} className={`stat-card animate-slide-up border-2 ${stat.borderColor} hover:border-[#B38B00] transition-colors duration-200`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-[#166534]">{stat.title}</p>
-                    <p className="text-3xl font-bold mt-1 text-[#166534]">
+              <CardContent className="p-3 md:p-6">
+                <div className="flex flex-col items-center text-center justify-center h-full min-h-[100px] md:min-h-0 md:flex-row md:text-left md:justify-between gap-2">
+                  <div className="order-2 md:order-1 flex-1 md:flex-none">
+                    <p className="text-xs md:text-sm font-medium text-[#166534]">{stat.title}</p>
+                    <p className="text-2xl md:text-3xl font-bold mt-1 text-[#166534] font-mono tabular-nums">
                       {loading ? '-' : stat.value}
                     </p>
                   </div>
-                  <div className={`w-12 h-12 rounded-lg ${stat.bgColor} flex items-center justify-center`}>
-                    <Icon className={`w-6 h-6 ${stat.color}`} />
+                  <div className={`order-1 md:order-2 w-8 h-8 md:w-12 md:h-12 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}>
+                    <Icon className={`w-4 h-4 md:w-6 md:h-6 ${stat.color}`} />
                   </div>
                 </div>
               </CardContent>
@@ -326,17 +326,17 @@ export default function Dashboard() {
         })}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
         <Card className="card-elevated border-2 border-[#166534] hover:border-[#B38B00] transition-colors duration-200">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2 text-[#166534]">
-              <TrendingUp className="w-5 h-5 text-[#B38B00]" />
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-[#166534]">
+              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-[#B38B00]" />
               Quick Actions
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1">
+          <CardContent className="space-y-2 pt-0">
             <Button 
-              className="w-full justify-start gap-3 h-12 border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]" 
+              className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]" 
               variant="outline"
               onClick={() => setShowCreateModal(true)}
             >
@@ -344,19 +344,15 @@ export default function Dashboard() {
               Create New Exam
             </Button>
             
-            <div className="h-2"></div>
-            
             <Link href="/students">
-              <Button className="w-full justify-start gap-3 h-12 border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]" variant="outline">
+              <Button className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]" variant="outline">
                 <Users className="w-4 h-4 text-[#B38B00]" />
                 Manage Students
               </Button>
             </Link>
             
-            <div className="h-2"></div>
-            
             <Link href="/exams">
-              <Button className="w-full justify-start gap-3 h-12 border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]" variant="outline">
+              <Button className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]" variant="outline">
                 <FileText className="w-4 h-4 text-[#B38B00]" />
                 View All Exams
               </Button>
@@ -365,49 +361,49 @@ export default function Dashboard() {
         </Card>
 
         <Card className="card-elevated border-2 border-[#166534] hover:border-[#B38B00] transition-colors duration-200">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2 text-[#166534]">
-              <Clock className="w-5 h-5 text-[#B38B00]" />
+          <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-[#166534]">
+              <Clock className="w-4 h-4 md:w-5 md:h-5 text-[#B38B00]" />
               Recent Exams
             </CardTitle>
             <Link href="/exams">
-              <Button variant="ghost" size="sm" className="border-2 border-transparent hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]">View all</Button>
+              <Button variant="ghost" size="sm" className="text-xs md:text-sm border-2 border-transparent hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]">View all</Button>
             </Link>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {loading ? (
-              <div className="space-y-3">
+              <div className="space-y-2 md:space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-16 bg-[#B38B00]/10 rounded-lg animate-pulse border-2 border-[#166534]" />
+                  <div key={i} className="h-14 md:h-16 bg-[#B38B00]/10 rounded-lg animate-pulse border-2 border-[#166534]" />
                 ))}
               </div>
             ) : stats.recentExams.length === 0 ? (
-              <div className="text-center py-8 text-[#166534] border-2 border-dashed border-[#166534] rounded-lg">
-                <FileText className="w-10 h-10 mx-auto mb-2 opacity-50 text-[#B38B00]" />
-                <p className="text-[#166534]">No exams created yet</p>
+              <div className="text-center py-6 md:py-8 text-[#166534] border-2 border-dashed border-[#166534] rounded-lg">
+                <FileText className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 opacity-50 text-[#B38B00]" />
+                <p className="text-sm md:text-base text-[#166534]">No exams created yet</p>
                 <Button 
                   variant="link" 
-                  className="mt-2 text-[#B38B00] hover:text-[#166534]"
+                  className="mt-2 text-sm text-[#B38B00] hover:text-[#166534]"
                   onClick={() => setShowCreateModal(true)}
                 >
                   Create your first exam
                 </Button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2 md:space-y-3">
                 {stats.recentExams.map((exam) => (
                   <Link 
                     key={exam.id} 
                     href={`/exams/${exam.id}`}
-                    className="block p-3 rounded-lg border-2 border-[#166534] hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200"
+                    className="block p-2.5 md:p-3 rounded-lg border-2 border-[#166534] hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200"
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-[#166534]">{exam.title}</p>
-                        <p className="text-sm text-[#B38B00]">{exam.subject}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm md:text-base text-[#166534] truncate">{exam.title}</p>
+                        <p className="text-xs md:text-sm text-[#B38B00] truncate">{exam.subject}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-[#166534]}">{exam.num_items} items</p>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs md:text-sm font-medium text-[#166534]">{exam.num_items} items</p>
                         <p className="text-xs text-[#B38B00]">
                           {new Date(exam.created_at).toLocaleDateString()}
                         </p>

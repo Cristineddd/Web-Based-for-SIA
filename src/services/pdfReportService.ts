@@ -1,5 +1,5 @@
 /**
- * PDF Report Service — SS4 2.2 + 2.3 (Gordon College Branding)
+ * PDF Report Service - SS4 2.2 + 2.3 (Gordon College Branding)
  *
  * Generates professional, multi-page PDF reports with:
  * - Cover page with GC logo, institution name, gold accents
@@ -27,7 +27,7 @@ import {
   loadGCLogoBase64,
 } from '@/lib/gcBranding';
 
-// ─── Constants ──────────────────────────────────────────────────────────────
+// === Constants ===
 
 const BRAND_COLOR = GC_PRIMARY;
 const GRAY_700: [number, number, number] = [55, 65, 81];
@@ -46,7 +46,7 @@ const MARGIN_TOP = GC_PDF_PAGE.marginTop;
 const MARGIN_BOTTOM = GC_PDF_PAGE.marginBottom;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// === Types ===
 
 export interface PdfStudentRow {
   studentId: string;

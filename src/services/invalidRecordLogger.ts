@@ -445,10 +445,8 @@ export class InvalidRecordLogger {
   /**
    * Helper: Format error details for display
    */
-  static formatErrorDetails(
-    errors: Array<{ field: string; message: string }>,
-  ): string {
-    return errors.map((e) => `• ${e.field}: ${e.message}`).join("\n");
+  static formatErrorDetails(errors: Array<{ field: string; message: string }>): string {
+    return errors.map((e) => `- ${e.field}: ${e.message}`).join('\n');
   }
 
   /**
