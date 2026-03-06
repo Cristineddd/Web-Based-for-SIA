@@ -169,11 +169,9 @@ export default function ArchivedClasses() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            Archived Classes
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            View and manage archived classes
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Archived Classes</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            View, restore, and manage archived classes
           </p>
         </div>
       </div>
@@ -183,7 +181,7 @@ export default function ArchivedClasses() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Search archived classes by name, subject, or section..."
+            placeholder="Search archived classes by program, course, or section..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -207,56 +205,74 @@ export default function ArchivedClasses() {
         </Card>
       ) : (
         <Card className="overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Class Name</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Section</TableHead>
-                <TableHead>Room</TableHead>
-                <TableHead className="text-center">Students</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredClasses.map((archivedClass) => (
-                <TableRow key={archivedClass.id}>
-                  <TableCell className="font-medium">
-                    {archivedClass.class_name}
-                  </TableCell>
-                  <TableCell>{archivedClass.course_subject}</TableCell>
-                  <TableCell>{archivedClass.section_block}</TableCell>
-                  <TableCell>{archivedClass.room}</TableCell>
-                  <TableCell className="text-center">
-                    <span className="inline-flex items-center gap-1">
-                      <GraduationCap className="w-4 h-4" />
-                      {archivedClass.students_count}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex gap-2 justify-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-blue-600 hover:text-blue-700"
-                        onClick={() => setRestoreId(archivedClass.id)}
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setDeleteId(archivedClass.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[150px]">Program</TableHead>
+                  <TableHead className="min-w-[120px]">Course</TableHead>
+                  <TableHead className="min-w-[100px] hidden sm:table-cell">Section</TableHead>
+                  <TableHead className="min-w-[80px] hidden md:table-cell">Room</TableHead>
+                  <TableHead className="text-center min-w-[100px]">Students</TableHead>
+                  <TableHead className="text-center min-w-[100px]">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredClasses.map((archivedClass) => (
+                  <TableRow key={archivedClass.id}>
+                    <TableCell className="font-medium">
+                      <div className="truncate max-w-[150px]" title={archivedClass.class_name}>
+                        {archivedClass.class_name}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="truncate max-w-[120px]" title={archivedClass.course_subject}>
+                        {archivedClass.course_subject}
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      <div className="truncate max-w-[100px]" title={archivedClass.section_block}>
+                        {archivedClass.section_block}
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <div className="truncate max-w-[80px]" title={archivedClass.room}>
+                        {archivedClass.room}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="inline-flex items-center gap-1">
+                        <GraduationCap className="w-4 h-4" />
+                        {archivedClass.students_count}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex gap-2 justify-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => setRestoreId(archivedClass.id)}
+                          title="Restore class to active"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeleteId(archivedClass.id)}
+                          title="Permanently delete class"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
       )}
 

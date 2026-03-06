@@ -526,30 +526,10 @@ export default function AuditLogsViewer() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Audit Logs</h1>
-          <p className="text-muted-foreground mt-1">
-            Monitor all project activities and administrative changes
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Audit Logs</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            Monitor all upload, administrative, and grade modification activities
           </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={loadLogs}
-            variant="outline"
-            disabled={loading}
-            className="flex items-center gap-2"
-          >
-            <RefreshCcw
-              className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-            />
-            {loading ? "Refreshing..." : "Refresh"}
-          </Button>
-          <Button
-            onClick={() => setShowExportDialog(true)}
-            className="gradient-primary flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Export Data
-          </Button>
         </div>
       </div>
 

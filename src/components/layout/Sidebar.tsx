@@ -23,12 +23,12 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/exams", label: "Exams", icon: FileText },
-  { path: "/classes", label: "Classes", icon: Users },
-  { path: "/results", label: "Results", icon: BarChart3 },
-  { path: "/templates", label: "Templates", icon: FileText },
-  { path: "/archive", label: "Archive", icon: Archive },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/classes', label: 'Classes', icon: Users },
+  { path: '/exams', label: 'Exams', icon: FileText },
+  { path: '/results', label: 'Results', icon: BarChart3 },
+  { path: '/templates', label: 'Templates', icon: FileText },
+  { path: '/archive', label: 'Archive', icon: Archive },
 ];
 
 export function Sidebar() {
@@ -144,8 +144,7 @@ export function Sidebar() {
                 href={item.path}
                 className={cn(
                   "sidebar-item text-white/80 hover:text-white hover:bg-[#1a7a3e] transition-colors",
-                  isActive &&
-                    "bg-[#B38B00] text-white border-l-4 border-[#F0E6D2]",
+                  isActive && "bg-[#B38B00] text-white border-r-4 border-[#F0E6D2]"
                 )}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
@@ -170,8 +169,8 @@ export function Sidebar() {
             <button
               onClick={() => setShowSignOutModal(true)}
               className={cn(
-                "w-full h-10 flex items-center text-white/80 border-2 rounded-lg hover:text-white hover:bg-[#1a7a3e] hover:border-[#1a7a3e] transition-all duration-200 active:scale-95",
-                collapsed ? "justify-center px-2" : "justify-start px-3",
+                "w-full h-10 flex items-center text-white/80 border-2 rounded-lg hover:text-white hover:bg-emerald-700 hover:border-emerald-500 transition-all duration-200 active:scale-95",
+                collapsed ? "justify-center px-2" : "justify-start px-3"
               )}
               style={{
                 borderColor: "#F0E6D2",
@@ -195,7 +194,7 @@ export function Sidebar() {
         <Button
           variant="ghost"
           size="icon"
-          className="absolute -right-2.5 top-16 w-5 h-5 rounded-full border bg-white shadow-sm hover:bg-[#FEF9E7] p-0 text-[#166534]"
+          className="absolute -right-2.5 top-16 w-5 h-5 rounded-full border bg-white shadow-sm hover:bg-emerald-50 p-0 text-emerald-700"
           onClick={() => setCollapsed(!collapsed)}
         >
           {collapsed ? (
@@ -229,7 +228,7 @@ export function Sidebar() {
                 onClick={handleNavClick}
                 className={cn(
                   "sidebar-item text-white/80 hover:text-white hover:bg-[#1a7a3e] transition-colors",
-                  isActive && "bg-[#B38B00] text-white",
+                  isActive && "bg-[#B38B00] text-white border-r-4 border-[#F0E6D2]"
                 )}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
@@ -251,21 +250,18 @@ export function Sidebar() {
             </div>
           )}
           <div className="w-full">
-            <button
-              onClick={() => setShowSignOutModal(true)}
-              className="w-full h-12 flex items-center justify-start text-left border-2 rounded-lg hover:text-white hover:bg-[#1a7a3e] hover:border-[#1a7a3e] active:bg-[#155a30] transition-all duration-200 px-4 py-3"
+              <button
+                onClick={() => setShowSignOutModal(true)}
+                className="w-full h-12 flex items-center justify-start text-left border-2 rounded-lg hover:text-white hover:bg-emerald-700 hover:border-emerald-500 active:bg-emerald-800 transition-all duration-200 px-4 py-3"
               style={{
-                borderColor: "#F0E6D2",
-                backgroundColor: "#FEF9E7",
+                borderColor: "#10b981",
+                backgroundColor: "#f0fdf4",
                 color: "#166534",
                 minHeight: "48px",
                 touchAction: "manipulation",
               }}
             >
-              <LogOut
-                className="w-5 h-5 flex-shrink-0 mr-3"
-                style={{ color: "#B38B00" }}
-              />
+              <LogOut className="w-5 h-5 flex-shrink-0 mr-3" style={{ color: "#10b981" }} />
               <span className="font-medium text-base">Sign out</span>
             </button>
           </div>

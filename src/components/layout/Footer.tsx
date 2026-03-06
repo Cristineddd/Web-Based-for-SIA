@@ -7,28 +7,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Mail, Phone, MapPin, Github, Linkedin, Twitter } from 'lucide-react';
-
-const contactInfo = [
-  {
-    icon: Mail,
-    label: 'Email',
-    value: 'support@sia-system.com',
-    href: 'mailto:support@sia-system.com',
-  },
-  {
-    icon: Phone,
-    label: 'Phone',
-    value: '+1 (555) 123-4567',
-    href: 'tel:+15551234567',
-  },
-  {
-    icon: MapPin,
-    label: 'Address',
-    value: 'Olongapo City, Philippines',
-    href: '#',
-  },
-];
+import { Github, Linkedin, Twitter } from 'lucide-react';
 
 const socialLinks = [
   {
@@ -144,6 +123,9 @@ export function Footer() {
     </footer>
   );
 }
+
+// Default export for easier importing
+export default Footer;
 
 /**
  * Minimal Footer Component (for landing pages)
