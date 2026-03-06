@@ -1008,7 +1008,7 @@ export default function StudentClasses() {
                 <h3 className="text-lg font-semibold mb-4 text-gray-800">Basic Information</h3>
                 <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <Label htmlFor="class_name" className="text-sm font-medium text-gray-700">Class Name *</Label>
+                  <Label htmlFor="class_name" className="text-sm font-medium text-gray-700">Program *</Label>
                   <Input
                     id="class_name"
                     value={newClass.class_name}
@@ -1047,7 +1047,7 @@ export default function StudentClasses() {
                   )}
                 </div>
                 <div className="space-y-3">
-                  <Label htmlFor="course_subject" className="text-sm font-medium text-gray-700">Course/Subject *</Label>
+                  <Label htmlFor="course_subject" className="text-sm font-medium text-gray-700">Course *</Label>
                   <Input
                     id="course_subject"
                     value={newClass.course_subject}
@@ -1571,14 +1571,6 @@ export default function StudentClasses() {
                 <div>
                   <p className="text-sm text-muted-foreground">Room</p>
                   <p className="font-medium">{selectedClass.room || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Semester</p>
-                  <p className="font-medium">{selectedClass.semester || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">School Year</p>
-                  <p className="font-medium">{selectedClass.school_year || '-'}</p>
                 </div>
               </div>
 

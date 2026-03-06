@@ -711,8 +711,8 @@ export default function Students() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Students</h1>
-          <p className="text-muted-foreground mt-1">Manage student records</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Students</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">Manage student records</p>
         </div>
         <div className="flex gap-2">
           <input

@@ -111,11 +111,13 @@ export default function InvalidRecordsFeedback() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold">Invalid Records Feedback</h1>
-        <p className="text-gray-600 mt-1">
-          Review and manage rejected records due to validation errors
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Invalid Records Feedback</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            Review and manage rejected records due to validation errors
+          </p>
+        </div>
       </div>
 
       {/* Summary Cards */}

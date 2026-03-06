@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ import { InvalidRecordLogger } from "@/services/invalidRecordLogger";
 
 export default function ClassManagement() {
   const { user } = useAuth();
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [classes, setClasses] = useState<Class[]>([]);
@@ -65,15 +67,12 @@ export default function ClassManagement() {
   const [search, setSearch] = useState("");
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [currentTab, setCurrentTab] = useState("basic");
   const [importing] = useState(false);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [roomWarning, setRoomWarning] = useState(false);
   const [classNameWarning, setClassNameWarning] = useState(false);
   const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
@@ -160,6 +159,12 @@ export default function ClassManagement() {
       return;
     }
 
+    // Validate that class has students
+    if (students.length === 0) {
+      toast.error("Cannot create a class without students. Please add at least one student.");
+      return;
+    }
+
     if (!user?.id) {
       toast.error("You must be logged in to create a class");
       return;
@@ -226,90 +231,6 @@ export default function ClassManagement() {
     } catch (error) {
       console.error("Error archiving class:", error);
       toast.error("Failed to archive class");
-    }
-  };
-
-  const handleEditClass = (classItem: Class) => {
-    setEditingClass(classItem);
-    setNewClass({
-      class_name: classItem.class_name,
-      course_subject: classItem.course_subject,
-      section_block: classItem.section_block,
-      room: classItem.room,
-    });
-    setStudents(classItem.students);
-    setCurrentTab("basic");
-    setShowEditDialog(true);
-  };
-
-  const handleUpdateClass = async () => {
-    if (!editingClass) return;
-
-    if (
-      !newClass.class_name ||
-      !newClass.course_subject ||
-      !newClass.section_block
-    ) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
-    // Validate Class Name minimum length
-    if (newClass.class_name.trim().length < 5) {
-      toast.error("Class Name must be at least 5 characters long");
-      return;
-    }
-
-    // Validate Course/Subject minimum length
-    if (newClass.course_subject.trim().length < 5) {
-      toast.error("Course/Subject must be at least 5 characters long");
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const updatedData = {
-        class_name: newClass.class_name,
-        course_subject: newClass.course_subject,
-        section_block: newClass.section_block,
-        room: newClass.room || "",
-        students: students || [],
-      };
-
-      console.log(
-        "Update data being sent:",
-        JSON.stringify(updatedData, null, 2),
-      );
-
-      await updateClass(editingClass.id, updatedData);
-
-      // Update local state
-      setClasses(
-        classes.map((c) =>
-          c.id === editingClass.id
-            ? { ...c, ...updatedData, updatedAt: new Date().toISOString() }
-            : c,
-        ),
-      );
-
-      setShowEditDialog(false);
-      setEditingClass(null);
-      setNewClass({
-        class_name: "",
-        course_subject: "",
-        section_block: "",
-        room: "",
-      });
-      setStudents([]);
-      setCurrentTab("basic");
-
-      toast.success("Class updated successfully");
-    } catch (error) {
-      console.error("Error updating class:", error);
-      toast.error("Failed to update class");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -604,13 +525,13 @@ export default function ClassManagement() {
       toast.success(`Imported ${newOnly.length} students`);
     }
 
-    // If we're not currently adding or editing a class, assume this is a new class creation
+    // If we're not currently adding a class, assume this is a new class creation
     // triggered from the main page upload button.
-    if (!showAddDialog && !showEditDialog) {
+    if (!showAddDialog) {
       setShowAddDialog(true);
       setCurrentTab("students"); // Show the students tab immediately so user sees the import
     } else {
-      // If we ARE in a dialog (e.g. user clicked "Import" inside the Add/Edit modal),
+      // If we ARE in a dialog (e.g. user clicked "Import" inside the Add modal),
       // just switch to the students tab to show the update.
       setCurrentTab("students");
     }
@@ -786,7 +707,7 @@ export default function ClassManagement() {
               key={classItem.id}
               className="card-elevated hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => {
-                setSelectedClass(classItem);
+                setEditingClass(classItem);
                 setShowViewDialog(true);
               }}
             >
@@ -806,30 +727,6 @@ export default function ClassManagement() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-primary hover:text-primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditClass(classItem);
-                      }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                        <path d="m15 5 4 4" />
-                      </svg>
-                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -925,7 +822,7 @@ export default function ClassManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-3">
                   <Label htmlFor="class_name" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    Class Name <span className="text-red-500">*</span>
+                    Program <span className="text-red-500">*</span>
                   </Label>
                   <div className="relative">
                     <Input
@@ -943,7 +840,7 @@ export default function ClassManagement() {
                           setClassNameWarning(false);
                         }
                       }}
-                      placeholder="Enter class name"
+                      placeholder="Enter program name"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
                         newClass.class_name.trim() && newClass.class_name.trim().length >= 5
                           ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
@@ -981,7 +878,7 @@ export default function ClassManagement() {
                 </div>
                 <div className="space-y-3">
                   <Label htmlFor="course_subject" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    Course/Subject <span className="text-red-500">*</span>
+                    Course <span className="text-red-500">*</span>
                   </Label>
                   <div className="relative">
                     <Input
@@ -1357,359 +1254,14 @@ export default function ClassManagement() {
             <Button
               variant="outline"
               onClick={handleCloseAddDialog}
-              disabled={saving}
             >
               Cancel
             </Button>
             <Button
               onClick={handleAddClass}
               className="gradient-primary"
-              disabled={saving}
             >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Add Class"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Class Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Class</DialogTitle>
-            <DialogDescription>
-              Update class information and student roster
-            </DialogDescription>
-          </DialogHeader>
-
-          <Tabs
-            value={currentTab}
-            onValueChange={setCurrentTab}
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="basic">Class Information</TabsTrigger>
-              <TabsTrigger value="students">Student Roster</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="basic" className="space-y-4 mt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_class_name">Class Name *</Label>
-                  <Input
-                    id="edit_class_name"
-                    value={newClass.class_name}
-                    onChange={(e) =>
-                      setNewClass({ ...newClass, class_name: e.target.value })
-                    }
-                    placeholder="e.g., Computer Science 101"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_course_subject">Course/Subject *</Label>
-                  <Input
-                    id="edit_course_subject"
-                    value={newClass.course_subject}
-                    onChange={(e) =>
-                      setNewClass({
-                        ...newClass,
-                        course_subject: e.target.value,
-                      })
-                    }
-                    placeholder="e.g., Introduction to Programming"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_section_block">Block *</Label>
-                  <select
-                    id="edit_section_block"
-                    value={newClass.section_block}
-                    onChange={(e) =>
-                      setNewClass({
-                        ...newClass,
-                        section_block: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">Select a block...</option>
-                    {Array.from({ length: 26 }, (_, i) =>
-                      String.fromCharCode(65 + i)
-                    ).map((letter) => (
-                      <option key={letter} value={letter}>
-                        {letter}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_room">Room</Label>
-                  <Input
-                    id="edit_room"
-                    type="number"
-                    value={newClass.room}
-                    onChange={(e) => {
-                      // Only allow exactly 3 numbers
-                      const inputValue = e.target.value.replace(/[^0-9]/g, '');
-                      if (inputValue.length > 3) {
-                        setRoomWarning(true);
-                        setTimeout(() => setRoomWarning(false), 3000);
-                        return;
-                      }
-                      const value = inputValue.slice(0, 3);
-                      setNewClass({ ...newClass, room: value });
-                    }}
-                    placeholder="e.g., 101 (exactly 3 digits)"
-                  />
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="students" className="space-y-4 mt-4">
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importing}
-                  className="w-full sm:w-auto"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {importing ? "Importing..." : "Import CSV/Excel"}
-                </Button>
-                <Button variant="outline" onClick={downloadTemplate} className="w-full sm:w-auto">
-                  <Download className="w-4 h-4 mr-2" />
-                  Download Template
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </div>
-
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 space-y-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-green-900">Add Student Manually</h4>
-                    <p className="text-sm text-green-700">Add new students to this class</p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
-                      Student ID 
-                      <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      placeholder="Enter student ID"
-                      value={newStudent.student_id}
-                      onChange={(e) =>
-                        setNewStudent({
-                          ...newStudent,
-                          student_id: e.target.value,
-                        })
-                      }
-                      className={`transition-all duration-200 ${
-                        newStudent.student_id.trim() 
-                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200' 
-                          : 'focus:border-primary focus:ring-primary/20'
-                      }`}
-                    />
-                    {newStudent.student_id.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        Valid student ID
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
-                      First Name 
-                      <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      placeholder="Enter first name"
-                      value={newStudent.first_name}
-                      onChange={(e) =>
-                        setNewStudent({
-                          ...newStudent,
-                          first_name: e.target.value,
-                        })
-                      }
-                      className={`transition-all duration-200 ${
-                        newStudent.first_name.trim() 
-                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200' 
-                          : 'focus:border-primary focus:ring-primary/20'
-                      }`}
-                    />
-                    {newStudent.first_name.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        Valid first name
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
-                      Last Name 
-                      <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      placeholder="Enter last name"
-                      value={newStudent.last_name}
-                      onChange={(e) =>
-                        setNewStudent({
-                          ...newStudent,
-                          last_name: e.target.value,
-                        })
-                      }
-                      className={`transition-all duration-200 ${
-                        newStudent.last_name.trim() 
-                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200' 
-                          : 'focus:border-primary focus:ring-primary/20'
-                      }`}
-                    />
-                    {newStudent.last_name.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        Valid last name
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground">
-                      Email 
-                      <span className="text-muted-foreground text-xs">(Optional)</span>
-                    </label>
-                    <Input
-                      placeholder="Enter email address"
-                      type="email"
-                      value={newStudent.email}
-                      onChange={(e) =>
-                        setNewStudent({ ...newStudent, email: e.target.value })
-                      }
-                      className="focus:border-primary focus:ring-primary/20 transition-all duration-200"
-                    />
-                    {newStudent.email.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-blue-600">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                        Email provided
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between pt-2 border-t border-green-200">
-                  <div className="text-sm text-green-700">
-                    <span className="font-medium">
-                      {newStudent.student_id.trim() && newStudent.first_name.trim() && newStudent.last_name.trim() 
-                        ? 'Ready to add' 
-                        : 'Fill required fields'}
-                    </span>
-                  </div>
-                  <Button 
-                    onClick={handleAddStudent} 
-                    disabled={!newStudent.student_id.trim() || !newStudent.first_name.trim() || !newStudent.last_name.trim()}
-                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 min-w-[120px]"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Student
-                  </Button>
-                </div>
-              </div>
-
-              {students.length > 0 && (
-                <div className="border rounded-lg overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[100px]">Student ID</TableHead>
-                        <TableHead className="min-w-[120px]">Name</TableHead>
-                        <TableHead className="hidden sm:table-cell min-w-[150px]">Email</TableHead>
-                        <TableHead className="text-right min-w-[80px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {students.map((student, idx) => (
-                        <TableRow key={`edit-class-${idx}`}>
-                          <TableCell className="min-w-[100px]">{student.student_id}</TableCell>
-                          <TableCell className="min-w-[120px]">{`${student.first_name} ${student.last_name}`}</TableCell>
-                          <TableCell className="hidden sm:table-cell min-w-[150px]">{student.email || "---"}</TableCell>
-                          <TableCell className="text-right min-w-[80px]">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleRemoveStudent(student.student_id)
-                              }
-                            >
-                              <X className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              {students.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <AlertCircle className="w-8 h-8 mx-auto mb-2" />
-                  <p>No students added yet</p>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowEditDialog(false);
-                setEditingClass(null);
-                setNewClass({
-                  class_name: "",
-                  course_subject: "",
-                  section_block: "",
-                  room: "",
-                });
-                setStudents([]);
-                setCurrentTab("basic");
-              }}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpdateClass}
-              className="gradient-primary"
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                "Update Class"
-              )}
+              Add Class
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1876,89 +1428,110 @@ export default function ClassManagement() {
 
       {/* View Class Dialog */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-        <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-3 sm:p-6">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-lg sm:text-xl">{selectedClass?.class_name}</DialogTitle>
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="flex-shrink-0 p-4 sm:p-6 border-b">
+            <DialogTitle className="text-lg sm:text-xl">{editingClass?.class_name}</DialogTitle>
             <DialogDescription className="text-sm">
-              {selectedClass?.course_subject} - Block{" "}
-              {selectedClass?.section_block}
+              {editingClass?.course_subject} - Block{" "}
+              {editingClass?.section_block}
             </DialogDescription>
           </DialogHeader>
-          {selectedClass && (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-lg">
+          
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-h-0">
+            {editingClass && (
+              <div className="space-y-4">
+                <div className="p-4 bg-muted rounded-lg">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Room</p>
+                    <p className="font-medium">{editingClass.room || "---"}</p>
+                  </div>
+                </div>
+
                 <div>
-                  <p className="text-sm text-muted-foreground">Room</p>
-                  <p className="font-medium">{selectedClass.room || "---"}</p>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
-                  <h4 className="font-medium text-sm sm:text-base">
-                    Students ({selectedClass.students.length})
-                  </h4>
-                </div>
-                {selectedClass.students.length > 0 ? (
-                <div className="space-y-4">
-                    {/* Mobile Card Layout */}
-                    <div className="block sm:hidden space-y-3">
-                      {selectedClass.students.map((student, idx) => (
-                        <div key={`${selectedClass.id}-mobile-${idx}`} className="bg-card border rounded-lg p-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-mono text-sm font-medium">{student.student_id}</div>
-                            <div className="text-sm font-medium truncate">{`${student.first_name} ${student.last_name}`}</div>
-                            <div className="text-xs text-muted-foreground truncate">{student.email || "No email"}</div>
+                  <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+                    <h4 className="font-medium text-sm sm:text-base">
+                      Students ({editingClass.students.length})
+                    </h4>
+                  </div>
+                  {editingClass.students.length > 0 ? (
+                  <div className="space-y-4">
+                      {/* Mobile Card Layout */}
+                      <div className="block sm:hidden space-y-3">
+                        {editingClass.students.map((student, idx) => (
+                          <div key={`${editingClass.id}-mobile-${idx}`} className="bg-card border rounded-lg p-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-mono text-sm font-medium">{student.student_id}</div>
+                              <div className="text-sm font-medium truncate">{`${student.first_name} ${student.last_name}`}</div>
+                              <div className="text-xs text-muted-foreground truncate">{student.email || "No email"}</div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
 
-                    {/* Desktop Table Layout */}
-                    <div className="hidden sm:block">
-                      <div className="border rounded-lg overflow-hidden">
-                        <div className="max-h-[40vh] sm:max-h-[50vh] overflow-y-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="min-w-[70px] sm:min-w-[80px] text-xs sm:text-sm px-1 sm:px-3 w-[100px]">ID</TableHead>
-                                <TableHead className="min-w-[80px] sm:min-w-[100px] text-xs sm:text-sm px-1 sm:px-3 w-[120px]">Name</TableHead>
-                                <TableHead className="min-w-[100px] text-xs sm:text-sm px-1 sm:px-3">Email</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {selectedClass.students.map((student, idx) => (
-                                <TableRow key={`${selectedClass.id}-view-${idx}`} className="hover:bg-muted/50">
-                                  <TableCell className="font-mono text-xs sm:text-sm p-1 sm:p-2 w-[100px] max-w-[100px]">
-                                    <div className="truncate">{student.student_id}</div>
-                                  </TableCell>
-                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2 w-[120px] max-w-[120px]">
-                                    <div className="truncate font-medium text-xs sm:text-sm">{`${student.first_name} ${student.last_name}`}</div>
-                                  </TableCell>
-                                  <TableCell className="text-xs sm:text-sm p-1 sm:p-2">{student.email || "---"}</TableCell>
+                      {/* Desktop Table Layout */}
+                      <div className="hidden sm:block">
+                        <div className="border rounded-lg overflow-hidden">
+                          <div className="max-h-[300px] overflow-y-auto">
+                            <Table>
+                              <TableHeader className="sticky top-0 bg-background">
+                                <TableRow>
+                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">ID</TableHead>
+                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">Name</TableHead>
+                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">Email</TableHead>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {editingClass.students.map((student, idx) => (
+                                  <TableRow key={`${editingClass.id}-view-${idx}`} className="hover:bg-muted/50">
+                                    <TableCell className="font-mono text-xs sm:text-sm p-2 sm:p-3">
+                                      <div className="truncate">{student.student_id}</div>
+                                    </TableCell>
+                                    <TableCell className="text-xs sm:text-sm p-2 sm:p-3">
+                                      <div className="truncate font-medium text-xs sm:text-sm">{`${student.first_name} ${student.last_name}`}</div>
+                                    </TableCell>
+                                    <TableCell className="text-xs sm:text-sm p-2 sm:p-3">{student.email || "---"}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">
-                    No students enrolled
-                  </p>
-                )}
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4">
+                      No students enrolled
+                    </p>
+                  )}
+                </div>
               </div>
+            )}
+          </div>
+          
+          <DialogFooter className="flex-shrink-0 p-4 sm:p-6 border-t">
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button 
+                variant="outline"
+                onClick={() => setShowViewDialog(false)}
+                className="flex-1 sm:flex-none"
+              >
+                Close
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (editingClass) {
+                    setShowViewDialog(false);
+                    // Small delay to ensure dialog closes before navigation
+                    setTimeout(() => {
+                      router.push(`/classes/edit?id=${editingClass.id}`);
+                    }, 100);
+                  }
+                }}
+                className="flex-1 sm:flex-none"
+              >
+                Edit Class
+              </Button>
             </div>
-          )}
-          <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
-            <Button 
-              onClick={() => setShowViewDialog(false)}
-              className="w-full sm:w-auto"
-            >
-              Close
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

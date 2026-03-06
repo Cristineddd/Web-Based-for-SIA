@@ -18,6 +18,8 @@ export interface Student {
   first_name: string;
   last_name: string;
   email?: string;
+  section?: string;
+  grade?: string;
   validation_status?: 'official' | 'unvalidated';
 }
 
@@ -27,6 +29,8 @@ export interface Class {
   course_subject: string;
   section_block: string;
   room: string;
+  semester?: string;
+  school_year?: string;
   students: Student[];
   created_at: string;
   createdBy?: string;
@@ -191,6 +195,9 @@ export async function getClassById(classId: string): Promise<Class | null> {
     throw error;
   }
 }
+
+// Alias for getClassById for compatibility
+export const getClass = getClassById;
 
 /**
  * Update a class

@@ -26,6 +26,8 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
     course_subject: '',
     section_block: '',
     room: '',
+    semester: '',
+    school_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -93,6 +95,8 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
           course_subject: formData.course_subject.trim(),
           section_block: formData.section_block.trim(),
           room: formData.room.trim(),
+          semester: formData.semester.trim(),
+          school_year: formData.school_year.trim(),
           students: [],
           created_at: new Date().toISOString(),
         },
@@ -111,6 +115,8 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
         course_subject: '',
         section_block: '',
         room: '',
+        semester: '',
+        school_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
       });
 
       onClassCreated(newClass);
@@ -156,7 +162,7 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
           {/* Class Name */}
           <div className="space-y-3">
             <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              Class Name 
+              Program 
               <span className="text-red-500">*</span>
             </label>
             <div className="relative">
@@ -210,7 +216,7 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
           {/* Course Subject */}
           <div className="space-y-3">
             <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              Course Subject 
+              Course 
               <span className="text-red-500">*</span>
             </label>
             <div className="relative">
@@ -341,6 +347,51 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                 <span>Room number must be exactly 3 digits only</span>
               </div>
             )}
+          </div>
+
+          {/* Semester */}
+          <div className="space-y-3">
+            <label className="block text-sm font-semibold text-gray-700">
+              Semester
+              <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+            </label>
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="Enter semester (e.g., 1st Semester, 2nd Semester)"
+                value={formData.semester}
+                onChange={(e) => handleInputChange('semester', e.target.value)}
+                disabled={loading}
+                className="w-full transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
+              />
+            </div>
+          </div>
+
+          {/* School Year */}
+          <div className="space-y-3">
+            <label className="block text-sm font-semibold text-gray-700">
+              School Year
+              <span className="text-gray-400 text-xs font-normal">(Auto-populated)</span>
+            </label>
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="School year (e.g., 2023-2024)"
+                value={formData.school_year}
+                onChange={(e) => handleInputChange('school_year', e.target.value)}
+                disabled={loading}
+                className="w-full transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
+              />
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">✓</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <div className="w-2 h-2 bg-green-500 rounded-full" />
+              <span>Auto-generated for current academic year</span>
+            </div>
           </div>
 
           {/* Form Progress */}

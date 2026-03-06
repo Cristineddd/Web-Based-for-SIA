@@ -344,7 +344,10 @@ export default function Exams() {
   const filteredExams = exams.filter(
     (exam) =>
       exam.title.toLowerCase().includes(search.toLowerCase()) ||
-      exam.subject.toLowerCase().includes(search.toLowerCase()),
+      exam.subject.toLowerCase().includes(search.toLowerCase()) ||
+      (exam.className && exam.className.toLowerCase().includes(search.toLowerCase())) ||
+      exam.num_items.toString().includes(search) ||
+      exam.choices_per_item.toString().includes(search),
   );
 
   return (
@@ -352,10 +355,7 @@ export default function Exams() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Exams</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your exams and answer keys
-          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Exams</h1>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -366,20 +366,35 @@ export default function Exams() {
         </button>
       </div>
 
-      {/* Search */}
+      {/* Actions Bar */}
       <Card className="mb-6">
         <CardContent className="py-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by title or subject..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by title, subject, class, or number of items..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FileText className="w-4 h-4" />
+              <span>{filteredExams.length} exam{filteredExams.length !== 1 ? 's' : ''}</span>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Exam Information */}
+      <div className="mb-6">
+        <p className="text-sm text-muted-foreground">
+          Manage your exams and answer keys. Click on any exam row to view details or use the actions to edit or manage.
+        </p>
+      </div>
 
       {/* Table */}
       <Card className="table-container overflow-x-auto">
@@ -390,22 +405,13 @@ export default function Exams() {
               <TableHead className="hidden sm:table-cell">Subject</TableHead>
               <TableHead className="hidden lg:table-cell">Class</TableHead>
               <TableHead className="text-center">Items</TableHead>
-              <TableHead className="text-center hidden md:table-cell">
-                Choices
-              </TableHead>
-              <TableHead className="text-center hidden sm:table-cell">
-                Answer Key
-              </TableHead>
-              <TableHead className="text-center hidden lg:table-cell">
-                Template
-              </TableHead>
               <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={5} className="text-center py-12">
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                     Loading exams...
@@ -414,7 +420,7 @@ export default function Exams() {
               </TableRow>
             ) : filteredExams.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={5} className="text-center py-12">
                   <FileText className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
                   <p className="text-muted-foreground">
                     {search
@@ -434,7 +440,11 @@ export default function Exams() {
               </TableRow>
             ) : (
               filteredExams.map((exam) => (
-                <TableRow key={exam.id} className="hover:bg-table-row-hover">
+                <TableRow 
+                  key={exam.id} 
+                  className="hover:bg-table-row-hover cursor-pointer"
+                  onClick={() => window.location.href = `/exams/${exam.id}`}
+                >
                   <TableCell className="font-medium">{exam.title}</TableCell>
                   <TableCell className="text-muted-foreground hidden sm:table-cell">
                     {exam.subject}
@@ -445,43 +455,15 @@ export default function Exams() {
                   <TableCell className="text-center">
                     {exam.num_items}
                   </TableCell>
-                  <TableCell className="text-center hidden md:table-cell">
-                    {exam.choices_per_item}
-                  </TableCell>
-                  <TableCell className="text-center hidden sm:table-cell">
-                    {exam.answerKeyStatus?.hasAnswerKey ? (
-                      exam.answerKeyStatus.completed ===
-                      exam.answerKeyStatus.total ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
-                          Complete
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
-                          {exam.answerKeyStatus.completed}/
-                          {exam.answerKeyStatus.total}
-                        </span>
-                      )
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
-                        Not started
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center hidden lg:table-cell">
-                    {exam.hasTemplate ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
-                        Yes
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground">
-                        No
-                      </span>
-                    )}
-                  </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
                       <Link href={`/exams/${exam.id}`}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Eye className="w-4 h-4" />
                         </Button>
                       </Link>
@@ -489,7 +471,10 @@ export default function Exams() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => setArchiveId(exam.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setArchiveId(exam.id);
+                        }}
                       >
                         <Archive className="w-4 h-4" />
                       </Button>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowLeft,
   Edit2,
@@ -14,6 +14,8 @@ import {
   CheckCircle,
   Loader2,
   Pencil,
+  BookOpen,
+  Calendar,
 } from "lucide-react";
 import { getExamById, updateExam, Exam } from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
@@ -377,100 +379,6 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         </button>
       </div>
 
-      {/* Exam Information */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase mb-1">
-            Total Questions
-          </p>
-          <p className="text-xl sm:text-2xl font-bold text-primary">
-            {exam.num_items}
-          </p>
-        </Card>
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase mb-1">
-            Exam Date
-          </p>
-          <p className="text-xl sm:text-2xl font-bold text-foreground">
-            {new Date(exam.created_at).toLocaleDateString()}
-          </p>
-        </Card>
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase mb-1">
-            Status
-          </p>
-          <p className="text-xl sm:text-2xl font-bold text-primary">
-            {answerKeyStatus.hasAnswerKey
-              ? answerKeyStatus.completed === answerKeyStatus.total
-                ? "Complete"
-                : "In Progress"
-              : "Not started"}
-          </p>
-        </Card>
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase mb-1">
-            Folder
-          </p>
-          <p className="text-xl sm:text-2xl font-bold text-foreground">
-            {exam.subject}
-          </p>
-        </Card>
-        {exam.examCode && (
-          <Card className="p-3 sm:p-4 border bg-amber-50">
-            <p className="text-[10px] sm:text-xs font-semibold text-amber-700 uppercase mb-1">
-              Exam Code
-            </p>
-            <p className="text-lg sm:text-xl font-mono font-bold text-amber-900">
-              {exam.examCode}
-            </p>
-            <p className="text-[10px] text-amber-600 mt-1">
-              Printed on answer sheets
-            </p>
-          </Card>
-        )}
-      </div>
-
-      {/* Details Card */}
-      <Card className="p-6 border">
-        <h2 className="text-lg font-bold text-foreground mb-4">Exam Details</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <p className="text-muted-foreground font-semibold mb-1">
-              Created Date
-            </p>
-            <p className="text-foreground">
-              {new Date(exam.created_at).toLocaleDateString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground font-semibold mb-1">
-              Answer Key Status
-            </p>
-            {answerKeyStatus.hasAnswerKey ? (
-              <p
-                className={`font-semibold ${
-                  answerKeyStatus.completed === answerKeyStatus.total
-                    ? "text-success"
-                    : "text-warning"
-                }`}
-              >
-                {answerKeyStatus.completed}/{answerKeyStatus.total} answers
-              </p>
-            ) : (
-              <p className="font-semibold text-muted-foreground">Not started</p>
-            )}
-          </div>
-          <div>
-            <p className="text-muted-foreground font-semibold mb-1">
-              Papers Scanned
-            </p>
-            <p className="text-foreground">
-              {scannedPaperCount} papers
-            </p>
-          </div>
-        </div>
-      </Card>
-
       {/* Action Buttons */}
       <div>
         <h2 className="text-lg font-bold text-foreground mb-4">Actions</h2>
@@ -521,6 +429,41 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           })}
         </div>
       </div>
+
+      {/* Exam Details */}
+      <Card className="mb-6">
+        <CardContent className="p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-4">Exam Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Program</label>
+                <p className="text-base text-foreground mt-1">{exam.title}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Course</label>
+                <p className="text-base text-foreground mt-1">{exam.subject}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Created</label>
+                <p className="text-base text-foreground mt-1">
+                  {new Date(exam.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Number of Items</label>
+                <p className="text-base text-foreground mt-1">{exam.num_items}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Choices per Item</label>
+                <p className="text-base text-foreground mt-1">{exam.choices_per_item}</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Edit Exam Dialog */}
       {isEditing && (
