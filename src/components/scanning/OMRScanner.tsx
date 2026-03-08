@@ -12,7 +12,6 @@ import {
   CheckCircle,
   Save,
   User,
-  Camera
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -72,6 +71,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   const [markersDetected, setMarkersDetected] = useState(false);
   const [stabilizationProgress, setStabilizationProgress] = useState(0); // 0-100%
   const [alignmentError, setAlignmentError] = useState<string | null>(null);
+  const liveOverlayRef = useRef<HTMLCanvasElement>(null);
 
   // Keep streamRef in sync with stream state
   useEffect(() => {
@@ -107,7 +107,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               const allClasses = await getClasses(user.id);
               const matchedClass = allClasses.find(c => 
                 c.class_name === examData.className || 
-                `${c.class_name}${c.year ? ` - ${c.year}` : ''}` === examData.className
+                `${c.class_name} - ${c.section_block}` === examData.className
               );
               if (matchedClass) {
                 setClassData(matchedClass);
@@ -218,22 +218,29 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   // Get the guide frame crop region as fractions of the video dimensions
   const getGuideCropRegion = (videoWidth: number, videoHeight: number): { x: number; y: number; w: number; h: number } => {
     const t = getTemplateType();
-    // These match the CSS guide overlay exactly
-    // 100-item uses a tighter frame (90%) to minimize background inclusion
-    const guideWidthFraction = t === 20 ? 0.75 : t === 50 ? 0.55 : 0.90;
-    const paperAspect = t === 20 ? (105 / 148.5) : t === 50 ? (105 / 297) : (210 / 297); // width / height
+    const paperAspect = t === 50 ? (105 / 297) : t === 100 ? (210 / 297) : (105 / 148.5); // w/h
 
-    // In normalized coordinates (0-1 of video):
-    let guideW = guideWidthFraction; // fraction of video width
-    let guideH = (guideW * videoWidth) / (paperAspect * videoHeight); // fraction of video height
+    // Match the canvas overlay PAD=0.12 → fit inside 76% of each dimension
+    const maxWfrac = 0.76;
+    const maxHfrac = 0.76;
 
-    // If the guide is taller than the video, clamp to video height and recalculate width
-    if (guideH > 0.95) {
-      guideH = 0.95;
-      guideW = (guideH * videoHeight * paperAspect) / videoWidth;
+    // Fit aspect ratio inside the available box
+    let guideW = maxWfrac;
+    let guideH = guideW / (paperAspect * (videoWidth / videoHeight)); // in video-height fractions... recalc below
+
+    // Work in pixel space then convert back to fractions
+    const maxWpx = videoWidth * maxWfrac;
+    const maxHpx = videoHeight * maxHfrac;
+    let gwPx = maxWpx;
+    let ghPx = gwPx / paperAspect;
+    if (ghPx > maxHpx) {
+      ghPx = maxHpx;
+      gwPx = ghPx * paperAspect;
     }
 
-    // Center the crop
+    guideW = gwPx / videoWidth;
+    guideH = ghPx / videoHeight;
+
     const x = (1 - guideW) / 2;
     const y = (1 - guideH) / 2;
 
@@ -286,13 +293,15 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
   // ── Lightweight marker detection for live video frames ──
   // Runs on a downscaled version of the guide-frame crop.
+  // Uses an integral image for fast region averages and a stricter
+  // uniformity + contrast check to reduce false positives.
   // Returns true if 4 dark squares are found in approximately the right positions.
-  const detectMarkersInFrame = useCallback((): boolean => {
-    if (!videoRef.current || !scanCanvasRef.current) return false;
+  const detectMarkersInFrame = useCallback((): { found: boolean; markers: { tl:{x:number;y:number}; tr:{x:number;y:number}; bl:{x:number;y:number}; br:{x:number;y:number} } | null } => {
+    if (!videoRef.current || !scanCanvasRef.current) return { found: false, markers: null };
     
     const video = videoRef.current;
-    if (video.readyState < 2) return false; // HAVE_CURRENT_DATA
-    if (video.videoWidth === 0 || video.videoHeight === 0) return false;
+    if (video.readyState < 2) return { found: false, markers: null }; // HAVE_CURRENT_DATA
+    if (video.videoWidth === 0 || video.videoHeight === 0) return { found: false, markers: null };
     
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -300,13 +309,14 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     
     const scanCanvas = scanCanvasRef.current;
     const ctx = scanCanvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return false;
+    if (!ctx) return { found: false, markers: null };
     
-    // Use ~320px wide for better detection accuracy
-    const targetW = 320;
+    // Use 480px wide for better accuracy while staying fast
+    const targetW = 480;
     const scale = targetW / (crop.w * vw);
     const dw = Math.round(crop.w * vw * scale);
     const dh = Math.round(crop.h * vh * scale);
+
     
     scanCanvas.width = dw;
     scanCanvas.height = dh;
@@ -327,91 +337,234 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       const idx = i * 4;
       gray[i] = Math.round(pixels[idx] * 0.299 + pixels[idx + 1] * 0.587 + pixels[idx + 2] * 0.114);
     }
-    
-    // Marker is ~3.3% of paper width → ~10px at 320px wide
-    const markerSize = Math.max(6, Math.round(dw * 0.035));
-    const half = Math.floor(markerSize / 2);
-    const step = Math.max(2, Math.floor(markerSize / 3));
-    
-    const avgBrightness = (x1: number, y1: number, x2: number, y2: number): number => {
-      x1 = Math.max(0, Math.floor(x1));
-      y1 = Math.max(0, Math.floor(y1));
-      x2 = Math.min(dw, Math.floor(x2));
-      y2 = Math.min(dh, Math.floor(y2));
-      if (x2 <= x1 || y2 <= y1) return 255;
-      let sum = 0, count = 0;
-      for (let py = y1; py < y2; py += 2) {
-        for (let px = x1; px < x2; px += 2) {
-          sum += gray[py * dw + px];
-          count++;
-        }
+
+    // ── Build integral image for O(1) rectangular averages ──
+    const integral = new Float32Array((dw + 1) * (dh + 1));
+    for (let y = 0; y < dh; y++) {
+      let rowSum = 0;
+      for (let x = 0; x < dw; x++) {
+        rowSum += gray[y * dw + x];
+        integral[(y + 1) * (dw + 1) + (x + 1)] = integral[y * (dw + 1) + (x + 1)] + rowSum;
       }
-      return count > 0 ? sum / count : 255;
+    }
+    const rectAvgLive = (x1: number, y1: number, x2: number, y2: number): number => {
+      x1 = Math.max(0, Math.floor(x1)); y1 = Math.max(0, Math.floor(y1));
+      x2 = Math.min(dw, Math.floor(x2)); y2 = Math.min(dh, Math.floor(y2));
+      const area = (x2 - x1) * (y2 - y1);
+      if (area <= 0) return 255;
+      const sum = integral[y2 * (dw + 1) + x2] - integral[y1 * (dw + 1) + x2]
+                - integral[y2 * (dw + 1) + x1] + integral[y1 * (dw + 1) + x1];
+      return sum / area;
     };
+
+    // Adaptive threshold: normalize global brightness to handle dark/bright scenes
+    const globalBrightness = rectAvgLive(0, 0, dw, dh);
+    // A "dark enough" marker: below 55% of global brightness
+    const darkThreshold = Math.min(100, globalBrightness * 0.55);
+    // A "bright enough" paper ring: above 65% of global brightness
+    const brightThreshold = Math.max(110, globalBrightness * 0.65);
+
+    // Marker is ~3.3% of paper width → ~15px at 480px wide
+    const markerSize = Math.max(8, Math.round(dw * 0.033));
+    const half = Math.floor(markerSize / 2);
+    // Use fine step (1/4 of marker size) for better sub-pixel coverage
+    const step = Math.max(2, Math.floor(markerSize / 4));
     
-    // Define search regions for each corner.
-    // For rotated sheets (up to ~30°), markers may shift from their expected positions.
-    // Expand search regions to accommodate rotation.
-    // For 100-item: bottom markers are at ~75% of page height, not at the page bottom.
-    // The guide frame crops the full page, so bottom markers are at ~75% of frame height.
     const t = getTemplateType();
-    // Increase margin for rotated sheets - markers can shift horizontally
-    const margin = Math.round(dw * 0.30); // 30% of width for horizontal search (increased from 20%)
-    const topH = Math.round(dh * 0.30);   // top 30% for top markers (increased from 20%)
-    
-    // Bottom markers: for 100-item, they're at ~75% down (markers at Y=222 on 297mm page)
-    // Search from 50% to 95% of frame height for 100-item, bottom 40% for others
-    const botY1 = t === 100 ? Math.round(dh * 0.50) : Math.round(dh * 0.60);
-    const botY2 = t === 100 ? Math.round(dh * 0.95) : dh;
+    // Search windows match the exact marker positions from templatePdfGenerator:
+    //   50-item: yTop≈7.4%, yBot≈79.5%  →  search top 0–20%, bottom 65–100%
+    //   20-item: yTop≈14.8%, yBot≈88.9% →  search top 0–28%, bottom 75–100%
+    //   100-item: yTop≈2.2%, yBot≈74.7% → search top 0–15%, bottom 60–85%
+    // X margins cover left/right 20-25% of paper to catch the 3.1% / 96.9% positions.
+    let marginX: number, topH: number, botY1: number, botY2: number;
+    if (t === 100) {
+      marginX = Math.round(dw * 0.25);  // wider — markers at 3.1%/96.9% of paper width
+      topH    = Math.round(dh * 0.20);  // more headroom at top
+      botY1   = Math.round(dh * 0.55);  // start earlier
+      botY2   = dh;                     // go all the way to bottom edge
+    } else if (t === 50) {
+      marginX = Math.round(dw * 0.25);
+      topH    = Math.round(dh * 0.20);
+      botY1   = Math.round(dh * 0.65);
+      botY2   = Math.round(dh * 0.95);
+    } else {
+      // 20-item
+      marginX = Math.round(dw * 0.25);
+      topH    = Math.round(dh * 0.28);
+      botY1   = Math.round(dh * 0.75);
+      botY2   = dh;
+    }
     
     const cornerRegions = [
-      { name: 'TL', x1: 0, y1: 0, x2: margin, y2: topH },
-      { name: 'TR', x1: dw - margin, y1: 0, x2: dw, y2: topH },
-      { name: 'BL', x1: 0, y1: botY1, x2: margin, y2: botY2 },
-      { name: 'BR', x1: dw - margin, y1: botY1, x2: dw, y2: botY2 },
+      { name: 'TL', x1: 0,            y1: 0,    x2: marginX,      y2: topH },
+      { name: 'TR', x1: dw - marginX, y1: 0,    x2: dw,           y2: topH },
+      { name: 'BL', x1: 0,            y1: botY1, x2: marginX,     y2: botY2 },
+      { name: 'BR', x1: dw - marginX, y1: botY1, x2: dw,          y2: botY2 },
     ];
     
     let cornersFound = 0;
     const foundCorners: string[] = [];
+    // Best pixel position per corner in downscaled-crop space
+    const bestPos: Record<string, { cx: number; cy: number }> = {};
     
     for (const region of cornerRegions) {
-      let found = false;
-      for (let cy = region.y1 + half + 1; cy < region.y2 - half - 1 && !found; cy += step) {
-        for (let cx = region.x1 + half + 1; cx < region.x2 - half - 1 && !found; cx += step) {
-          // Check if this spot is dark (potential marker)
-          const inner = avgBrightness(cx - half, cy - half, cx + half, cy + half);
-          if (inner > 100) continue; // relaxed from 90
+      let bestContrast = 0;
+      let bestCx = (region.x1 + region.x2) / 2;
+      let bestCy = (region.y1 + region.y2) / 2;
+      let debugInner = 0, debugBrightSides = 0;
+
+      for (let cy = region.y1 + half + 2; cy < region.y2 - half - 2; cy += step) {
+        for (let cx = region.x1 + half + 2; cx < region.x2 - half - 2; cx += step) {
+          // 1. Interior must be dark
+          const inner = rectAvgLive(cx - half, cy - half, cx + half, cy + half);
+          if (inner > darkThreshold) { debugInner = Math.max(debugInner, inner); continue; }
+
+          // 2. Uniformity: all 4 quadrants of the marker must be consistently dark
+          const q1 = rectAvgLive(cx - half, cy - half, cx, cy);
+          const q2 = rectAvgLive(cx,         cy - half, cx + half, cy);
+          const q3 = rectAvgLive(cx - half, cy,         cx, cy + half);
+          const q4 = rectAvgLive(cx,         cy,         cx + half, cy + half);
+          if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 70) continue;
+
+          // 3. At least ONE surrounding side must be bright (on paper, not desk)
+          const ringInner = Math.floor(half * 1.2);
+          const ringOuter = Math.floor(half * 2.5);
+          const tB = rectAvgLive(cx - ringOuter, cy - ringOuter, cx + ringOuter, cy - ringInner);
+          const bB = rectAvgLive(cx - ringOuter, cy + ringInner, cx + ringOuter, cy + ringOuter);
+          const lB = rectAvgLive(cx - ringOuter, cy - ringInner, cx - ringInner, cy + ringInner);
+          const rB = rectAvgLive(cx + ringInner, cy - ringInner, cx + ringOuter, cy + ringInner);
           
-          // Check surrounding brightness (should be paper = bright)
-          const ring = Math.max(half + 2, Math.floor(half * 1.8));
-          const topB = avgBrightness(cx - ring, Math.max(0, cy - ring), cx + ring, cy - half);
-          const botB = avgBrightness(cx - ring, cy + half, cx + ring, Math.min(dh, cy + ring));
-          const leftB = avgBrightness(Math.max(0, cx - ring), cy - half, cx - half, cy + half);
-          const rightB = avgBrightness(cx + half, cy - half, Math.min(dw, cx + ring), cy + half);
-          
-          // At least 2 of 4 sides must be bright (paper)
-          const brightCount = (topB > 130 ? 1 : 0) + (botB > 130 ? 1 : 0) + 
-                              (leftB > 130 ? 1 : 0) + (rightB > 130 ? 1 : 0);
-          if (brightCount < 2) continue;
-          
-          const borderAvg = (topB + botB + leftB + rightB) / 4;
-          if (borderAvg - inner > 40) { // relaxed from 50
-            found = true;
+          const brightSides = (tB > brightThreshold ? 1 : 0) + (bB > brightThreshold ? 1 : 0)
+                             + (lB > brightThreshold ? 1 : 0) + (rB > brightThreshold ? 1 : 0);
+          debugBrightSides = Math.max(debugBrightSides, brightSides);
+          if (brightSides < 1) continue;
+
+          // 4. Contrast: dark centre vs average of surrounding bright sides
+          const borderAvg = (tB + bB + lB + rB) / 4;
+          const contrast = borderAvg - inner;
+          if (contrast > bestContrast) {
+            bestContrast = contrast;
+            bestCx = cx;
+            bestCy = cy;
           }
         }
       }
-      if (found) {
+
+      if (bestContrast > 30) {
         cornersFound++;
         foundCorners.push(region.name);
+        bestPos[region.name] = { cx: bestCx, cy: bestCy };
       }
     }
     
-    // Log periodically for debugging (every ~2 seconds at 6fps)
-    if (Math.random() < 0.08) {
-      console.log(`[LiveScan] ${dw}x${dh} markerSize=${markerSize} found=${foundCorners.join(',')||'none'} (${cornersFound}/4)`);
+    // Periodic log for debugging (kept at low frequency)
+    if (Math.random() < 0.05) {
+      console.log(`[LiveScan] ${dw}x${dh} t=${t} found=${foundCorners.join(',') || 'none'} (${cornersFound}/4)`);
     }
     
-    return cornersFound >= 4;
+    const allFound = cornersFound >= 4;
+
+    if (allFound) {
+      // Convert best positions from downscaled-crop space → fraction of full video element
+      // crop.x/y/w/h are already fractions of the video dimensions
+      const toFrac = (cx: number, cy: number) => ({
+        x: crop.x + (cx / dw) * crop.w,
+        y: crop.y + (cy / dh) * crop.h,
+      });
+      return {
+        found: true,
+        markers: {
+          tl: toFrac(bestPos['TL'].cx, bestPos['TL'].cy),
+          tr: toFrac(bestPos['TR'].cx, bestPos['TR'].cy),
+          bl: toFrac(bestPos['BL'].cx, bestPos['BL'].cy),
+          br: toFrac(bestPos['BR'].cx, bestPos['BR'].cy),
+        },
+      };
+    }
+    return { found: false, markers: null };
+  }, [exam]);
+
+  // ── Draw guide box overlay onto the canvas ──
+  // Called every scan frame so it always reflects the current video layout.
+  // Uses getBoundingClientRect() which is reliable even on mobile/h-auto videos.
+  const drawOverlay = useCallback(() => {
+    const canvas = liveOverlayRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
+    const rect = video.getBoundingClientRect();
+    const vw = Math.round(rect.width);
+    const vh = Math.round(rect.height);
+    if (vw === 0 || vh === 0) return;
+
+    // Only resize the canvas if dimensions changed (avoids flicker)
+    if (canvas.width !== vw || canvas.height !== vh) {
+      canvas.width = vw;
+      canvas.height = vh;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, vw, vh);
+
+    // Paper guide area — fit paper aspect ratio centered in the viewport
+    const t = getTemplateType();
+    const paperAspect = t === 50 ? 105 / 297 : t === 100 ? 210 / 297 : 105 / 148.5;
+    const PAD = 0.12;
+    const maxW = vw * (1 - PAD * 2);
+    const maxH = vh * (1 - PAD * 2);
+    let gw = maxW;
+    let gh = gw / paperAspect;
+    if (gh > maxH) { gh = maxH; gw = gh * paperAspect; }
+    const midX = vw / 2;
+    const midY = vh / 2;
+
+    const paperLeft = midX - gw / 2;
+    const paperTop  = midY - gh / 2;
+
+    // Marker positions as fractions of paper width/height —
+    // Derived exactly from templatePdfGenerator.ts drawMiniSheet/drawFullSheet:
+    //
+    // Mini sheet (20 & 50-item): markerSize=4mm, inset=5mm
+    //   X: left center = (5+2)/paperW, right center = (paperW-5-2)/paperW
+    //   Y top: topBlackSquareY ≈ 22mm from top → 22/paperH
+    //   Y bot (50-item, 105×297): maxQY≈234mm → bottomY=236/297≈0.795
+    //   Y bot (20-item, 105×148.5): maxQY≈130mm → bottomY=132/148.5≈0.889
+    //
+    // Full sheet (100-item, 210×297): markerSize=7mm, inset=3mm
+    //   X: (3+3.5)/210=0.031, (210-3-3.5)/210=0.969
+    //   Y top: startY+inset+markerSize/2 = 3+3.5 = 6.5mm → 6.5/297=0.022
+    //   Y bot: bmY=maxQY+3, maxQY≈215.5 → bmY=218.5, center=222mm → 222/297=0.747
+    let mxL: number, mxR: number, myT: number, myB: number;
+    if (t === 100) {
+      mxL = 0.031; mxR = 0.969; myT = 0.022; myB = 0.747;
+    } else if (t === 50) {
+      // 105×297mm
+      mxL = 0.067; mxR = 0.933; myT = 0.074; myB = 0.795;
+    } else {
+      // 20-item, 105×148.5mm
+      mxL = 0.067; mxR = 0.933; myT = 0.148; myB = 0.889;
+    }
+
+    const boxSz = Math.round(Math.min(vw, vh) * 0.08);
+
+    const guidePts = [
+      { x: paperLeft + gw * mxL, y: paperTop + gh * myT }, // TL
+      { x: paperLeft + gw * mxR, y: paperTop + gh * myT }, // TR
+      { x: paperLeft + gw * mxL, y: paperTop + gh * myB }, // BL
+      { x: paperLeft + gw * mxR, y: paperTop + gh * myB }, // BR
+    ];
+
+    // White outer stroke + dark inner stroke for visibility on any background
+    ctx.lineWidth = 3;
+    for (const p of guidePts) {
+      const bx = Math.round(p.x - boxSz / 2);
+      const by = Math.round(p.y - boxSz / 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.strokeRect(bx - 1, by - 1, boxSz + 2, boxSz + 2);
+      ctx.strokeStyle = 'rgba(20,20,20,0.95)';
+      ctx.strokeRect(bx, by, boxSz, boxSz);
+    }
   }, [exam]);
 
   // ── Auto-scan loop: continuously check for markers in the video feed ──
@@ -420,42 +573,36 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     if (mode !== 'camera' || !stream || !exam) return;
     
     const templateType = getTemplateType();
-    const isManualCapture = templateType === 100; // 100-item uses manual capture button
     
     let frameCount = 0;
     let consecutiveDetections = 0;
-    // Need ~12-18 consecutive detections to trigger capture (2-3 seconds at 6fps)
-    // This gives users time to stabilize their phone before auto-capture
-    const REQUIRED_CONSECUTIVE = 15; // ~2.5 seconds of stable marker detection
+    const REQUIRED_CONSECUTIVE = 8; // ~1.3 seconds of stable marker detection
     let cancelled = false;
     
     const scanLoop = () => {
       if (cancelled || isAutoCapturingRef.current) return;
-      
+
+      // Always redraw the overlay every frame
+      drawOverlay();
+
       frameCount++;
-      // Only scan every 5th frame (~6fps at 30fps video) to save CPU
-      if (frameCount % 5 === 0) {
-        const detected = detectMarkersInFrame();
+      // Only run marker detection every 3rd frame (~10fps at 30fps video)
+      if (frameCount % 3 === 0) {
+        const result = detectMarkersInFrame();
+        const detected = result.found;
         
-        if (detected) {
+        if (detected && result.markers) {
           consecutiveDetections++;
           setMarkersDetected(true);
           
-          // For manual capture mode (100-item), just show that markers are detected
-          // For auto-capture mode (20/50-item), track stabilization and auto-capture
-          if (isManualCapture) {
-            // Keep markers detected state but don't auto-capture
-            setStabilizationProgress(100); // Show as ready
-          } else {
-            // Update stabilization progress (0-100%)
-            const progress = Math.min(100, Math.round((consecutiveDetections / REQUIRED_CONSECUTIVE) * 100));
-            setStabilizationProgress(progress);
-            
-            if (consecutiveDetections >= REQUIRED_CONSECUTIVE) {
-              console.log(`[AutoScan] Markers stable for ${(consecutiveDetections / 6).toFixed(1)}s — capturing!`);
-              captureAndProcess();
-              return; // stop the loop
-            }
+          // All templates: auto-capture after stable detection
+          const progress = Math.min(100, Math.round((consecutiveDetections / REQUIRED_CONSECUTIVE) * 100));
+          setStabilizationProgress(progress);
+          
+          if (consecutiveDetections >= REQUIRED_CONSECUTIVE) {
+            console.log(`[AutoScan] Markers stable — capturing! (${templateType}-item)`);
+            captureAndProcess();
+            return; // stop the loop
           }
         } else {
           consecutiveDetections = 0;
@@ -482,101 +629,99 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       setMarkersDetected(false);
       setStabilizationProgress(0);
     };
-  }, [mode, stream, exam, detectMarkersInFrame, captureAndProcess]);
+  }, [mode, stream, exam, detectMarkersInFrame, captureAndProcess, drawOverlay]);
 
-  // ─── SKEW DETECTION AND CORRECTION ───
-  // Detects rotation angle up to ±30° and corrects it using Hough-like line detection
-  // on the edges of the paper/markers.
+  // Detects rotation angle up to ±30° using a weighted Sobel-edge histogram (Hough-inspired).
+  // Uses 0.25° bins (241 bins total) for sub-degree accuracy.
+  // Only edges with high magnitude vote, and votes are weighted by magnitude so strong
+  // long edges (paper boundary, column separators) dominate over noise.
   const detectSkewAngle = (grayscale: Uint8Array, width: number, height: number): number => {
-    // Use Sobel edge detection to find strong horizontal/vertical edges
-    // Then accumulate angles in a histogram to find dominant angle
+    const BINS = 241;              // –30° to +30° in 0.25° steps
+    const CENTER = 120;            // bin index for 0°
+    const SCALE = 4;               // bins per degree (1 / 0.25)
+    const angleHist = new Float32Array(BINS);
     
-    const angleHist = new Float32Array(121); // -30 to +30 degrees in 0.5° steps
-    const centerAngle = 60; // Index 60 = 0 degrees
-    
-    // Sample a grid of points and measure local edge direction
-    const step = Math.max(4, Math.floor(Math.min(width, height) / 100));
+    // Sample a grid of points; denser sampling = more accurate but slower.
+    // Use ~200 sample rows (capped for large images).
+    const step = Math.max(3, Math.floor(Math.min(width, height) / 200));
+    // Edge magnitude threshold — only vote for genuinely strong edges (reduces noise)
+    const EDGE_THRESH = 40;
     
     for (let y = step; y < height - step; y += step) {
       for (let x = step; x < width - step; x += step) {
-        // Sobel gradients
+        // 3×3 Sobel
         const gx = 
           -grayscale[(y - 1) * width + (x - 1)] - 2 * grayscale[y * width + (x - 1)] - grayscale[(y + 1) * width + (x - 1)] +
-          grayscale[(y - 1) * width + (x + 1)] + 2 * grayscale[y * width + (x + 1)] + grayscale[(y + 1) * width + (x + 1)];
+           grayscale[(y - 1) * width + (x + 1)] + 2 * grayscale[y * width + (x + 1)] + grayscale[(y + 1) * width + (x + 1)];
         
         const gy = 
           -grayscale[(y - 1) * width + (x - 1)] - 2 * grayscale[(y - 1) * width + x] - grayscale[(y - 1) * width + (x + 1)] +
-          grayscale[(y + 1) * width + (x - 1)] + 2 * grayscale[(y + 1) * width + x] + grayscale[(y + 1) * width + (x + 1)];
+           grayscale[(y + 1) * width + (x - 1)] + 2 * grayscale[(y + 1) * width + x] + grayscale[(y + 1) * width + (x + 1)];
         
         const magnitude = Math.sqrt(gx * gx + gy * gy);
+        if (magnitude < EDGE_THRESH) continue;
         
-        // Only consider strong edges
-        if (magnitude < 50) continue;
-        
-        // Calculate angle in degrees (-90 to +90)
-        let angle = Math.atan2(gy, gx) * 180 / Math.PI;
-        
-        // We're interested in angles close to 0 (horizontal) or 90 (vertical)
-        // which correspond to paper edges. Normalize to -30 to +30 range.
-        // Horizontal edges: angle ≈ 90 or -90 → paper rotation
-        // Vertical edges: angle ≈ 0 or 180 → paper rotation
-        
-        // For horizontal edges (gy dominant): rotation = angle - 90 (or + 90)
-        // For vertical edges (gx dominant): rotation = angle
-        
+        // Derive rotation angle from edge direction
+        // Horizontal edges (gy dominant): edge angle ≈ ±90° → paper rotated by (angle − 90°)
+        // Vertical edges (gx dominant):  edge angle ≈ 0°/180° → paper rotated by edge angle
+        let angle = Math.atan2(gy, gx) * 180 / Math.PI; // –180..+180
         let rotation: number;
-        if (Math.abs(gx) > Math.abs(gy)) {
-          // Vertical edge - angle should be near 0 or ±180
+        if (Math.abs(gx) >= Math.abs(gy)) {
+          // Vertical edge
           rotation = angle;
           if (rotation > 90) rotation -= 180;
           if (rotation < -90) rotation += 180;
         } else {
-          // Horizontal edge - angle should be near ±90
+          // Horizontal edge
           rotation = angle > 0 ? angle - 90 : angle + 90;
         }
         
-        // Clamp to ±30° range
         if (rotation < -30 || rotation > 30) continue;
         
-        // Add to histogram with weighted magnitude
-        const histIdx = Math.round((rotation + 30) * 2); // -30 → 0, 0 → 60, +30 → 120
-        if (histIdx >= 0 && histIdx < 121) {
-          angleHist[histIdx] += magnitude;
+        const binIdx = Math.round((rotation + 30) * SCALE);
+        if (binIdx >= 0 && binIdx < BINS) {
+          angleHist[binIdx] += magnitude; // weight by edge strength
         }
       }
     }
     
-    // Find the peak in the histogram (with smoothing)
-    let maxVal = 0;
-    let maxIdx = centerAngle;
-    
-    for (let i = 2; i < 119; i++) {
-      // Gaussian smoothing kernel
-      const smoothed = angleHist[i - 2] * 0.1 + angleHist[i - 1] * 0.2 + 
-                       angleHist[i] * 0.4 + angleHist[i + 1] * 0.2 + angleHist[i + 2] * 0.1;
-      if (smoothed > maxVal) {
-        maxVal = smoothed;
-        maxIdx = i;
+    // Gaussian-smooth the histogram (σ ≈ 2 bins = 0.5°) then find peak
+    const smoothed = new Float32Array(BINS);
+    const kernel = [0.06, 0.12, 0.22, 0.40, 0.22, 0.12, 0.06]; // σ≈1.5 bins, sum≈1.2→renorm below
+    const kCenter = 3;
+    for (let i = 0; i < BINS; i++) {
+      let acc = 0;
+      for (let k = 0; k < kernel.length; k++) {
+        const j = i + k - kCenter;
+        if (j >= 0 && j < BINS) acc += angleHist[j] * kernel[k];
       }
+      smoothed[i] = acc;
     }
+
+    let maxVal = 0, maxIdx = CENTER;
+    for (let i = 0; i < BINS; i++) {
+      if (smoothed[i] > maxVal) { maxVal = smoothed[i]; maxIdx = i; }
+    }
+
+    // Sub-bin parabolic interpolation for extra precision
+    let subBin = maxIdx;
+    if (maxIdx > 0 && maxIdx < BINS - 1) {
+      const left = smoothed[maxIdx - 1], right = smoothed[maxIdx + 1];
+      const denom = left - 2 * maxVal + right;
+      if (Math.abs(denom) > 1e-6) subBin = maxIdx - (right - left) / (2 * denom);
+    }
+
+    const detectedAngle = (subBin - CENTER) / SCALE;
     
-    const detectedAngle = (maxIdx - centerAngle) / 2; // Convert back to degrees
-    
-    // Only return angle if there's significant evidence
     const totalVotes = angleHist.reduce((a, b) => a + b, 0);
     const peakStrength = maxVal / (totalVotes || 1);
     
-    console.log(`[Skew] Detected angle: ${detectedAngle.toFixed(1)}° (peak strength: ${(peakStrength * 100).toFixed(1)}%)`);
+    console.log(`[Skew] Detected angle: ${detectedAngle.toFixed(2)}° (peak strength: ${(peakStrength * 100).toFixed(1)}%)`);
     
-    // If peak is weak, don't rotate
-    if (peakStrength < 0.05) {
-      return 0;
-    }
-    
-    // If angle is very small (< 1°), skip rotation
-    if (Math.abs(detectedAngle) < 1) {
-      return 0;
-    }
+    // Require a meaningful peak to avoid spurious corrections
+    if (peakStrength < 0.04) return 0;
+    // Skip imperceptible sub-0.5° rotations (saves a canvas copy operation)
+    if (Math.abs(detectedAngle) < 0.5) return 0;
     
     return detectedAngle;
   };
@@ -637,43 +782,57 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     
     const angle = detectSkewAngle(grayscale, w, h);
     
-    if (Math.abs(angle) < 1) {
-      console.log('[Skew] No significant skew detected');
+    if (Math.abs(angle) < 0.5) {
+      console.log('[Skew] No significant skew detected (< 0.5°)');
       return srcCanvas;
     }
     
+    console.log(`[Skew] Correcting by ${angle.toFixed(2)}°`);
     return rotateCanvas(srcCanvas, angle);
   };
 
-  // ─── IMAGE ENHANCEMENT: Adaptive brightness (no perspective warp) ───
-  // Normalizes lighting across the image to handle shadows and uneven illumination.
-  // Does NOT warp or distort the image — perspective correction is handled by
-  // the 4-corner marker system in detectBubbles.
+  // ─── IMAGE ENHANCEMENT: Adaptive brightness (white-level normalisation only) ───
+  // Scales each pixel so the local paper-white maps to 245.
+  //
+  // KEY DESIGN DECISIONS to avoid the "blue inversion" artefact:
+  //  1. Grid size is 96px — large enough that a tile containing mostly desk
+  //     background still borrows the paper-white level from adjacent tiles via
+  //     bilinear interpolation, instead of computing a tiny ~40 local white.
+  //  2. safeWhite floor is 130 — we never divide by anything < 130, so even a
+  //     tile that is 100% dark desk gets at most a 245/130 ≈ 1.88× boost,
+  //     which is a gentle brightening rather than a wild 6× amplification.
+  //  3. We use GRAYSCALE luminance (not max-channel) for the percentile sample
+  //     so that a blue desk doesn't inflate only the blue reference level.
   const enhanceImage = (srcCanvas: HTMLCanvasElement): HTMLCanvasElement => {
     const ctx = srcCanvas.getContext('2d');
     if (!ctx) return srcCanvas;
-    
+
     const w = srcCanvas.width;
     const h = srcCanvas.height;
-    
-    // Work on a copy so we don't mutate the source
+
     const outCanvas = document.createElement('canvas');
     outCanvas.width = w;
     outCanvas.height = h;
     const outCtx = outCanvas.getContext('2d');
     if (!outCtx) return srcCanvas;
     outCtx.drawImage(srcCanvas, 0, 0);
-    
+
     const imgData = outCtx.getImageData(0, 0, w, h);
     const d = imgData.data;
-    
-    // Adaptive brightness enhancement using a local grid
-    // Each grid cell finds the local "paper white" level and scales up so paper → 245
-    const gridSize = 48; // larger grid = smoother transitions between cells
+
+    // Build a luminance (grayscale) plane for percentile sampling only.
+    // This ensures a blue/coloured background doesn't skew a single channel.
+    const lum = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      lum[i] = Math.round(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]);
+    }
+
+    // Large grid so dark-background tiles get a sensible white level from neighbours
+    const gridSize = 96;
     const gW = Math.ceil(w / gridSize);
     const gH = Math.ceil(h / gridSize);
     const gridWhite = new Float32Array(gW * gH);
-    
+
     for (let gy = 0; gy < gH; gy++) {
       for (let gx = 0; gx < gW; gx++) {
         const samples: number[] = [];
@@ -681,20 +840,20 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const x1 = gx * gridSize, x2 = Math.min(w, (gx + 1) * gridSize);
         for (let py = y1; py < y2; py += 3) {
           for (let px = x1; px < x2; px += 3) {
-            const i = (py * w + px) * 4;
-            samples.push(Math.max(d[i], d[i + 1], d[i + 2]));
+            samples.push(lum[py * w + px]);
           }
         }
         samples.sort((a, b) => a - b);
-        // Use 85th percentile as "local paper white" (avoids being pulled up by specular highlights)
-        gridWhite[gy * gW + gx] = samples.length > 0 ? samples[Math.floor(samples.length * 0.85)] : 200;
+        // 90th percentile of luminance → local paper-white estimate
+        gridWhite[gy * gW + gx] = samples.length > 0
+          ? samples[Math.floor(samples.length * 0.90)]
+          : 200;
       }
     }
-    
-    // Apply with bilinear interpolation between grid cells for smooth result
+
+    // Bilinear interpolation across grid cells
     for (let py = 0; py < h; py++) {
       for (let px = 0; px < w; px++) {
-        // Find the four surrounding grid cells and interpolate
         const gxf = px / gridSize - 0.5;
         const gyf = py / gridSize - 0.5;
         const gx0 = Math.max(0, Math.floor(gxf));
@@ -703,25 +862,28 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const gy1 = Math.min(gH - 1, gy0 + 1);
         const fx = Math.max(0, Math.min(1, gxf - gx0));
         const fy = Math.max(0, Math.min(1, gyf - gy0));
-        
+
         const w00 = gridWhite[gy0 * gW + gx0];
         const w10 = gridWhite[gy0 * gW + gx1];
         const w01 = gridWhite[gy1 * gW + gx0];
         const w11 = gridWhite[gy1 * gW + gx1];
-        const localWhite = w00 * (1 - fx) * (1 - fy) + w10 * fx * (1 - fy) + w01 * (1 - fx) * fy + w11 * fx * fy;
-        
-        const safeWhite = Math.max(80, localWhite);
+        const localWhite = w00 * (1 - fx) * (1 - fy) + w10 * fx * (1 - fy)
+                         + w01 * (1 - fx) * fy        + w11 * fx * fy;
+
+        // Floor at 130: caps boost at ~1.88× even for fully-dark tiles.
+        // This prevents the blue-inversion artefact on dark desk backgrounds.
+        const safeWhite = Math.max(130, localWhite);
         const scale = 245 / safeWhite;
-        
+
         const i = (py * w + px) * 4;
-        d[i] = Math.min(255, Math.round(d[i] * scale));
+        d[i]     = Math.min(255, Math.round(d[i]     * scale));
         d[i + 1] = Math.min(255, Math.round(d[i + 1] * scale));
         d[i + 2] = Math.min(255, Math.round(d[i + 2] * scale));
       }
     }
-    
+
     outCtx.putImageData(imgData, 0, 0);
-    console.log(`[Enhance] Applied adaptive brightness: ${w}x${h}, grid=${gridSize}px`);
+    console.log(`[Enhance] Adaptive brightness done: ${w}x${h}, grid=${gridSize}px, safeWhiteFloor=130`);
     return outCanvas;
   };
 
@@ -772,7 +934,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       console.log(`[OMR] Processing enhanced image: ${imageData.width}x${imageData.height}`);
       
       // Process the image to detect filled bubbles
-      const { studentId, answers, multipleAnswers, idDoubleShades, rawIdDigits: detectedRawIdDigits, debugMarkers, markersFound, markerConfidence } = await detectBubbles(imageData, exam.num_items, exam.choices_per_item);
+      const { studentId, answers, multipleAnswers, idDoubleShades, rawIdDigits: detectedRawIdDigits, debugMarkers, markersFound, markerConfidence, bubbleHits } = await detectBubbles(imageData, exam.num_items, exam.choices_per_item);
       
       // Check for alignment issues based on marker detection quality
       if (!markersFound || markerConfidence < 0.5) {
@@ -815,115 +977,77 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       setDebugInfo(dbgLines.join(' | '));
       
       // Draw debug overlay showing detected marker positions and ID bubble sample points
+      // ── ZipGrade-style result overlay ──
+      // Draw the scanned image, then paint:
+      //   • Green border box around each of the 4 detected corner markers
+      //   • A circle over every answered bubble: green=correct, red=wrong, yellow=multiple
       if (debugMarkers) {
-        const debugCanvas = document.createElement('canvas');
-        debugCanvas.width = enhancedCanvas.width;
-        debugCanvas.height = enhancedCanvas.height;
-        const dCtx = debugCanvas.getContext('2d');
-        if (dCtx) {
-          dCtx.drawImage(enhancedCanvas, 0, 0);
-          
-          // Draw marker positions as large red circles with crosshairs
-          const markerPoints = [
-            { label: 'TL', ...debugMarkers.topLeft },
-            { label: 'TR', ...debugMarkers.topRight },
-            { label: 'BL', ...debugMarkers.bottomLeft },
-            { label: 'BR', ...debugMarkers.bottomRight },
-          ];
-          for (const mp of markerPoints) {
-            // Filled red dot
-            dCtx.fillStyle = 'rgba(255, 0, 0, 0.6)';
-            dCtx.beginPath();
-            dCtx.arc(mp.x, mp.y, 12, 0, Math.PI * 2);
-            dCtx.fill();
-            // White crosshair for visibility
-            dCtx.strokeStyle = '#FFFFFF';
-            dCtx.lineWidth = 2;
-            dCtx.beginPath();
-            dCtx.moveTo(mp.x - 25, mp.y);
-            dCtx.lineTo(mp.x + 25, mp.y);
-            dCtx.moveTo(mp.x, mp.y - 25);
-            dCtx.lineTo(mp.x, mp.y + 25);
-            dCtx.stroke();
-            // Red outline circle
-            dCtx.strokeStyle = '#FF0000';
-            dCtx.lineWidth = 3;
-            dCtx.beginPath();
-            dCtx.arc(mp.x, mp.y, 20, 0, Math.PI * 2);
-            dCtx.stroke();
-            // Label with background
-            dCtx.fillStyle = '#FF0000';
-            dCtx.font = 'bold 20px sans-serif';
-            dCtx.fillText(mp.label, mp.x + 24, mp.y - 12);
-          }
-          
-          // Draw connecting lines between markers (bright green, thick)
-          dCtx.strokeStyle = '#00FF00';
-          dCtx.lineWidth = 2;
-          dCtx.setLineDash([10, 5]);
-          dCtx.beginPath();
-          dCtx.moveTo(debugMarkers.topLeft.x, debugMarkers.topLeft.y);
-          dCtx.lineTo(debugMarkers.topRight.x, debugMarkers.topRight.y);
-          dCtx.lineTo(debugMarkers.bottomRight.x, debugMarkers.bottomRight.y);
-          dCtx.lineTo(debugMarkers.bottomLeft.x, debugMarkers.bottomLeft.y);
-          dCtx.closePath();
-          dCtx.stroke();
-          dCtx.setLineDash([]);
+        const overlayCanvas = document.createElement('canvas');
+        overlayCanvas.width = enhancedCanvas.width;
+        overlayCanvas.height = enhancedCanvas.height;
+        const oCtx = overlayCanvas.getContext('2d');
+        if (oCtx) {
+          oCtx.drawImage(enhancedCanvas, 0, 0);
 
-          // Draw ID bubble sample positions as blue dots with column/row annotations
-          // This lets us verify the grid is properly aligned with the ID bubbles
-          // We use 9 columns for 9-digit student IDs
-          const layout = getTemplateLayout(exam.num_items);
-          for (let col = 0; col < 9; col++) {
-            for (let row = 0; row < 10; row++) {
-              const nx = layout.id.firstColNX + col * layout.id.colSpacingNX;
-              const ny = layout.id.firstRowNY + row * layout.id.rowSpacingNY;
-              // Bilinear interpolation (same as mapToPixel)
-              const topX = debugMarkers.topLeft.x + nx * (debugMarkers.topRight.x - debugMarkers.topLeft.x);
-              const topY = debugMarkers.topLeft.y + nx * (debugMarkers.topRight.y - debugMarkers.topLeft.y);
-              const botX = debugMarkers.bottomLeft.x + nx * (debugMarkers.bottomRight.x - debugMarkers.bottomLeft.x);
-              const botY = debugMarkers.bottomLeft.y + nx * (debugMarkers.bottomRight.y - debugMarkers.bottomLeft.y);
-              const px = topX + ny * (botX - topX);
-              const py = topY + ny * (botY - topY);
-              
-              // Use bright cyan for visibility, larger dots
-              dCtx.fillStyle = 'rgba(0, 200, 255, 0.8)';
-              dCtx.beginPath();
-              dCtx.arc(px, py, 5, 0, Math.PI * 2);
-              dCtx.fill();
-              dCtx.strokeStyle = '#000000';
-              dCtx.lineWidth = 1;
-              dCtx.stroke();
-            }
-            // Label each column at the top
-            const nx0 = layout.id.firstColNX + col * layout.id.colSpacingNX;
-            const ny0 = layout.id.firstRowNY - layout.id.rowSpacingNY * 0.8; // slightly above first row
-            const topX0 = debugMarkers.topLeft.x + nx0 * (debugMarkers.topRight.x - debugMarkers.topLeft.x);
-            const topY0 = debugMarkers.topLeft.y + nx0 * (debugMarkers.topRight.y - debugMarkers.topLeft.y);
-            const botX0 = debugMarkers.bottomLeft.x + nx0 * (debugMarkers.bottomRight.x - debugMarkers.bottomLeft.x);
-            const botY0 = debugMarkers.bottomLeft.y + nx0 * (debugMarkers.bottomRight.y - debugMarkers.bottomLeft.y);
-            const labelPx = topX0 + ny0 * (botX0 - topX0);
-            const labelPy = topY0 + ny0 * (botY0 - topY0);
-            dCtx.fillStyle = '#FFFF00';
-            dCtx.font = 'bold 12px sans-serif';
-            dCtx.fillText(`C${col}`, labelPx - 6, labelPy);
+          const iw = enhancedCanvas.width;
+          const ih = enhancedCanvas.height;
+          // Square size ~2.8% of the shorter image dimension
+          const boxSize = Math.max(16, Math.round(Math.min(iw, ih) * 0.028));
+
+          // 1. Green squares with dark border at the 4 corner markers (ZipGrade style)
+          const corners = [
+            debugMarkers.topLeft,
+            debugMarkers.topRight,
+            debugMarkers.bottomLeft,
+            debugMarkers.bottomRight,
+          ];
+          const border = Math.max(1, Math.round(boxSize * 0.15));
+          for (const c of corners) {
+            const bx = Math.round(c.x - boxSize / 2);
+            const by = Math.round(c.y - boxSize / 2);
+            // Dark border
+            oCtx.fillStyle = '#15532c';
+            oCtx.fillRect(bx - border, by - border, boxSize + border * 2, boxSize + border * 2);
+            // Green fill
+            oCtx.fillStyle = '#22c55e';
+            oCtx.fillRect(bx, by, boxSize, boxSize);
           }
-          
-          setCapturedImage(debugCanvas.toDataURL('image/png'));
+
+          // 2. Circles over answered bubbles
+          const lineW = Math.max(2, Math.round(Math.min(iw, ih) * 0.004));
+          for (const hit of bubbleHits) {
+            const qIdx = hit.qIndex;
+            const isMultiple = multipleAnswers.includes(qIdx + 1);
+            const isCorrect = answerKey[qIdx] && hit.choice.toUpperCase() === answerKey[qIdx].toUpperCase();
+
+            if (isMultiple) {
+              oCtx.strokeStyle = '#facc15'; // yellow-400
+            } else if (isCorrect) {
+              oCtx.strokeStyle = '#22c55e'; // green-500
+            } else {
+              oCtx.strokeStyle = '#ef4444'; // red-500
+            }
+            oCtx.lineWidth = lineW;
+            oCtx.beginPath();
+            oCtx.ellipse(hit.px, hit.py, hit.rx * 1.15, hit.ry * 1.15, 0, 0, Math.PI * 2);
+            oCtx.stroke();
+          }
+
+          setCapturedImage(overlayCanvas.toDataURL('image/png'));
         }
       }
-      
+
       setDetectedStudentId(studentId);
       setDetectedAnswers(answers);
       setMultipleAnswerQuestions(multipleAnswers);
       setIdDoubleShadeColumns(idDoubleShades);
       setRawIdDigits(detectedRawIdDigits || []); // Store raw digit array for UI display
-      
+
       // Validate student ID against class roster
       // Consider alignment errors when classifying ID detection issues
       let idError: string | null = null;
       let matched: Student | null = null;
-      
+
       // If there's an alignment error and ID detection issues, prioritize the alignment message
       const hasAlignmentIssue = !markersFound || markerConfidence < 0.5;
       
@@ -950,9 +1074,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         } else {
           // If alignment is poor but ID was detected, warn that the ID might be misread
           if (hasAlignmentIssue) {
-            idError = `Student ID "${studentId}" may have been misread due to alignment issues. The ID is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Try retaking the photo with better alignment.`;
+            idError = `Student ID "${studentId}" may have been misread due to alignment issues. The ID is not registered in class "${classData.class_name} - ${classData.section_block}". Try retaking the photo with better alignment.`;
           } else {
-            idError = `Student ID "${studentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`;
+            idError = `Student ID "${studentId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`;
           }
         }
       }
@@ -1097,7 +1221,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     for (const size of sizes) {
       const half = Math.floor(size / 2);
-      const step = Math.max(3, Math.floor(size / 2));
+      // Use 1/3 of marker size as step — finer than before (was 1/2) so we don't
+      // accidentally stride over a marker that sits between two step positions.
+      const step = Math.max(2, Math.floor(size / 3));
 
       for (let cy = half + 2; cy < height - half - 2; cy += step) {
         for (let cx = half + 2; cx < width - half - 2; cx += step) {
@@ -1188,35 +1314,41 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       };
     }
 
-    // For 100-item templates, pre-filter candidates to those near edges
-    // This removes false positives from section markers (■) inside the sheet
+    // ── Edge-proximity filter for ALL template types ──
+    // Corner alignment markers must be near the edges of the captured image.
+    // This is the single most effective way to reject interior section markers (■)
+    // that also happen to look like dark squares surrounded by bright paper.
+    //
+    // How tight to make the margin depends on how much of the image the paper fills:
+    //   20-item  guide = 75% frame width  → paper corners in outer ~12% of image
+    //   50-item  guide = 55% frame width  → paper corners in outer ~22% of image
+    //   100-item guide = 90% frame width  → paper corners in outer ~10% of image
+    //
+    // We use generous margins (2-2.5×) to accommodate rotation and alignment error:
+    //   20-item  → 28% margin  (2.3× the expected 12%)
+    //   50-item  → 32% margin  (1.5× the expected 22%)
+    //   100-item → 28% margin  (2.8× the expected 10%)
+    //
+    // A "corner candidate" must be near at least one LEFT/RIGHT edge AND at
+    // least one TOP/BOTTOM edge — so it occupies a corner quadrant of the image.
     let filteredCandidates = merged;
-    if (templateType === 100) {
-      // For 100-item, the paper fills most of the image
-      // True corner markers should be in the outer 35% of image width/height
-      // (allowing for some paper rotation/offset)
-      const edgeMarginX = width * 0.35;
-      const edgeMarginY = height * 0.35;
-      
-      filteredCandidates = merged.filter(c => {
-        const nearLeftEdge = c.x < edgeMarginX;
-        const nearRightEdge = c.x > width - edgeMarginX;
-        const nearTopEdge = c.y < edgeMarginY;
-        const nearBottomEdge = c.y > height - edgeMarginY;
-        
-        // Must be near at least one horizontal AND one vertical edge
-        const nearHorizontalEdge = nearLeftEdge || nearRightEdge;
-        const nearVerticalEdge = nearTopEdge || nearBottomEdge;
-        
-        return nearHorizontalEdge && nearVerticalEdge;
+    {
+      const edgeMarginX = templateType === 50 ? width * 0.32 : width * 0.28;
+      const edgeMarginY = templateType === 50 ? height * 0.32 : height * 0.28;
+
+      const edgeFiltered = merged.filter(c => {
+        const nearH = c.x < edgeMarginX || c.x > width  - edgeMarginX;
+        const nearV = c.y < edgeMarginY || c.y > height - edgeMarginY;
+        return nearH && nearV;
       });
-      
-      console.log(`[OMR] 100-item edge filter: ${merged.length} → ${filteredCandidates.length} candidates`);
-      
-      // If edge filtering removed too many, fall back to all candidates
-      if (filteredCandidates.length < 4) {
-        console.log('[OMR] Edge filter too aggressive, using all candidates');
-        filteredCandidates = merged;
+
+      console.log(`[OMR] Edge filter (${templateType}-item): ${merged.length} → ${edgeFiltered.length} candidates`);
+
+      // Only apply if we still have at least 4 candidates
+      if (edgeFiltered.length >= 4) {
+        filteredCandidates = edgeFiltered;
+      } else {
+        console.log('[OMR] Edge filter too aggressive, keeping all candidates');
       }
     }
 
@@ -1282,56 +1414,42 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             // Allow more skew tolerance (up to 15% instead of 8%)
             if (leftXDiff > 0.15 || rightXDiff > 0.15 || topYDiff > 0.15 || botYDiff > 0.15) continue;
             
-            // Score: product of individual marker scores × rectangle quality
+            // ── Scoring ──
+            // Primary driver: area of the rectangle (larger = more likely to be
+            // the true outer corner markers, not inner section squares).
+            // Multiply by individual marker quality and rectangle regularity.
             const rectQuality = wRatio * hRatio;
-            
-            // For 100-item templates, add aspect ratio bonus - prefer rectangles closer to expected 0.91
+            const areaFraction = (avgW * avgH) / (width * height); // 0–1
+
+            // For 100-item templates, add aspect ratio bonus
             let aspectBonus = 1.0;
             if (templateType === 100) {
-              // Target aspect is 0.91, penalize deviation
               const expectedAspect = 0.91;
               const aspectDiff = Math.abs(aspect - expectedAspect);
-              aspectBonus = Math.max(0.5, 1.0 - aspectDiff); // Penalty increases with distance from 0.91
+              aspectBonus = Math.max(0.5, 1.0 - aspectDiff);
             }
-            
-            // For 100-item templates, check if bottom markers are at approximately
-            // the right position (should be around 70-80% down from top markers if paper fills most of frame)
-            // The key insight: bottom markers should NOT be at the image bottom
+
+            // Position bonus for 100-item (bottom markers not at very bottom)
             let positionBonus = 1.0;
             if (templateType === 100) {
-              // Check if bottom markers are in the expected vertical range
-              // If paper fills frame, bottom markers should be at ~75% of image height
-              // But if there's background below, they could be higher
               const bottomY = (bl.y + br.y) / 2;
-              const topY = (tl.y + tr.y) / 2;
-              const markerFrameHeight = bottomY - topY;
-              
-              // For 100-item, the marker frame should be taller than wide (aspect ~0.91)
-              // If the frame height is less than ~60% of image height, likely wrong markers
-              const frameHeightRatio = markerFrameHeight / height;
-              
-              // Bottom markers should be in the range 50-90% of image height
-              // (They can't be at the very bottom because there's page content below)
-              const bottomYRatio = bottomY / height;
-              
-              // Prefer rectangles where:
-              // 1. Bottom markers are NOT at the very bottom of the image (< 95%)
-              // 2. The frame height is at least 40% of the image
-              if (bottomYRatio > 0.95) {
-                positionBonus = 0.3; // Penalize if bottom markers are at image edge
-              } else if (bottomYRatio < 0.50) {
-                positionBonus = 0.5; // Penalize if bottom markers are too high
-              } else if (frameHeightRatio < 0.35) {
-                positionBonus = 0.4; // Penalize very small frames
-              } else {
-                // Good position - bonus based on how close to expected
-                positionBonus = 1.0 + (frameHeightRatio * 0.5); // Prefer larger frames
-              }
+              const topY2   = (tl.y + tr.y) / 2;
+              const frameHeightRatio = (bottomY - topY2) / height;
+              const bottomYRatio     = bottomY / height;
+              if (bottomYRatio > 0.95)      positionBonus = 0.3;
+              else if (bottomYRatio < 0.50) positionBonus = 0.5;
+              else if (frameHeightRatio < 0.35) positionBonus = 0.4;
+              else positionBonus = 1.0 + frameHeightRatio * 0.5;
             }
-            
-            // Prefer larger rectangles but with position bonus and aspect bonus for 100-item
-            const areaBonus = avgW * avgH / (width * height);
-            const totalScore = (tl.score + tr.score + bl.score + br.score) * rectQuality * areaBonus * positionBonus * aspectBonus;
+
+            // Area is raised to the power of 2 so that a rectangle that is 10%
+            // larger in each dimension (21% more area) scores ~44% better,
+            // strongly preferring the outermost (correct) corner markers.
+            const totalScore = (tl.score + tr.score + bl.score + br.score)
+              * rectQuality
+              * Math.pow(areaFraction, 2)
+              * positionBonus
+              * aspectBonus;
             
             if (totalScore > bestRectScore) {
               bestRectScore = totalScore;
@@ -1706,6 +1824,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       bottomLeft: { x: number; y: number };
       bottomRight: { x: number; y: number };
     };
+    // Pixel coords of each detected answer bubble for overlay drawing
+    bubbleHits: Array<{ px: number; py: number; rx: number; ry: number; choice: string; qIndex: number }>;
   }> => {
     const { data, width, height } = imageData;
 
@@ -1717,8 +1837,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       );
     }
 
-    // 1b. Contrast normalization — stretches the histogram to use the full 0-255 range
-    // This helps when the image has poor lighting (shadows, dim environment)
+    // 1b. Global contrast stretch (2nd–98th percentile) for bubble sampling.
+    // Simple and predictable — keeps paper white and ink black without the
+    // per-tile inversion artefact that per-tile CLAHE caused on dark backgrounds.
     const sortSample: number[] = [];
     const sampleStep = Math.max(1, Math.floor(rawGrayscale.length / 10000));
     for (let i = 0; i < rawGrayscale.length; i += sampleStep) {
@@ -1731,9 +1852,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     const grayscale = new Uint8Array(width * height);
     for (let i = 0; i < rawGrayscale.length; i++) {
-      grayscale[i] = Math.max(0, Math.min(255, Math.round(((rawGrayscale[i] - gMin) / gRange) * 255)));
+      grayscale[i] = Math.max(0, Math.min(255,
+        Math.round(((rawGrayscale[i] - gMin) / gRange) * 255)
+      ));
     }
-    console.log(`[OMR] Contrast normalization: min=${gMin} max=${gMax} range=${gRange}`);
+    console.log(`[OMR] Contrast stretch: min=${gMin} max=${gMax} range=${gRange}`);
 
     // 2. Find corner alignment markers using RAW grayscale (before contrast normalization)
     // This avoids shadows/noise being amplified into false marker candidates
@@ -1771,7 +1894,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     // 5. Detect student ID and answers using GRAYSCALE for bubble sampling
     const { studentId, doubleShadeColumns, rawIdDigits } = detectStudentIdFromImage(grayscale, width, height, effectiveMarkers, layout);
-    const { answers, multipleAnswers } = detectAnswersFromImage(
+    const { answers, multipleAnswers, bubbleHits } = detectAnswersFromImage(
       grayscale, width, height, effectiveMarkers, layout, numQuestions, choicesPerQuestion
     );
 
@@ -1783,17 +1906,22 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       rawIdDigits, // Include raw digit array for UI display
       markersFound: markers.found,
       markerConfidence: noMarkersAtAll ? 0 : markers.confidence,
-      debugMarkers: effectiveMarkers 
+      debugMarkers: effectiveMarkers,
+      bubbleHits,
     };
   };
 
   // ─── BUBBLE SAMPLING (grayscale-based) ───
-  // Returns the MEAN BRIGHTNESS of the bubble interior (0-255).
+  // Returns a WEIGHTED MEAN BRIGHTNESS of the bubble interior (0-255).
   // LOWER value = DARKER = MORE LIKELY FILLED.
-  // 
-  // We sample only the interior of the bubble and return raw brightness.
-  // Detection functions compare bubbles WITHIN the same column/question —
-  // the filled bubble will simply be much darker than unfilled ones.
+  //
+  // Strategy:
+  //  • Sample the inner 65% of the bubble radius (avoids the printed circle outline).
+  //  • Weight pixels with a 2D Gaussian centred on the bubble centre so that
+  //    a pencil mark anywhere inside — even if only at the centre — is detected,
+  //    while edge noise from the printed circle is down-weighted.
+  //  • Minimum-pool: return the min of the weighted mean and the darkest 10th-
+  //    percentile brightness so that a small but very dark mark is not averaged away.
   const sampleBubbleAt = (
     grayscale: Uint8Array,
     imgW: number,
@@ -1803,40 +1931,44 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     radiusX: number,
     radiusY: number
   ): number => {
-    // Sample the center of the bubble using an elliptical mask
-    // Use inner 50% to safely avoid the printed circle outline
-    let sum = 0, count = 0;
-    const innerRX = radiusX * 0.50;
-    const innerRY = radiusY * 0.50;
-    const step = Math.max(1, Math.floor(Math.min(innerRX, innerRY) / 4));
+    const innerRX = radiusX * 0.65;
+    const innerRY = radiusY * 0.65;
+    // Gaussian σ = half the inner radius; weight falls to ~14% at the edge
+    const sigX = innerRX * 0.5;
+    const sigY = innerRY * 0.5;
+    const step = Math.max(1, Math.floor(Math.min(innerRX, innerRY) / 5));
+
+    let wSum = 0, sum = 0;
+    const samples: number[] = [];
 
     for (let dy = -Math.ceil(innerRY); dy <= Math.ceil(innerRY); dy += step) {
       for (let dx = -Math.ceil(innerRX); dx <= Math.ceil(innerRX); dx += step) {
-        if (innerRX > 0 && innerRY > 0 && (dx * dx) / (innerRX * innerRX) + (dy * dy) / (innerRY * innerRY) > 1) continue;
+        if (innerRX > 0 && innerRY > 0 &&
+            (dx * dx) / (innerRX * innerRX) + (dy * dy) / (innerRY * innerRY) > 1) continue;
         const px = Math.round(cx + dx);
         const py = Math.round(cy + dy);
-        if (px >= 0 && px < imgW && py >= 0 && py < imgH) {
-          sum += grayscale[py * imgW + px];
-          count++;
-        }
+        if (px < 0 || px >= imgW || py < 0 || py >= imgH) continue;
+        const val = grayscale[py * imgW + px];
+        // Gaussian weight (higher at centre, tapering to edges)
+        const w = Math.exp(-0.5 * ((dx * dx) / (sigX * sigX + 1) + (dy * dy) / (sigY * sigY + 1)));
+        sum += val * w;
+        wSum += w;
+        samples.push(val);
       }
     }
 
-    // Also sample the exact center cross pattern for extra precision
-    // This catches small-pencil fills that are concentrated at center
-    for (let r = 0; r <= Math.floor(innerRX * 0.7); r++) {
-      for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) {
-        const px = Math.round(cx + dx);
-        const py = Math.round(cy + dy);
-        if (px >= 0 && px < imgW && py >= 0 && py < imgH) {
-          sum += grayscale[py * imgW + px];
-          count++;
-        }
-      }
-    }
+    if (wSum === 0) return 255;
 
-    if (count === 0) return 255; // default = bright = unfilled
-    return sum / count; // raw brightness: low = dark = filled
+    const weightedMean = sum / wSum;
+
+    // Also compute the 10th-percentile brightness (darkest 10% of sampled pixels)
+    // so that a small but solidly-filled centre patch is not diluted.
+    samples.sort((a, b) => a - b);
+    const p10 = samples.length > 0 ? samples[Math.floor(samples.length * 0.10)] : 255;
+
+    // Return the lower (darker) of the two — catches both large-area fills and
+    // concentrated centre-only fills (e.g. short pencil strokes).
+    return Math.min(weightedMean, p10 * 0.85 + weightedMean * 0.15);
   };
 
   // ─── DETECT STUDENT ID ───
@@ -1901,36 +2033,35 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       let detectedDigit: number | null = null; // null means no detection (unshaded column)
       let hasDetection = false;
 
-      // Detection criteria (calibrated to 70% threshold):
-      // 1. The darkest bubble must be < 70% of the upper quartile brightness (30%+ drop)
-      //    This is stricter to avoid false positives from noise/dots
-      // 2. OR: the gap between darkest and 2nd-darkest must be > 15% of upper quartile
-      //    AND darkest < 85% of upper quartile (clear separation indicates intentional mark)
+      // ── Detection thresholds (calibrated for Gaussian-weighted sampler) ──
+      //
+      // sampleBubbleAt now returns a Gaussian-weighted mean blended with the p10
+      // darkest sample, so filled bubbles appear darker than before.
+      //
+      // Tier 1 – Strong fill (clear dark mark):
+      //   darkest < 68% of upper-quartile reference  → definite fill
+      // Tier 2 – Light fill (light pencil / faded ink):
+      //   darkest < 82% of upper-quartile  AND  gap to 2nd > 12% of reference
+      //   → probably intentional (stands out from neighbours)
       const darkRatio = upperQ > 20 ? darkest / upperQ : 1;
       const gapFromSecond = secondDark - darkest;
       const gapRatio = upperQ > 20 ? gapFromSecond / upperQ : 0;
 
-      // Primary detection: darkest must be significantly darker than unfilled (30% drop = 70% threshold)
-      if (darkRatio < 0.70) {
-        // Strong detection: darkest is much darker than unfilled
+      if (darkRatio < 0.68) {
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
-      } else if (darkRatio < 0.85 && gapRatio > 0.15) {
-        // Moderate detection: darkest is somewhat dark AND clearly separated from 2nd
-        // Requires stronger gap (15% instead of 12%) to avoid light mark false positives
+      } else if (darkRatio < 0.82 && gapRatio > 0.12) {
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
       }
 
       if (hasDetection && detectedDigit !== null) {
-        // Check for double-shade: is the 2nd-darkest ALSO significantly dark?
+        // Double-shade: 2nd-darkest is also quite dark AND close to darkest
         const secondRatio = upperQ > 20 ? secondDark / upperQ : 1;
         const gapBetweenTopTwo = upperQ > 20 ? gapFromSecond / upperQ : 1;
-        // Double shade if 2nd is also quite dark AND close to the darkest
-        if (secondRatio < 0.75 && gapBetweenTopTwo < 0.08) {
+        if (secondRatio < 0.76 && gapBetweenTopTwo < 0.09) {
           doubleShadeColumns.push(col + 1);
           console.log(`[ID] ⚠️ Col ${col} DOUBLE SHADE: darkest=${darkest.toFixed(0)} 2nd=${secondDark.toFixed(0)} upperQ=${upperQ.toFixed(0)}`);
-          // Mark as double-shade (-2) so it is excluded from cleanId and shown as '?' in UI
           idDigits.push(-2);
           continue;
         }
@@ -1977,9 +2108,10 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     layout: TemplateLayout,
     numQuestions: number,
     choicesPerQuestion: number
-  ): { answers: string[]; multipleAnswers: number[] } => {
+  ): { answers: string[]; multipleAnswers: number[]; bubbleHits: Array<{ px: number; py: number; rx: number; ry: number; choice: string; qIndex: number }> } => {
     const answers = new Array<string>(numQuestions).fill('');
     const multipleAnswers: number[] = [];
+    const bubbleHits: Array<{ px: number; py: number; rx: number; ry: number; choice: string; qIndex: number }> = [];
     const choiceLabels = 'ABCDEFGH'.slice(0, choicesPerQuestion).split('');
 
     const frameW = markers.topRight.x - markers.topLeft.x;
@@ -1997,14 +2129,14 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const qIndex = q - 1;
         const rowInBlock = q - block.startQ;
 
-        const fills: { choice: string; brightness: number }[] = [];
+        const fills: { choice: string; brightness: number; px: number; py: number }[] = [];
 
         for (let c = 0; c < choicesPerQuestion; c++) {
           const nx = block.firstBubbleNX + c * block.bubbleSpacingNX;
           const ny = block.firstBubbleNY + rowInBlock * block.rowSpacingNY;
           const { px, py } = mapToPixel(markers, nx, ny);
           const brightness = sampleBubbleAt(grayscale, width, height, px, py, bubbleRX, bubbleRY);
-          fills.push({ choice: choiceLabels[c], brightness });
+          fills.push({ choice: choiceLabels[c], brightness, px, py });
         }
 
         // Sort ASCENDING by brightness — darkest (most filled) first
@@ -2015,31 +2147,29 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
         let selectedChoice = '';
 
-        // Use the brightest bubble as the "unfilled" reference
-        // For a 5-choice question, at most 1 is filled, so the brightest is a good reference
+        // Use the brightest bubble as the "unfilled" reference.
+        // For a row of N choices, at most 1 is filled — the brightest N-1 are unfilled.
         const ref = brightest;
         const darkRatio = ref > 20 ? darkest / ref : 1;
         const gapFromSecond = secondDark - darkest;
         const gapRatio = ref > 20 ? gapFromSecond / ref : 0;
 
-        // Detection with 70% threshold (calibrated to avoid false positives from noise):
-        // Primary: darkest must be < 70% of brightest (30%+ drop) - clear intentional mark
-        // Secondary: darkest < 85% of brightest AND strong gap from 2nd (15%+)
-        //            This catches lighter but intentional marks that stand out
-        if (darkRatio < 0.70) {
+        // ── Detection tiers (Gaussian-weighted sampler) ──
+        // Tier 1 – Strong fill:   darkest < 68% of brightest  → definite mark
+        // Tier 2 – Light fill:    darkest < 82% of brightest  AND gap to 2nd > 12%
+        //          → intentional light mark (pen nearly dry, hard-pressure pencil, etc.)
+        if (darkRatio < 0.68) {
           selectedChoice = sorted[0].choice;
-        } else if (darkRatio < 0.85 && gapRatio > 0.15) {
-          // Stricter gap requirement (was 0.10) to distinguish from noise
+        } else if (darkRatio < 0.82 && gapRatio > 0.12) {
           selectedChoice = sorted[0].choice;
         }
 
-        // Check for multiple answers
+        // Check for multiple answers (flag but still use darkest)
         if (selectedChoice) {
           const secondRatio = ref > 20 ? secondDark / ref : 1;
           const gapBetweenTopTwo = ref > 20 ? gapFromSecond / ref : 1;
-          // Multiple answers: 2nd darkest is also quite dark (<75%) AND close to darkest (<8% gap)
-          // Stricter thresholds to reduce false positives from background noise
-          if (secondRatio < 0.75 && gapBetweenTopTwo < 0.08) {
+          // Multiple answers: 2nd darkest is also quite dark (<76%) AND close to darkest (<9% gap)
+          if (secondRatio < 0.76 && gapBetweenTopTwo < 0.09) {
             multipleAnswers.push(q);
             console.log(`[MULTI] Q${q}: ${sorted.slice(0, 3).map(f => `${f.choice}=${f.brightness.toFixed(0)}`).join(', ')} ref=${ref.toFixed(0)}`);
           }
@@ -2051,9 +2181,15 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         }
 
         answers[qIndex] = selectedChoice;
+
+        // Record bubble hit for overlay drawing
+        if (selectedChoice) {
+          const hit = fills.find(f => f.choice === selectedChoice);
+          if (hit) bubbleHits.push({ px: hit.px, py: hit.py, rx: bubbleRX, ry: bubbleRY, choice: selectedChoice, qIndex });
+        }
       }
     }
-    return { answers, multipleAnswers };
+    return { answers, multipleAnswers, bubbleHits };
   };
 
   // Calculate letter grade
@@ -2100,8 +2236,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     const student = classData.students.find(s => s.student_id === detectedStudentId);
     if (!student) {
-      toast.error(`Cannot save: Student ID "${detectedStudentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}".`);
-      setStudentIdError(`Student ID "${detectedStudentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class.`);
+      toast.error(`Cannot save: Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.section_block}".`);
+      setStudentIdError(`Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class.`);
       return;
     }
     
@@ -2173,7 +2309,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         setStudentIdError(null);
       } else {
         setMatchedStudent(null);
-        setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
+        setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
       }
     }
   };
@@ -2284,10 +2420,6 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       {/* Mode: Camera */}
       {mode === 'camera' && (
         <Card className="overflow-hidden">
-          {/* 
-            Camera container: always use the native video stream aspect ratio.
-            The guide overlay inside adapts its shape to match the paper template.
-          */}
           <div className="relative bg-black">
             <video
               ref={videoRef}
@@ -2295,74 +2427,42 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               playsInline
               className="w-full h-auto block"
             />
-            {/* Camera overlay guide — adapts to template */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              {/* Semi-transparent overlay around the guide */}
-              {(() => {
-                const t = getTemplateType();
-                // Paper aspect ratios (width:height)
-                // 20-item: 105 x 148.5mm  → ~0.707
-                // 50-item: 105 x 297mm    → ~0.354
-                // 100-item: 210 x 297mm   → ~0.707
-                // Guide occupies most of the view, with padding
-                const guideStyle = t === 20
-                  ? { width: '75%', aspectRatio: '105 / 148.5' }   // landscape-ish small card
-                  : t === 50
-                  ? { width: '55%', aspectRatio: '105 / 297' }     // tall narrow
-                  : { width: '90%', aspectRatio: '210 / 297' };    // A4 portrait — tight fit to minimize background
-                const borderColor = markersDetected ? 'border-green-400' : 'border-white/60';
-                const cornerColor = markersDetected ? 'border-green-400' : 'border-white';
-                const isManualCapture = t === 100; // 100-item uses manual capture
-                // Show different labels based on template type and marker detection
-                const label = isManualCapture
-                  ? markersDetected
-                    ? '✓ Ready — tap Capture below'
-                    : 'Align sheet and tap Capture when ready'
-                  : markersDetected
-                    ? stabilizationProgress >= 100
-                      ? '✓ Capturing now...'
-                      : `Hold steady... ${stabilizationProgress}%`
-                    : t === 20
-                    ? 'Align answer sheet within the frame'
-                    : `Align ${t}-item sheet within the frame`;
-                return (
-                  <div className="relative" style={guideStyle}>
-                    <div className={`absolute inset-0 border-2 ${borderColor} rounded-lg transition-colors duration-200`} />
-                    {/* Corner brackets */}
-                    <div className={`absolute top-1 left-1 w-6 h-6 border-t-2 border-l-2 ${cornerColor} rounded-tl transition-colors duration-200`} />
-                    <div className={`absolute top-1 right-1 w-6 h-6 border-t-2 border-r-2 ${cornerColor} rounded-tr transition-colors duration-200`} />
-                    <div className={`absolute bottom-1 left-1 w-6 h-6 border-b-2 border-l-2 ${cornerColor} rounded-bl transition-colors duration-200`} />
-                    <div className={`absolute bottom-1 right-1 w-6 h-6 border-b-2 border-r-2 ${cornerColor} rounded-br transition-colors duration-200`} />
-                    {/* Stabilization progress bar when markers detected (only for auto-capture modes) */}
-                    {!isManualCapture && markersDetected && stabilizationProgress < 100 && (
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30 rounded-b-lg overflow-hidden">
-                        <div 
-                          className="h-full bg-green-400 transition-all duration-150"
-                          style={{ width: `${stabilizationProgress}%` }}
-                        />
-                      </div>
-                    )}
-                    {/* Label */}
-                    <p className={`absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-white text-xs ${markersDetected ? 'bg-green-600/80' : 'bg-black/60'} px-3 py-1.5 rounded-full transition-colors duration-200`}>
+            {/* Full-video canvas overlay — draws live green squares on detected corner markers */}
+            <canvas
+              ref={liveOverlayRef}
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              style={{ mixBlendMode: 'normal' }}
+            />
+            {/* Status label + progress bar */}
+            {(() => {
+              const t = getTemplateType();
+              const label = markersDetected
+                ? stabilizationProgress >= 100
+                  ? '✓ Capturing now...'
+                  : `Hold steady... ${stabilizationProgress}%`
+                : `Align ${t}-item sheet within the frame`;
+              return (
+                <>
+                  {/* Progress bar */}
+                  {markersDetected && stabilizationProgress < 100 && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30 overflow-hidden">
+                      <div
+                        className="h-full bg-green-400 transition-all duration-150"
+                        style={{ width: `${stabilizationProgress}%` }}
+                      />
+                    </div>
+                  )}
+                  {/* Status pill */}
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
+                    <p className={`whitespace-nowrap text-white text-xs ${markersDetected ? 'bg-green-600/80' : 'bg-black/60'} px-3 py-1.5 rounded-full transition-colors duration-200`}>
                       {label}
                     </p>
                   </div>
-                );
-              })()}
-            </div>
+                </>
+              );
+            })()}
           </div>
           <div className="p-4 flex justify-center gap-3">
-            {/* Capture button for 100-item (manual capture) */}
-            {getTemplateType() === 100 && (
-              <Button 
-                onClick={captureAndProcess}
-                disabled={!markersDetected}
-                className={`${markersDetected ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
-              >
-                <Camera className="w-4 h-4 mr-2" />
-                Capture
-              </Button>
-            )}
             <Button variant="outline" onClick={stopCamera}>
               <X className="w-4 h-4 mr-2" />
               Cancel
@@ -2539,7 +2639,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                             setStudentIdError(null);
                           } else {
                             setMatchedStudent(null);
-                            setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
+                            setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
                           }
                         }
                       }}
@@ -2551,7 +2651,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                       placeholder="Enter Student ID"
                     />
                     {matchedStudent && (
-                      <p className="text-xs text-green-700 font-medium mt-0.5 break-words">
+                      <p className="text-xs text-green-700 font-medium mt-0.5 truncate">
                         {matchedStudent.first_name} {matchedStudent.last_name}
                       </p>
                     )}
