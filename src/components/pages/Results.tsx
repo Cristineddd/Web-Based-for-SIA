@@ -284,7 +284,7 @@ function SendResultsPanel({
                 <p className="text-xs text-green-300 font-medium">Delivery Details</p>
                 {deliveryResults.map((r, i) => (
                   <div key={i} className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2">
-                    <span className="text-sm text-white truncate mr-2">{r.to}</span>
+                    <span className="text-sm text-white break-all mr-2">{r.to}</span>
                     {r.success ? (
                       <span className="text-xs text-green-300 flex items-center gap-1">
                         <Check className="w-3 h-3" /> Sent
@@ -1312,7 +1312,7 @@ export default function Results() {
                 </div>
               </div>
               <Progress value={batchProgress.percent} className="h-3" />
-              <p className="text-sm text-gray-600 truncate">{batchProgress.step}</p>
+              <p className="text-sm text-gray-600 break-words">{batchProgress.step}</p>
               {batchProgress.percent >= 100 && (
                 <p className="text-sm text-green-600 font-medium">
                   Download complete!

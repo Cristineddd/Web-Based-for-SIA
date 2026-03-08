@@ -177,22 +177,22 @@ export default function ArchivedClasses() {
                 {filteredClasses.map((archivedClass) => (
                   <TableRow key={archivedClass.id}>
                     <TableCell className="font-medium">
-                      <div className="truncate max-w-[150px]" title={archivedClass.class_name}>
+                      <div className="break-words min-w-0" title={archivedClass.class_name}>
                         {archivedClass.class_name}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="truncate max-w-[120px]" title={archivedClass.course_subject}>
+                      <div className="break-words min-w-0" title={archivedClass.course_subject}>
                         {archivedClass.course_subject}
                       </div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <div className="truncate max-w-[100px]" title={archivedClass.section_block}>
+                      <div className="break-words min-w-0" title={archivedClass.section_block}>
                         {archivedClass.section_block}
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <div className="truncate max-w-[80px]" title={archivedClass.room}>
+                      <div className="break-words min-w-0" title={archivedClass.room}>
                         {archivedClass.room}
                       </div>
                     </TableCell>

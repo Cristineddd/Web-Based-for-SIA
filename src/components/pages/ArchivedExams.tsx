@@ -153,12 +153,12 @@ export default function ArchivedExams() {
                 {filteredExams.map((exam) => (
                   <TableRow key={exam.id}>
                     <TableCell className="font-medium">
-                      <div className="truncate max-w-[200px]" title={exam.title}>
+                      <div className="break-words min-w-0" title={exam.title}>
                         {exam.title}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="truncate max-w-[120px]" title={exam.subject}>
+                      <div className="break-words min-w-0" title={exam.subject}>
                         {exam.subject}
                       </div>
                     </TableCell>

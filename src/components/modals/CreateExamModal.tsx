@@ -551,19 +551,10 @@ export function CreateExamModal({
               </div>
             </div>
           )}
-
-          <div className="flex gap-1 pt-4">
-            {[1, 2, 3, 4, 5, 6, 7].map((s) => (
-              <div
-                key={s}
-                className={`flex-1 h-1 rounded-full ${s <= step ? "bg-primary" : "bg-muted"}`}
-              />
-            ))}
-          </div>
         </div>
         </div>
 
-        <div className="flex-shrink-0 flex gap-3 p-4 sm:p-6 border-t bg-gray-50">
+        <div className="flex-shrink-0 flex gap-3 p-3 sm:p-4 border-t bg-gray-50">
           {step > 1 && (
             <button
               onClick={() => setStep(step - 1)}
@@ -593,7 +584,7 @@ export function CreateExamModal({
                 }
                 setStep(step + 1);
               }}
-              className={`flex items-center justify-center gap-2 flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
+              className={`flex items-center justify-center gap-2 flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
                 (step === 1 && !formData.name.trim()) ||
                 (step === 2 && !questionsPicked) ||
                 (step === 4 && classes.length === 0) ||
@@ -618,7 +609,7 @@ export function CreateExamModal({
             <button
               onClick={handleCreateExam}
               disabled={isSubmitting}
-              className="flex items-center justify-center gap-2 flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+              className="flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
             >
               {isSubmitting ? (
                 <>

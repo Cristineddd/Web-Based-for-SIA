@@ -88,7 +88,7 @@ export default function ClassManagement() {
   const [newClass, setNewClass] = useState({
     class_name: "",
     course_subject: "",
-    section_block: "",
+    year: "",
     room: "",
   });
 
@@ -124,7 +124,7 @@ export default function ClassManagement() {
     setNewClass({
       class_name: "",
       course_subject: "",
-      section_block: "",
+      year: "",
       room: "",
     });
     setStudents([]);
@@ -140,8 +140,7 @@ export default function ClassManagement() {
   const handleAddClass = async () => {
     if (
       !newClass.class_name ||
-      !newClass.course_subject ||
-      !newClass.section_block
+      !newClass.course_subject
     ) {
       toast.error("Please fill in all required fields");
       return;
@@ -193,7 +192,7 @@ export default function ClassManagement() {
     setNewClass({
       class_name: "",
       course_subject: "",
-      section_block: "",
+      year: "",
       room: "",
     });
     setStudents([]);
@@ -571,7 +570,7 @@ export default function ClassManagement() {
     .filter((c) =>
       c.class_name.toLowerCase().includes(search.toLowerCase()) ||
       c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
-      c.section_block.toLowerCase().includes(search.toLowerCase()),
+      c.year?.toLowerCase().includes(search.toLowerCase()),
     );
 
   return (
@@ -722,7 +721,7 @@ export default function ClassManagement() {
                         {classItem.class_name}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {classItem.course_subject} &bull; {classItem.section_block}
+                        {classItem.course_subject}{classItem.year ? ` • ${classItem.year}` : ''}
                       </p>
                     </div>
                   </div>
@@ -783,15 +782,15 @@ export default function ClassManagement() {
           setShowAddDialog(true);
         }
       }}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto border-2 border-green-200 rounded-xl">
-          <DialogHeader className="bg-gradient-to-r from-green-50 to-emerald-50 -m-6 mb-6 p-6 rounded-t-xl border-b border-green-200">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto border-2 border-gray-200 rounded-xl">
+          <DialogHeader className="bg-gradient-to-r from-gray-50 to-slate-50 -m-6 mb-6 p-6 rounded-t-xl border-b border-gray-200">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Plus className="w-6 h-6 text-green-600" />
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Plus className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <DialogTitle className="text-2xl font-bold text-green-900">Add New Class</DialogTitle>
-                <DialogDescription className="text-green-700 text-base">
+                <DialogTitle className="text-2xl font-bold text-foreground">Add New Class</DialogTitle>
+                <DialogDescription className="text-muted-foreground text-base">
                   Create a new class and add students to the roster
                 </DialogDescription>
               </div>
@@ -803,22 +802,22 @@ export default function ClassManagement() {
             onValueChange={setCurrentTab}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-2 bg-green-100 border border-green-200">
+            <TabsList className="grid w-full grid-cols-2 bg-muted border border-border">
               <TabsTrigger 
                 value="basic" 
-                className="data-[state=active]:bg-green-600 data-[state=active]:text-white font-medium"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium"
               >
                 Class Information
               </TabsTrigger>
               <TabsTrigger 
                 value="students" 
-                className="data-[state=active]:bg-green-600 data-[state=active]:text-white font-medium"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium"
               >
                 Student Roster
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="basic" className="space-y-6 mt-6 p-3 sm:p-6 bg-gradient-to-br from-green-50/50 to-emerald-50/50 rounded-lg border border-green-200">
+            <TabsContent value="basic" className="space-y-6 mt-6 p-3 sm:p-6 bg-gradient-to-br from-muted/30 to-muted/50 rounded-lg border border-border">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-3">
                   <Label htmlFor="class_name" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -843,23 +842,23 @@ export default function ClassManagement() {
                       placeholder="Enter program name"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
                         newClass.class_name.trim() && newClass.class_name.trim().length >= 5
-                          ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
+                          ? 'border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5' 
                           : newClass.class_name.trim() && newClass.class_name.trim().length < 5
                           ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
-                          : 'border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100'
+                          : 'border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10'
                       }`}
                     />
                     {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
                   {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && (
-                    <div className="flex items-center gap-2 text-xs text-green-600">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <div className="flex items-center gap-2 text-xs text-primary">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                       <span>Valid class name</span>
                     </div>
                   )}
@@ -902,23 +901,23 @@ export default function ClassManagement() {
                       placeholder="Enter course subject"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
                         newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5
-                          ? 'border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30' 
+                          ? 'border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5' 
                           : newClass.course_subject.trim() && newClass.course_subject.trim().length < 5
                           ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
-                          : 'border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100'
+                          : 'border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10'
                       }`}
                     />
                     {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
                   {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 && (
-                    <div className="flex items-center gap-2 text-xs text-green-600">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <div className="flex items-center gap-2 text-xs text-primary">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                       <span>Valid course subject</span>
                     </div>
                   )}
@@ -936,46 +935,34 @@ export default function ClassManagement() {
                   )}
                 </div>
                 <div className="space-y-3">
-                  <Label htmlFor="section_block" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    Block <span className="text-red-500">*</span>
+                  <Label htmlFor="year" className="text-sm font-semibold text-gray-700">
+                    Year <span className="text-gray-400 text-xs">(Optional)</span>
                   </Label>
                   <div className="relative">
-                    <select
-                      id="section_block"
-                      value={newClass.section_block}
+                    <Input
+                      id="year"
+                      value={newClass.year}
                       onChange={(e) =>
                         setNewClass({
                           ...newClass,
-                          section_block: e.target.value,
+                          year: e.target.value,
                         })
                       }
-                      className={`w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 bg-background focus:outline-none focus:ring-4 ${
-                        newClass.section_block.trim() 
-                          ? 'border-green-400 focus:border-green-500 focus:ring-green-100 bg-green-50/30' 
-                          : 'border-gray-200 focus:border-green-400 focus:ring-green-100'
-                      }`}
-                    >
-                      <option value="">Select a block...</option>
-                      {Array.from({ length: 26 }, (_, i) =>
-                        String.fromCharCode(65 + i)
-                      ).map((letter) => (
-                        <option key={letter} value={letter}>
-                          {letter}
-                        </option>
-                      ))}
-                    </select>
-                    {newClass.section_block.trim() && (
-                      <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                      placeholder="e.g., 2024, First Year, Senior"
+                      className="transition-all duration-200 border-2 border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-lg px-4 py-3"
+                    />
+                    {newClass.year.trim() && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
-                  {newClass.section_block.trim() && (
-                    <div className="flex items-center gap-2 text-xs text-green-600">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                      <span>Block selected</span>
+                  {newClass.year.trim() && (
+                    <div className="flex items-center gap-2 text-xs text-primary">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                      <span>Year specified</span>
                     </div>
                   )}
                 </div>
@@ -1000,19 +987,19 @@ export default function ClassManagement() {
                         setNewClass({ ...newClass, room: value });
                       }}
                       placeholder="Enter room number (exactly 3 digits)"
-                      className="transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
+                      className="transition-all duration-200 border-2 border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-lg px-4 py-3"
                     />
                     {newClass.room.trim() && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">&#x2713;</span>
                         </div>
                       </div>
                     )}
                   </div>
                   {newClass.room.trim() && (
-                    <div className="flex items-center gap-2 text-xs text-green-600">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <div className="flex items-center gap-2 text-xs text-primary">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                       <span>Room specified</span>
                     </div>
                   )}
@@ -1026,18 +1013,18 @@ export default function ClassManagement() {
               </div>
 
               {/* Progress Indicator */}
-              <div className="bg-white border-2 border-green-200 rounded-xl p-4">
+              <div className="bg-white border-2 border-border rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-green-700">Form Progress:</span>
-                  <span className="text-sm font-semibold text-green-600">
-                    {[newClass.class_name.trim(), newClass.course_subject.trim(), newClass.section_block.trim()].filter(Boolean).length}/3 Required
+                  <span className="text-sm font-medium text-muted-foreground">Form Progress:</span>
+                  <span className="text-sm font-semibold text-foreground">
+                    {[newClass.class_name.trim(), newClass.course_subject.trim()].filter(Boolean).length}/2 Required
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
-                    className="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full transition-all duration-500"
+                    className="bg-gradient-to-r from-primary/80 to-primary h-2 rounded-full transition-all duration-500"
                     style={{ 
-                      width: `${[newClass.class_name.trim(), newClass.course_subject.trim(), newClass.section_block.trim()].filter(Boolean).length * 33.33}%` 
+                      width: `${[newClass.class_name.trim(), newClass.course_subject.trim()].filter(Boolean).length * 50}%` 
                     }}
                   />
                 </div>
@@ -1433,7 +1420,7 @@ export default function ClassManagement() {
             <DialogTitle className="text-lg sm:text-xl">{editingClass?.class_name}</DialogTitle>
             <DialogDescription className="text-sm">
               {editingClass?.course_subject} - Block{" "}
-              {editingClass?.section_block}
+              {editingClass?.year || 'No year specified'}
             </DialogDescription>
           </DialogHeader>
           
@@ -1461,8 +1448,8 @@ export default function ClassManagement() {
                           <div key={`${editingClass.id}-mobile-${idx}`} className="bg-card border rounded-lg p-3">
                             <div className="flex-1 min-w-0">
                               <div className="font-mono text-sm font-medium">{student.student_id}</div>
-                              <div className="text-sm font-medium truncate">{`${student.first_name} ${student.last_name}`}</div>
-                              <div className="text-xs text-muted-foreground truncate">{student.email || "No email"}</div>
+                              <div className="text-sm font-medium break-words">{`${student.first_name} ${student.last_name}`}</div>
+                              <div className="text-xs text-muted-foreground break-all">{student.email || "No email"}</div>
                             </div>
                           </div>
                         ))}

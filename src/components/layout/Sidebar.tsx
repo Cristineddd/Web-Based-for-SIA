@@ -100,7 +100,7 @@ export function Sidebar() {
               <Image src="/Sia.png" alt="SIA Logo" width={40} height={40} className="w-10 h-10 object-contain aspect-square flex-shrink-0" />
               <div>
                 <h1 className="font-bold text-white text-sm">SIA</h1>
-                <p className="text-xs text-white/60 truncate">Exam & Quiz Builder</p>
+                <p className="text-xs text-white/60 break-words">Exam & Quiz Builder</p>
               </div>
             </div>
           ) : (

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Save, Users, BookOpen, Hash, Download, Plus, X } from 'lucide-react';
+import { ArrowLeft, Save, Users, BookOpen, Hash, Download, Upload, Plus, X } from 'lucide-react';
 import { getClassById, updateClass, Class, Student as BaseStudent } from '@/services/classService';
 import { toast } from 'sonner';
 import { exportStudentRosterToExcel } from '@/services/excelExportService';
@@ -79,8 +79,8 @@ export default function ClassEdit() {
       toast.error('Program name is required');
       return;
     }
-    if (classData.class_name.trim().length < 5) {
-      toast.error('Program name must be at least 5 characters long');
+    if (classData.class_name.trim().length < 4) {
+      toast.error('Program name must be at least 4 characters long');
       return;
     }
     if (!/^[a-zA-Z\s]+$/.test(classData.class_name.trim())) {
@@ -102,9 +102,9 @@ export default function ClassEdit() {
       return;
     }
 
-    // Validate Block
-    if (!classData.section_block.trim()) {
-      toast.error('Block is required');
+    // Validate Year (optional)
+    if (classData.year && !/^[1-4]$/.test(classData.year.trim())) {
+      toast.error('Year must be between 1-4');
       return;
     }
 
@@ -156,7 +156,7 @@ export default function ClassEdit() {
       await updateClass(classData.id, {
         class_name: classData.class_name.trim(),
         course_subject: classData.course_subject.trim(),
-        section_block: classData.section_block.trim(),
+        year: classData.year?.trim() || undefined,
         room: classData.room.trim(),
         students: classData.students,
         updatedAt: new Date().toISOString(),
@@ -189,7 +189,6 @@ export default function ClassEdit() {
         last_name: student.last_name,
         email: student.email || '',
         grade: student.grade || '',
-        section: classData.section_block, // Use class section as student section
       }));
 
       exportStudentRosterToExcel(studentsForExport);
@@ -198,6 +197,23 @@ export default function ClassEdit() {
       console.error('Error exporting students:', error);
       toast.error('Failed to export students');
     }
+  };
+
+  const handleImportStudents = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast.error('Please select an Excel file (.xlsx or .xls)');
+      return;
+    }
+
+    // You can implement Excel parsing logic here
+    // For now, we'll show a placeholder message
+    toast.success(`File "${file.name}" selected. Import functionality can be implemented based on your Excel format.`);
+    
+    // Reset the file input
+    event.target.value = '';
   };
 
   const updateStudentField = (studentId: string, field: keyof Student, value: string) => {
@@ -285,9 +301,9 @@ export default function ClassEdit() {
   }
 
   return (
-    <div className="page-container">
+    <div className="page-container pb-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -313,6 +329,21 @@ export default function ClassEdit() {
             <Download className="w-4 h-4" />
             Export Students
           </Button>
+          <div className="relative">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleImportStudents}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+            <Button 
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Import Students
+            </Button>
+          </div>
           <Button onClick={handleSave} disabled={saving}>
             <Save className="w-4 h-4 mr-2" />
             {saving ? 'Saving...' : 'Save Changes'}
@@ -320,7 +351,7 @@ export default function ClassEdit() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Class Information */}
         <Card>
           <CardHeader>
@@ -341,14 +372,14 @@ export default function ClassEdit() {
                   className={
                     !classData.class_name.trim() || 
                     !/^[a-zA-Z\s]+$/.test(classData.class_name.trim()) || 
-                    classData.class_name.trim().length < 5 
+                    classData.class_name.trim().length < 4 
                       ? 'border-red-300 focus:border-red-500' 
                       : 'border-green-300 focus:border-green-500'
                   }
                 />
                 <p className="text-xs text-gray-600">
-                  Letters only, minimum 5 characters
-                  {classData.class_name.trim() && ` (${classData.class_name.trim().length}/5)`}
+                  Letters only, minimum 4 characters
+                  {classData.class_name.trim() && ` (${classData.class_name.trim().length}/4)`}
                 </p>
               </div>
               <div className="space-y-2">
@@ -375,23 +406,23 @@ export default function ClassEdit() {
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="section_block">Block *</Label>
+                <Label htmlFor="year">Year (Optional)</Label>
                 <Select
-                  value={classData.section_block}
-                  onValueChange={(value) => setClassData({ ...classData, section_block: value })}
+                  value={classData.year || 'none'}
+                  onValueChange={(value) => setClassData({ ...classData, year: value === 'none' ? undefined : value })}
                 >
-                  <SelectTrigger className={!classData.section_block.trim() ? 'border-red-300 focus:border-red-500' : 'border-green-300 focus:border-green-500'}>
-                    <SelectValue placeholder="Select block" />
+                  <SelectTrigger className="border-gray-300 focus:border-blue-500">
+                    <SelectValue placeholder="Select year" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map((letter) => (
-                      <SelectItem key={letter} value={letter}>
-                        {letter}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="1">1st Year</SelectItem>
+                    <SelectItem value="2">2nd Year</SelectItem>
+                    <SelectItem value="3">3rd Year</SelectItem>
+                    <SelectItem value="4">4th Year</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-600">Required field - select A through Z</p>
+                <p className="text-xs text-gray-600">Optional field - select academic year level</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="room">Room *</Label>
@@ -439,7 +470,7 @@ export default function ClassEdit() {
       </div>
 
       {/* Students List */}
-      <Card className="mt-6">
+      <Card className="mt-4">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -466,7 +497,6 @@ export default function ClassEdit() {
                   <TableHead className="min-w-[150px]">First Name</TableHead>
                   <TableHead className="min-w-[150px]">Last Name</TableHead>
                   <TableHead className="min-w-[200px]">Email</TableHead>
-                  <TableHead className="min-w-[100px]">Block</TableHead>
                   <TableHead className="min-w-[80px]">Year</TableHead>
                   <TableHead className="w-16">Actions</TableHead>
                 </TableRow>
@@ -504,20 +534,21 @@ export default function ClassEdit() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Input
-                        value={student.section || ''}
-                        onChange={(e) => updateStudentField(student.student_id, 'section', e.target.value)}
-                        className="border-0 p-1 h-8"
-                        placeholder="Block"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={student.grade || ''}
-                        onChange={(e) => updateStudentField(student.student_id, 'grade', e.target.value)}
-                        className="border-0 p-1 h-8"
-                        placeholder="Year"
-                      />
+                      <Select
+                        value={student.grade || 'none'}
+                        onValueChange={(value) => updateStudentField(student.student_id, 'grade', value === 'none' ? '' : value)}
+                      >
+                        <SelectTrigger className="border-0 p-1 h-8">
+                          <SelectValue placeholder="Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="1">1st Year</SelectItem>
+                          <SelectItem value="2">2nd Year</SelectItem>
+                          <SelectItem value="3">3rd Year</SelectItem>
+                          <SelectItem value="4">4th Year</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       <Button
@@ -568,9 +599,6 @@ export default function ClassEdit() {
                         className="border p-2 h-8"
                         type="email"
                       />
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      Auto-filled
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       Year (optional)

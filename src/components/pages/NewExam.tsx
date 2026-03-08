@@ -249,9 +249,9 @@ export default function NewExam() {
   };
 
   return (
-    <div className="page-container max-w-4xl">
+    <div className="page-container max-w-4xl pb-4">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-4">
         <Button
           variant="ghost"
           onClick={() => router.push("/exams")}
@@ -274,9 +274,9 @@ export default function NewExam() {
       </div>
 
       {/* Progress Indicator */}
-      <Card className="mb-6 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-        <CardContent className="pt-6">
-          <div className="mb-4 flex items-center justify-between text-sm">
+      <Card className="mb-4 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+        <CardContent className="pt-4">
+          <div className="mb-3 flex items-center justify-between text-sm">
             <span className="font-medium text-blue-900">Progress</span>
             <span className="text-blue-700">{Math.round((currentStep / steps.length) * 100)}% Complete</span>
           </div>
@@ -338,7 +338,7 @@ export default function NewExam() {
           
           {/* Step Validation Feedback */}
           {Object.keys(errors).length > 0 && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-center gap-2 text-red-800">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
@@ -355,7 +355,7 @@ export default function NewExam() {
           
           {/* Step Completion Feedback */}
           {Object.keys(errors).length === 0 && currentStep < steps.length && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
               <div className="flex items-center gap-2 text-green-800">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -366,19 +366,22 @@ export default function NewExam() {
           )}
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-2">
             {/* Step 1: Basic Information */}
             {currentStep === 1 && (
-              <div className="space-y-6">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                  <h3 className="font-medium text-blue-900 mb-2">📝 Step 1: Basic Information</h3>
-                  <p className="text-sm text-blue-700">
+              <div className="space-y-2">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
+                  <h3 className="font-medium text-blue-900 mb-2">📝 Step 1: Exam Name</h3>
+                  <p className="text-sm text-blue-700 mb-1">
+                    Give your exam a clear, descriptive name that helps you identify it later.
+                  </p>
+                  <p className="text-sm text-blue-600">
                     Fill in the essential details about your exam. Make sure to choose the correct class and subject.
                   </p>
                 </div>
 
                 {/* Title */}
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="title" className="flex items-center gap-2">
                     Exam Title *
                     <span className="text-xs text-muted-foreground">(5-200 characters)</span>
@@ -409,7 +412,7 @@ export default function NewExam() {
                 </div>
 
                 {/* Class Selection */}
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="class" className="flex items-center gap-2">
                     Class *
                     <span className="text-xs text-muted-foreground">(Select your target class)</span>
@@ -450,7 +453,7 @@ export default function NewExam() {
                 </div>
 
                 {/* Subject */}
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="subject" className="flex items-center gap-2">
                     Subject *
                     <span className="text-xs text-muted-foreground">(Auto-filled from class or enter custom)</span>
@@ -481,7 +484,7 @@ export default function NewExam() {
                 </div>
 
                 {/* Date */}
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="date" className="flex items-center gap-2">
                     Exam Date *
                     <span className="text-xs text-muted-foreground">(Cannot be in the past)</span>
@@ -511,8 +514,8 @@ export default function NewExam() {
 
             {/* Step 2: Exam Configuration */}
             {currentStep === 2 && (
-              <div className="space-y-6">
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+              <div className="space-y-2">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-2">
                   <h3 className="font-medium text-orange-900 mb-2">⚙️ Step 2: Exam Configuration</h3>
                   <p className="text-sm text-orange-700">
                     Configure the format and structure of your exam. These settings affect how answer sheets are generated.
@@ -576,12 +579,12 @@ export default function NewExam() {
                 </div>
 
                 {/* Choices per Item */}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     Answer Choices per Question
                     <span className="text-xs text-muted-foreground">(A, B, C, D format)</span>
                   </Label>
-                  <p className="text-sm text-muted-foreground mb-3">
+                  <p className="text-sm text-muted-foreground mb-2">
                     🔤 Select how many answer choices each question will have. Most common is 4 choices (A, B, C, D).
                   </p>
                   <div className="grid grid-cols-4 gap-3">
@@ -661,7 +664,7 @@ export default function NewExam() {
 
             {/* Step 3: Review & Create */}
             {currentStep === 3 && (
-              <div className="space-y-6">
+              <div className="space-y-2">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
                   <h3 className="font-medium text-green-900 mb-2">🔍 Step 3: Review & Create</h3>
                   <p className="text-sm text-green-700">
@@ -768,7 +771,7 @@ Examples:
             )}
 
             {/* Navigation */}
-            <div className="flex gap-3 pt-6 border-t">
+            <div className="flex gap-3 pt-2 border-t">
               {currentStep > 1 && (
                 <Button
                   type="button"

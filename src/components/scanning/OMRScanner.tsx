@@ -107,7 +107,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               const allClasses = await getClasses(user.id);
               const matchedClass = allClasses.find(c => 
                 c.class_name === examData.className || 
-                `${c.class_name} - ${c.section_block}` === examData.className
+                `${c.class_name}${c.year ? ` - ${c.year}` : ''}` === examData.className
               );
               if (matchedClass) {
                 setClassData(matchedClass);
@@ -950,9 +950,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         } else {
           // If alignment is poor but ID was detected, warn that the ID might be misread
           if (hasAlignmentIssue) {
-            idError = `Student ID "${studentId}" may have been misread due to alignment issues. The ID is not registered in class "${classData.class_name} - ${classData.section_block}". Try retaking the photo with better alignment.`;
+            idError = `Student ID "${studentId}" may have been misread due to alignment issues. The ID is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Try retaking the photo with better alignment.`;
           } else {
-            idError = `Student ID "${studentId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`;
+            idError = `Student ID "${studentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`;
           }
         }
       }
@@ -1930,27 +1930,27 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         if (secondRatio < 0.75 && gapBetweenTopTwo < 0.08) {
           doubleShadeColumns.push(col + 1);
           console.log(`[ID] ⚠️ Col ${col} DOUBLE SHADE: darkest=${darkest.toFixed(0)} 2nd=${secondDark.toFixed(0)} upperQ=${upperQ.toFixed(0)}`);
+          // Mark as double-shade (-2) so it is excluded from cleanId and shown as '?' in UI
+          idDigits.push(-2);
+          continue;
         }
       }
 
-      // NULL LOGIC: If no bubble is shaded, use '_' placeholder (not '0')
+      // NULL LOGIC: If no bubble is shaded, use -1 placeholder (not '0')
       // This prevents unshaded columns from corrupting the ID (e.g., 9 digits → 10)
       // The digit '0' should ONLY appear if the '0' bubble is actually shaded
       const digitChar = hasDetection && detectedDigit !== null ? String(detectedDigit) : '_';
       
       console.log(`[ID] Col ${col}: brightness=[${fills.map(f => f.toFixed(0)).join(',')}] → ${digitChar} (darkest=${darkest.toFixed(0)} upperQ=${upperQ.toFixed(0)} ratio=${darkRatio.toFixed(2)} gap=${gapRatio.toFixed(2)})`);
-      idDigits.push(hasDetection && detectedDigit !== null ? detectedDigit : -1); // -1 = unshaded
+      idDigits.push(hasDetection && detectedDigit !== null ? detectedDigit : -1); // -1 = unshaded, -2 = double-shade
     }
 
-    // Convert digits to string, using '_' for unshaded columns (-1)
-    // Then strip leading/trailing underscores and collapse to just the detected digits
-    const rawWithPlaceholders = idDigits.map(d => d === -1 ? '_' : String(d)).join('');
+    // Convert digits to string, using '_' for unshaded (-1) and '?' for double-shade (-2)
+    // Then strip placeholders and return only the cleanly detected digits
+    const rawWithPlaceholders = idDigits.map(d => d === -1 ? '_' : d === -2 ? '?' : String(d)).join('');
     
-    // For the final ID, we have two options:
-    // 1. Keep placeholders to show which columns were unshaded (for debugging/validation)
-    // 2. Strip placeholders and return only the detected digits
-    // We'll strip them to get a clean ID, but log both versions
-    const cleanId = idDigits.filter(d => d !== -1).map(d => String(d)).join('');
+    // For the final ID, exclude both unshaded (-1) and double-shaded (-2) columns
+    const cleanId = idDigits.filter(d => d >= 0).map(d => String(d)).join('');
     
     console.log('[ID] Raw with placeholders:', rawWithPlaceholders);
     console.log('[ID] Clean ID:', cleanId, cleanId.length, 'digits', doubleShadeColumns.length > 0 ? `(double-shade: cols ${doubleShadeColumns.join(',')})` : '');
@@ -2100,8 +2100,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     const student = classData.students.find(s => s.student_id === detectedStudentId);
     if (!student) {
-      toast.error(`Cannot save: Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.section_block}".`);
-      setStudentIdError(`Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class.`);
+      toast.error(`Cannot save: Student ID "${detectedStudentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}".`);
+      setStudentIdError(`Student ID "${detectedStudentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class.`);
       return;
     }
     
@@ -2144,6 +2144,37 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       toast.error('Failed to save scan result');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Edit a single digit in the Student ID digit boxes
+  const editIdDigit = (colIndex: number, newValue: string) => {
+    // Only allow 0-9 or empty
+    if (newValue !== '' && !/^[0-9]$/.test(newValue)) return;
+    const newDigits = [...rawIdDigits];
+    newDigits[colIndex] = newValue === '' ? -1 : parseInt(newValue, 10);
+    setRawIdDigits(newDigits);
+    // Clear double-shade flag for this column
+    setIdDoubleShadeColumns(prev => prev.filter(c => c !== colIndex + 1));
+    // Rebuild the detectedStudentId from the updated digits
+    const newId = newDigits.filter(d => d >= 0).map(d => String(d)).join('');
+    setDetectedStudentId(newId);
+    // Re-validate
+    if (!newId || /^0+$/.test(newId)) {
+      setStudentIdError('No Student ID provided. Please enter a valid Student ID.');
+      setMatchedStudent(null);
+    } else if (!classData) {
+      setStudentIdError('No class is linked to this exam.');
+      setMatchedStudent(null);
+    } else {
+      const student = classData.students.find(s => s.student_id === newId);
+      if (student) {
+        setMatchedStudent(student);
+        setStudentIdError(null);
+      } else {
+        setMatchedStudent(null);
+        setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
+      }
     }
   };
 
@@ -2473,28 +2504,28 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           )}
 
           {/* Score Summary */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                  (studentIdError || idDoubleShadeColumns.length > 0) ? 'bg-red-100' : matchedStudent ? 'bg-green-100' : 'bg-gray-100'
-                }`}>
-                  <User className={`w-8 h-8 ${
-                    (studentIdError || idDoubleShadeColumns.length > 0) ? 'text-red-600' : matchedStudent ? 'text-green-600' : 'text-gray-600'
-                  }`} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
+          <Card className="p-4 sm:p-6">
+            <div className="flex flex-col gap-4">
+              {/* Top row: student info + grade */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    (studentIdError || idDoubleShadeColumns.length > 0) ? 'bg-red-100' : matchedStudent ? 'bg-green-100' : 'bg-gray-100'
+                  }`}>
+                    <User className={`w-6 h-6 ${
+                      (studentIdError || idDoubleShadeColumns.length > 0) ? 'text-red-600' : matchedStudent ? 'text-green-600' : 'text-gray-600'
+                    }`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5">Student ID</p>
                     <input
                       type="text"
                       value={detectedStudentId}
                       onChange={(e) => {
                         const newId = e.target.value;
                         setDetectedStudentId(newId);
-                        // Clear double-shade error when user manually edits
                         setIdDoubleShadeColumns([]);
-                        setRawIdDigits([]); // Clear raw digits when manually editing
-                        // Re-validate student ID on change
+                        setRawIdDigits([]);
                         if (!newId || /^0+$/.test(newId)) {
                           setStudentIdError('No Student ID provided. Please enter a valid Student ID.');
                           setMatchedStudent(null);
@@ -2508,76 +2539,93 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                             setStudentIdError(null);
                           } else {
                             setMatchedStudent(null);
-                            setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
+                            setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
                           }
                         }
                       }}
-                      className={`text-xl font-bold bg-transparent border-b transition-colors focus:outline-none ${
+                      className={`text-lg font-bold bg-transparent border-b-2 transition-colors focus:outline-none w-full max-w-[180px] ${
                         (studentIdError || idDoubleShadeColumns.length > 0)
-                          ? 'text-red-700 border-red-300 hover:border-red-400 focus:border-red-500'
+                          ? 'text-red-700 border-red-300 focus:border-red-500'
                           : 'text-gray-900 border-transparent hover:border-gray-300 focus:border-[#1a472a]'
                       }`}
                       placeholder="Enter Student ID"
                     />
                     {matchedStudent && (
-                      <span className="text-sm text-green-600 bg-green-100 px-2 py-1 rounded">
+                      <p className="text-xs text-green-700 font-medium mt-0.5 break-words">
                         {matchedStudent.first_name} {matchedStudent.last_name}
-                      </span>
+                      </p>
                     )}
                   </div>
-                  {/* Student ID Digit Boxes - Visual display of each scanned column */}
-                  {rawIdDigits.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-xs text-gray-500 mb-1">Scanned ID Columns (9 digits):</p>
-                      <div className="flex gap-1">
-                        {rawIdDigits.map((digit, idx) => {
-                          const isUnshaded = digit === -1;
-                          const hasDoubleShade = idDoubleShadeColumns.includes(idx + 1);
-                          return (
-                            <div
-                              key={idx}
-                              className={`w-7 h-8 flex items-center justify-center text-sm font-bold rounded border-2 ${
-                                hasDoubleShade
-                                  ? 'border-yellow-500 bg-yellow-100 text-yellow-700'
-                                  : isUnshaded
-                                    ? 'border-gray-300 bg-gray-200 text-gray-400'
-                                    : 'border-green-500 bg-green-50 text-green-700'
-                              }`}
-                              title={
-                                hasDoubleShade
-                                  ? `Column ${idx + 1}: Multiple bubbles shaded`
-                                  : isUnshaded
-                                    ? `Column ${idx + 1}: No bubble shaded`
-                                    : `Column ${idx + 1}: Digit ${digit}`
-                              }
-                            >
-                              {hasDoubleShade ? '?' : isUnshaded ? '–' : digit}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {rawIdDigits.some(d => d === -1) && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          <span className="inline-block w-3 h-3 bg-gray-200 border border-gray-300 rounded mr-1 align-middle"></span>
-                          Grey boxes = no bubble shaded in that column
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-gray-600 mt-1">Student ID</p>
-                  {debugInfo && (
-                    <p className="text-xs text-gray-400 mt-1 font-mono break-all">{debugInfo}</p>
-                  )}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className={`inline-block px-3 py-1.5 rounded-lg text-2xl font-bold ${getGradeColor(scanResult.letterGrade)}`}>
+                    {scanResult.letterGrade}
+                  </div>
+                  <p className="text-gray-600 text-sm mt-1">
+                    {scanResult.score}/{scanResult.totalQuestions} ({scanResult.percentage}%)
+                  </p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className={`inline-block px-4 py-2 rounded-lg text-2xl font-bold ${getGradeColor(scanResult.letterGrade)}`}>
-                  {scanResult.letterGrade}
+
+              {/* Digit boxes: editable, one per column */}
+              {rawIdDigits.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Scanned ID Columns — tap a box to correct it:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rawIdDigits.map((digit, idx) => {
+                      const isUnshaded = digit === -1;
+                      const hasDoubleShade = digit === -2;
+                      return (
+                        <div key={idx} className="flex flex-col items-center gap-0.5">
+                          <span className="text-[10px] text-gray-400">{idx + 1}</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={1}
+                            value={hasDoubleShade || isUnshaded ? '' : String(digit)}
+                            placeholder={hasDoubleShade ? '?' : '–'}
+                            onChange={(e) => editIdDigit(idx, e.target.value)}
+                            className={`w-8 h-9 text-center text-sm font-bold rounded border-2 focus:outline-none focus:ring-2 transition-colors ${
+                              hasDoubleShade
+                                ? 'border-yellow-500 bg-yellow-100 text-yellow-700 placeholder-yellow-500 focus:ring-yellow-300'
+                                : isUnshaded
+                                  ? 'border-gray-300 bg-gray-100 text-gray-400 placeholder-gray-400 focus:ring-gray-300'
+                                  : 'border-green-500 bg-green-50 text-green-700 focus:ring-green-300'
+                            }`}
+                            title={
+                              hasDoubleShade
+                                ? `Column ${idx + 1}: Multiple bubbles — tap to fix`
+                                : isUnshaded
+                                  ? `Column ${idx + 1}: No bubble shaded — tap to fill`
+                                  : `Column ${idx + 1}: Digit ${digit}`
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded border-2 border-green-500 bg-green-50" />
+                      Detected
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded border-2 border-yellow-500 bg-yellow-100" />
+                      Double-shaded
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded border-2 border-gray-300 bg-gray-100" />
+                      Unshaded
+                    </span>
+                  </div>
                 </div>
-                <p className="text-gray-600 mt-1">
-                  {scanResult.score}/{scanResult.totalQuestions} ({scanResult.percentage}%)
-                </p>
-              </div>
+              )}
+
+              {debugInfo && (
+                <p className="text-xs text-gray-400 font-mono break-all">{debugInfo}</p>
+              )}
             </div>
           </Card>
 

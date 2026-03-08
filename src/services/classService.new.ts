@@ -38,8 +38,8 @@ export interface Class {
   id: string;
   class_name: string;
   course_subject: string;
-  section_block: string;
-  room: string;
+  year?: string; // Optional year field
+  room?: string;
   student_ids: string[]; // PRIMARY KEY references to students
   created_at: string;
   createdBy?: string;
@@ -64,7 +64,7 @@ export async function createClass(
     const newClassData = {
       class_name: classData.class_name,
       course_subject: classData.course_subject,
-      section_block: classData.section_block,
+      year: classData.year,
       room: classData.room,
       student_ids, // Store only student_id references
       createdBy: userId,
@@ -78,7 +78,7 @@ export async function createClass(
       id: docRef.id,
       class_name: classData.class_name,
       course_subject: classData.course_subject,
-      section_block: classData.section_block,
+      year: classData.year,
       room: classData.room,
       student_ids,
       created_at: new Date().toISOString(),
@@ -118,7 +118,7 @@ export async function getClasses(userId?: string): Promise<Class[]> {
         id: doc.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
-        section_block: data.section_block,
+        year: data.year,
         room: data.room || '',
         student_ids: data.student_ids || data.students?.map((s: any) => s.student_id) || [],
         created_at: data.created_at || data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
@@ -150,7 +150,7 @@ export async function getClass(classId: string): Promise<Class | null> {
       id: docSnap.id,
       class_name: data.class_name,
       course_subject: data.course_subject,
-      section_block: data.section_block,
+      year: data.year,
       room: data.room || '',
       student_ids: data.student_ids || data.students?.map((s: any) => s.student_id) || [],
       created_at: data.created_at || data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),

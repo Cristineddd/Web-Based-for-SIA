@@ -305,11 +305,6 @@ export default function Students() {
       return;
     }
 
-    if (!newStudent.section) {
-      toast.error("Please select a block");
-      return;
-    }
-
     try {
       if (!user?.id) {
         toast.error("You must be logged in to add students");
@@ -392,7 +387,6 @@ export default function Students() {
       !editStudent.first_name ||
       !editStudent.last_name ||
       !editStudent.grade ||
-      !editStudent.section ||
       !editingStudent
     ) {
       toast.error("Please fill in all required fields");
@@ -751,7 +745,7 @@ export default function Students() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by ID, name, or block..."
+                placeholder="Search by ID, name, or email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -788,9 +782,8 @@ export default function Students() {
             <TableRow className="bg-table-header hover:bg-table-header">
               <TableHead>Student ID</TableHead>
               <TableHead>Name</TableHead>
-              <TableHead>Grade</TableHead>
+              <TableHead>Year</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Block</TableHead>
               <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -837,7 +830,6 @@ export default function Students() {
                   <TableCell className="text-muted-foreground">
                     {student.email || "-"}
                   </TableCell>
-                  <TableCell>{student.section || "-"}</TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
                       <Button
@@ -913,7 +905,7 @@ export default function Students() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="grade">Grade *</Label>
+              <Label htmlFor="grade">Year *</Label>
               <Input
                 id="grade"
                 value={newStudent.grade}
@@ -934,26 +926,6 @@ export default function Students() {
                 }
                 placeholder="john@example.com"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="section">Block</Label>
-              <select
-                id="section"
-                value={newStudent.section}
-                onChange={(e) =>
-                  setNewStudent({ ...newStudent, section: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Select a block...</option>
-                {Array.from({ length: 26 }, (_, i) =>
-                  String.fromCharCode(65 + i),
-                ).map((letter) => (
-                  <option key={letter} value={letter}>
-                    {letter}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
           <DialogFooter>
@@ -1018,7 +990,7 @@ export default function Students() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit_grade">Grade *</Label>
+              <Label htmlFor="edit_grade">Year *</Label>
               <Input
                 id="edit_grade"
                 value={editStudent.grade}
@@ -1039,26 +1011,6 @@ export default function Students() {
                 }
                 placeholder="john@example.com"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit_section">Block *</Label>
-              <select
-                id="edit_section"
-                value={editStudent.section}
-                onChange={(e) =>
-                  setEditStudent({ ...editStudent, section: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Select a block...</option>
-                {Array.from({ length: 26 }, (_, i) =>
-                  String.fromCharCode(65 + i),
-                ).map((letter) => (
-                  <option key={letter} value={letter}>
-                    {letter}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
           <DialogFooter>
@@ -1093,9 +1045,8 @@ export default function Students() {
                 <TableRow className="bg-table-header">
                   <TableHead>Student ID</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>Grade</TableHead>
+                  <TableHead>Year</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Block</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1116,7 +1067,6 @@ export default function Students() {
                     <TableCell className="text-muted-foreground">
                       {student.email || "-"}
                     </TableCell>
-                    <TableCell>{student.section || "-"}</TableCell>
                   </TableRow>
                   );
                 })}

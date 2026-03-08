@@ -362,10 +362,10 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-3xl font-bold text-foreground truncate">
+          <h1 className="text-xl sm:text-3xl font-bold text-foreground break-words">
             {exam.title}
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground truncate">
+          <p className="text-xs sm:text-sm text-muted-foreground break-words">
             {exam.examCode || "No exam code"}
           </p>
         </div>

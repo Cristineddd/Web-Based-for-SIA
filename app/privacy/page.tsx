@@ -1,11 +1,27 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function PrivacyPolicyPage() {
+  const router = useRouter();
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+        </div>
         <div>
           <h1 className="text-3xl font-bold text-foreground">Privacy Policy</h1>
           <p className="text-muted-foreground mt-2">

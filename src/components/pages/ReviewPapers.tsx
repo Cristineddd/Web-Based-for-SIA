@@ -516,7 +516,7 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
                     {/* Desktop View */}
                     <div className="hidden md:grid md:grid-cols-12 gap-2 items-center">
                       <div className="col-span-2 font-mono text-sm">{paper.studentId}</div>
-                      <div className="col-span-3 font-medium truncate">{paper.studentName}</div>
+                      <div className="col-span-3 font-medium break-words">{paper.studentName}</div>
                       <div className="col-span-2">
                         <span className="font-semibold">{paper.score}</span>
                         <span className="text-muted-foreground">/{paper.totalQuestions}</span>

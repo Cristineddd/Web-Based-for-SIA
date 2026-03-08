@@ -314,7 +314,7 @@ export default function Dashboard() {
               <CardContent className="p-4 md:p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#166534] truncate">{stat.title}</p>
+                    <p className="text-sm font-medium text-[#166534] break-words">{stat.title}</p>
                     <p className="text-2xl md:text-3xl font-bold mt-2 text-[#166534] font-mono tabular-nums">
                       {loading ? '-' : stat.value}
                     </p>
@@ -402,8 +402,8 @@ export default function Dashboard() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm md:text-base text-[#166534] truncate">{exam.title}</p>
-                        <p className="text-xs md:text-sm text-[#B38B00] truncate">{exam.subject}</p>
+                        <p className="font-medium text-sm md:text-base text-[#166534] break-words">{exam.title}</p>
+                        <p className="text-xs md:text-sm text-[#B38B00] break-words">{exam.subject}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-xs md:text-sm font-medium text-[#166534]">{exam.num_items} items</p>

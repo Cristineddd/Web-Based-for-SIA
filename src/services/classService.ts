@@ -27,8 +27,8 @@ export interface Class {
   id: string;
   class_name: string;
   course_subject: string;
-  section_block: string;
-  room: string;
+  year?: string; // Optional year field
+  room?: string;
   semester?: string;
   school_year?: string;
   students: Student[];
@@ -141,7 +141,7 @@ export async function getClasses(userId?: string): Promise<Class[]> {
         id: doc.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
-        section_block: data.section_block,
+        year: data.year,
         room: data.room,
         students: data.students || [],
         created_at: data.created_at || (data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()),
@@ -180,7 +180,7 @@ export async function getClassById(classId: string): Promise<Class | null> {
         id: docSnap.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
-        section_block: data.section_block,
+        year: data.year,
         room: data.room,
         students: data.students || [],
         created_at: data.created_at || (data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()),
