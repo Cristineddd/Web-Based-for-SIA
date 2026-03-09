@@ -61,7 +61,7 @@ export default function About() {
       <section className="bg-gradient-to-b from-primary/5 to-background py-12 sm:py-16 md:py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4 sm:mb-6">
-            About SIA
+            About GC SMART CHECK
           </h1>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8">
             Smart Exam Checking & Auto-Grading System

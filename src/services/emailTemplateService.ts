@@ -175,7 +175,7 @@ export function studentScoreEmail(data: StudentScoreEmailData): string {
 export function studentScoreText(data: StudentScoreEmailData): string {
   const status = data.percentage >= data.passingThreshold ? 'PASSED' : 'FAILED';
   return [
-    `${GC_FULL_NAME} — ${GC_SYSTEM_NAME}`,
+    GC_SYSTEM_NAME,
     '',
     `Dear ${data.studentName},`,
     '',

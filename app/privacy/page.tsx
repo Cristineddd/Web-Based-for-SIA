@@ -36,7 +36,7 @@ export default function PrivacyPolicyPage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p>
-                SIA (Smart Exam Checking & Auto-Grading System) is committed to protecting your privacy.
+                GC SMART CHECK is committed to protecting your privacy.
                 This Privacy Policy explains how we collect, use, disclose, and safeguard your information
                 when you visit our website and use our services.
               </p>
