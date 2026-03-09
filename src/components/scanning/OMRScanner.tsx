@@ -4,17 +4,15 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
-  Camera, 
   ArrowLeft,
-  RotateCcw,
   X,
   Loader2,
   AlertCircle,
   AlertTriangle,
   CheckCircle,
-  Scan,
   Save,
-  User
+  User,
+  Camera
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -25,8 +23,6 @@ import { ScanningService } from '@/services/scanningService';
 import { getClassById, getClasses, Class, Student } from '@/services/classService';
 import { toast } from 'sonner';
 import { AnswerChoice } from '@/types/scanning';
-import { DuplicateScoreMatch } from '@/services/duplicateScoreDetectionService';
-import { DuplicateScoreOverrideDialog } from '@/components/modals/DuplicateScoreOverrideDialog';
 
 interface OMRScannerProps {
   examId: string;
@@ -48,13 +44,17 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const processingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const scanCanvasRef = useRef<HTMLCanvasElement>(null);
+  const autoScanTimerRef = useRef<number | null>(null);
+  const isAutoCapturingRef = useRef(false);
+  const streamRef = useRef<MediaStream | null>(null);
   
   // State
   const [exam, setExam] = useState<Exam | null>(null);
   const [answerKey, setAnswerKey] = useState<AnswerChoice[]>([]);
   const [classData, setClassData] = useState<Class | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<'camera' | 'processing' | 'review' | 'results'>('camera');
+  const [mode, setMode] = useState<'camera' | 'processing' | 'results'>('camera');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [, setProcessing] = useState(false);
@@ -67,12 +67,16 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   const [studentIdError, setStudentIdError] = useState<string | null>(null);
   const [multipleAnswerQuestions, setMultipleAnswerQuestions] = useState<number[]>([]);
   const [idDoubleShadeColumns, setIdDoubleShadeColumns] = useState<number[]>([]);
+  const [rawIdDigits, setRawIdDigits] = useState<number[]>([]); // Raw digit array (-1 = unshaded)
   const [debugInfo, setDebugInfo] = useState<string>('');
-  const [duplicateWarning, setDuplicateWarning] = useState<{
-    message: string;
-    match: DuplicateScoreMatch;
-  } | null>(null);
-  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
+  const [markersDetected, setMarkersDetected] = useState(false);
+  const [stabilizationProgress, setStabilizationProgress] = useState(0); // 0-100%
+  const [alignmentError, setAlignmentError] = useState<string | null>(null);
+
+  // Keep streamRef in sync with stream state
+  useEffect(() => {
+    streamRef.current = stream;
+  }, [stream]);
 
   // Load exam data
   useEffect(() => {
@@ -103,7 +107,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               const allClasses = await getClasses(user.id);
               const matchedClass = allClasses.find(c => 
                 c.class_name === examData.className || 
-                `${c.class_name} - ${c.section_block}` === examData.className
+                `${c.class_name}${c.year ? ` - ${c.year}` : ''}` === examData.className
               );
               if (matchedClass) {
                 setClassData(matchedClass);
@@ -131,9 +135,12 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     }
   }, [loading, exam]);
 
-  // Cleanup camera on unmount
+  // Cleanup camera and auto-scan on unmount
   useEffect(() => {
     return () => {
+      if (autoScanTimerRef.current) {
+        cancelAnimationFrame(autoScanTimerRef.current);
+      }
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
@@ -195,6 +202,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
   // Stop camera and go back to exam page
   const stopCamera = () => {
+    if (autoScanTimerRef.current) {
+      cancelAnimationFrame(autoScanTimerRef.current);
+      autoScanTimerRef.current = null;
+    }
+    isAutoCapturingRef.current = false;
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
@@ -228,15 +240,17 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     return { x, y, w: guideW, h: guideH };
   };
 
-  // Capture photo from camera — cropped to the guide frame
-  const capturePhoto = () => {
+  // Capture photo from camera — cropped to the guide frame, then auto-process
+  const captureAndProcess = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
+    if (isAutoCapturingRef.current) return; // prevent double-capture
+    isAutoCapturingRef.current = true;
     
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     
-    if (!ctx) return;
+    if (!ctx) { isAutoCapturingRef.current = false; return; }
     
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -255,17 +269,380 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     // Draw only the cropped region
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
     
-    console.log(`[Capture] Video: ${vw}x${vh}, Crop: x=${sx} y=${sy} w=${sw} h=${sh} (template=${getTemplateType()})`);
+    console.log(`[AutoCapture] Video: ${vw}x${vh}, Crop: x=${sx} y=${sy} w=${sw} h=${sh} (template=${getTemplateType()})`);
     
     const imageData = canvas.toDataURL('image/png');
     setCapturedImage(imageData);
-    setMode('review');
     
-    // Stop camera after capture
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+    // Stop camera after capture — use streamRef for latest value
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
       setStream(null);
     }
+    
+    // Go directly to processing (skip review)
+    setMode('processing');
+  }, [exam]); // removed stream dependency — use ref instead
+
+  // ── Lightweight marker detection for live video frames ──
+  // Runs on a downscaled version of the guide-frame crop.
+  // Returns true if 4 dark squares are found in approximately the right positions.
+  const detectMarkersInFrame = useCallback((): boolean => {
+    if (!videoRef.current || !scanCanvasRef.current) return false;
+    
+    const video = videoRef.current;
+    if (video.readyState < 2) return false; // HAVE_CURRENT_DATA
+    if (video.videoWidth === 0 || video.videoHeight === 0) return false;
+    
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const crop = getGuideCropRegion(vw, vh);
+    
+    const scanCanvas = scanCanvasRef.current;
+    const ctx = scanCanvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return false;
+    
+    // Use ~320px wide for better detection accuracy
+    const targetW = 320;
+    const scale = targetW / (crop.w * vw);
+    const dw = Math.round(crop.w * vw * scale);
+    const dh = Math.round(crop.h * vh * scale);
+    
+    scanCanvas.width = dw;
+    scanCanvas.height = dh;
+    
+    ctx.drawImage(
+      video,
+      Math.round(crop.x * vw), Math.round(crop.y * vh),
+      Math.round(crop.w * vw), Math.round(crop.h * vh),
+      0, 0, dw, dh
+    );
+    
+    const imgData = ctx.getImageData(0, 0, dw, dh);
+    const pixels = imgData.data;
+    
+    // Convert to grayscale
+    const gray = new Uint8Array(dw * dh);
+    for (let i = 0; i < dw * dh; i++) {
+      const idx = i * 4;
+      gray[i] = Math.round(pixels[idx] * 0.299 + pixels[idx + 1] * 0.587 + pixels[idx + 2] * 0.114);
+    }
+    
+    // Marker is ~3.3% of paper width → ~10px at 320px wide
+    const markerSize = Math.max(6, Math.round(dw * 0.035));
+    const half = Math.floor(markerSize / 2);
+    const step = Math.max(2, Math.floor(markerSize / 3));
+    
+    const avgBrightness = (x1: number, y1: number, x2: number, y2: number): number => {
+      x1 = Math.max(0, Math.floor(x1));
+      y1 = Math.max(0, Math.floor(y1));
+      x2 = Math.min(dw, Math.floor(x2));
+      y2 = Math.min(dh, Math.floor(y2));
+      if (x2 <= x1 || y2 <= y1) return 255;
+      let sum = 0, count = 0;
+      for (let py = y1; py < y2; py += 2) {
+        for (let px = x1; px < x2; px += 2) {
+          sum += gray[py * dw + px];
+          count++;
+        }
+      }
+      return count > 0 ? sum / count : 255;
+    };
+    
+    // Define search regions for each corner.
+    // For rotated sheets (up to ~30°), markers may shift from their expected positions.
+    // Expand search regions to accommodate rotation.
+    // For 100-item: bottom markers are at ~75% of page height, not at the page bottom.
+    // The guide frame crops the full page, so bottom markers are at ~75% of frame height.
+    const t = getTemplateType();
+    // Increase margin for rotated sheets - markers can shift horizontally
+    const margin = Math.round(dw * 0.30); // 30% of width for horizontal search (increased from 20%)
+    const topH = Math.round(dh * 0.30);   // top 30% for top markers (increased from 20%)
+    
+    // Bottom markers: for 100-item, they're at ~75% down (markers at Y=222 on 297mm page)
+    // Search from 50% to 95% of frame height for 100-item, bottom 40% for others
+    const botY1 = t === 100 ? Math.round(dh * 0.50) : Math.round(dh * 0.60);
+    const botY2 = t === 100 ? Math.round(dh * 0.95) : dh;
+    
+    const cornerRegions = [
+      { name: 'TL', x1: 0, y1: 0, x2: margin, y2: topH },
+      { name: 'TR', x1: dw - margin, y1: 0, x2: dw, y2: topH },
+      { name: 'BL', x1: 0, y1: botY1, x2: margin, y2: botY2 },
+      { name: 'BR', x1: dw - margin, y1: botY1, x2: dw, y2: botY2 },
+    ];
+    
+    let cornersFound = 0;
+    const foundCorners: string[] = [];
+    
+    for (const region of cornerRegions) {
+      let found = false;
+      for (let cy = region.y1 + half + 1; cy < region.y2 - half - 1 && !found; cy += step) {
+        for (let cx = region.x1 + half + 1; cx < region.x2 - half - 1 && !found; cx += step) {
+          // Check if this spot is dark (potential marker)
+          const inner = avgBrightness(cx - half, cy - half, cx + half, cy + half);
+          if (inner > 100) continue; // relaxed from 90
+          
+          // Check surrounding brightness (should be paper = bright)
+          const ring = Math.max(half + 2, Math.floor(half * 1.8));
+          const topB = avgBrightness(cx - ring, Math.max(0, cy - ring), cx + ring, cy - half);
+          const botB = avgBrightness(cx - ring, cy + half, cx + ring, Math.min(dh, cy + ring));
+          const leftB = avgBrightness(Math.max(0, cx - ring), cy - half, cx - half, cy + half);
+          const rightB = avgBrightness(cx + half, cy - half, Math.min(dw, cx + ring), cy + half);
+          
+          // At least 2 of 4 sides must be bright (paper)
+          const brightCount = (topB > 130 ? 1 : 0) + (botB > 130 ? 1 : 0) + 
+                              (leftB > 130 ? 1 : 0) + (rightB > 130 ? 1 : 0);
+          if (brightCount < 2) continue;
+          
+          const borderAvg = (topB + botB + leftB + rightB) / 4;
+          if (borderAvg - inner > 40) { // relaxed from 50
+            found = true;
+          }
+        }
+      }
+      if (found) {
+        cornersFound++;
+        foundCorners.push(region.name);
+      }
+    }
+    
+    // Log periodically for debugging (every ~2 seconds at 6fps)
+    if (Math.random() < 0.08) {
+      console.log(`[LiveScan] ${dw}x${dh} markerSize=${markerSize} found=${foundCorners.join(',')||'none'} (${cornersFound}/4)`);
+    }
+    
+    return cornersFound >= 4;
+  }, [exam]);
+
+  // ── Auto-scan loop: continuously check for markers in the video feed ──
+  // For 100-item templates, we only detect markers but don't auto-capture (manual button instead)
+  useEffect(() => {
+    if (mode !== 'camera' || !stream || !exam) return;
+    
+    const templateType = getTemplateType();
+    const isManualCapture = templateType === 100; // 100-item uses manual capture button
+    
+    let frameCount = 0;
+    let consecutiveDetections = 0;
+    // Need ~12-18 consecutive detections to trigger capture (2-3 seconds at 6fps)
+    // This gives users time to stabilize their phone before auto-capture
+    const REQUIRED_CONSECUTIVE = 15; // ~2.5 seconds of stable marker detection
+    let cancelled = false;
+    
+    const scanLoop = () => {
+      if (cancelled || isAutoCapturingRef.current) return;
+      
+      frameCount++;
+      // Only scan every 5th frame (~6fps at 30fps video) to save CPU
+      if (frameCount % 5 === 0) {
+        const detected = detectMarkersInFrame();
+        
+        if (detected) {
+          consecutiveDetections++;
+          setMarkersDetected(true);
+          
+          // For manual capture mode (100-item), just show that markers are detected
+          // For auto-capture mode (20/50-item), track stabilization and auto-capture
+          if (isManualCapture) {
+            // Keep markers detected state but don't auto-capture
+            setStabilizationProgress(100); // Show as ready
+          } else {
+            // Update stabilization progress (0-100%)
+            const progress = Math.min(100, Math.round((consecutiveDetections / REQUIRED_CONSECUTIVE) * 100));
+            setStabilizationProgress(progress);
+            
+            if (consecutiveDetections >= REQUIRED_CONSECUTIVE) {
+              console.log(`[AutoScan] Markers stable for ${(consecutiveDetections / 6).toFixed(1)}s — capturing!`);
+              captureAndProcess();
+              return; // stop the loop
+            }
+          }
+        } else {
+          consecutiveDetections = 0;
+          setMarkersDetected(false);
+          setStabilizationProgress(0);
+        }
+      }
+      
+      autoScanTimerRef.current = requestAnimationFrame(scanLoop);
+    };
+    
+    // Start scanning after a brief delay to let the camera stabilize
+    const startDelay = setTimeout(() => {
+      autoScanTimerRef.current = requestAnimationFrame(scanLoop);
+    }, 1000);
+    
+    return () => {
+      cancelled = true;
+      clearTimeout(startDelay);
+      if (autoScanTimerRef.current) {
+        cancelAnimationFrame(autoScanTimerRef.current);
+        autoScanTimerRef.current = null;
+      }
+      setMarkersDetected(false);
+      setStabilizationProgress(0);
+    };
+  }, [mode, stream, exam, detectMarkersInFrame, captureAndProcess]);
+
+  // ─── SKEW DETECTION AND CORRECTION ───
+  // Detects rotation angle up to ±30° and corrects it using Hough-like line detection
+  // on the edges of the paper/markers.
+  const detectSkewAngle = (grayscale: Uint8Array, width: number, height: number): number => {
+    // Use Sobel edge detection to find strong horizontal/vertical edges
+    // Then accumulate angles in a histogram to find dominant angle
+    
+    const angleHist = new Float32Array(121); // -30 to +30 degrees in 0.5° steps
+    const centerAngle = 60; // Index 60 = 0 degrees
+    
+    // Sample a grid of points and measure local edge direction
+    const step = Math.max(4, Math.floor(Math.min(width, height) / 100));
+    
+    for (let y = step; y < height - step; y += step) {
+      for (let x = step; x < width - step; x += step) {
+        // Sobel gradients
+        const gx = 
+          -grayscale[(y - 1) * width + (x - 1)] - 2 * grayscale[y * width + (x - 1)] - grayscale[(y + 1) * width + (x - 1)] +
+          grayscale[(y - 1) * width + (x + 1)] + 2 * grayscale[y * width + (x + 1)] + grayscale[(y + 1) * width + (x + 1)];
+        
+        const gy = 
+          -grayscale[(y - 1) * width + (x - 1)] - 2 * grayscale[(y - 1) * width + x] - grayscale[(y - 1) * width + (x + 1)] +
+          grayscale[(y + 1) * width + (x - 1)] + 2 * grayscale[(y + 1) * width + x] + grayscale[(y + 1) * width + (x + 1)];
+        
+        const magnitude = Math.sqrt(gx * gx + gy * gy);
+        
+        // Only consider strong edges
+        if (magnitude < 50) continue;
+        
+        // Calculate angle in degrees (-90 to +90)
+        let angle = Math.atan2(gy, gx) * 180 / Math.PI;
+        
+        // We're interested in angles close to 0 (horizontal) or 90 (vertical)
+        // which correspond to paper edges. Normalize to -30 to +30 range.
+        // Horizontal edges: angle ≈ 90 or -90 → paper rotation
+        // Vertical edges: angle ≈ 0 or 180 → paper rotation
+        
+        // For horizontal edges (gy dominant): rotation = angle - 90 (or + 90)
+        // For vertical edges (gx dominant): rotation = angle
+        
+        let rotation: number;
+        if (Math.abs(gx) > Math.abs(gy)) {
+          // Vertical edge - angle should be near 0 or ±180
+          rotation = angle;
+          if (rotation > 90) rotation -= 180;
+          if (rotation < -90) rotation += 180;
+        } else {
+          // Horizontal edge - angle should be near ±90
+          rotation = angle > 0 ? angle - 90 : angle + 90;
+        }
+        
+        // Clamp to ±30° range
+        if (rotation < -30 || rotation > 30) continue;
+        
+        // Add to histogram with weighted magnitude
+        const histIdx = Math.round((rotation + 30) * 2); // -30 → 0, 0 → 60, +30 → 120
+        if (histIdx >= 0 && histIdx < 121) {
+          angleHist[histIdx] += magnitude;
+        }
+      }
+    }
+    
+    // Find the peak in the histogram (with smoothing)
+    let maxVal = 0;
+    let maxIdx = centerAngle;
+    
+    for (let i = 2; i < 119; i++) {
+      // Gaussian smoothing kernel
+      const smoothed = angleHist[i - 2] * 0.1 + angleHist[i - 1] * 0.2 + 
+                       angleHist[i] * 0.4 + angleHist[i + 1] * 0.2 + angleHist[i + 2] * 0.1;
+      if (smoothed > maxVal) {
+        maxVal = smoothed;
+        maxIdx = i;
+      }
+    }
+    
+    const detectedAngle = (maxIdx - centerAngle) / 2; // Convert back to degrees
+    
+    // Only return angle if there's significant evidence
+    const totalVotes = angleHist.reduce((a, b) => a + b, 0);
+    const peakStrength = maxVal / (totalVotes || 1);
+    
+    console.log(`[Skew] Detected angle: ${detectedAngle.toFixed(1)}° (peak strength: ${(peakStrength * 100).toFixed(1)}%)`);
+    
+    // If peak is weak, don't rotate
+    if (peakStrength < 0.05) {
+      return 0;
+    }
+    
+    // If angle is very small (< 1°), skip rotation
+    if (Math.abs(detectedAngle) < 1) {
+      return 0;
+    }
+    
+    return detectedAngle;
+  };
+
+  // Rotate canvas by the given angle (in degrees)
+  const rotateCanvas = (srcCanvas: HTMLCanvasElement, angle: number): HTMLCanvasElement => {
+    if (Math.abs(angle) < 0.5) return srcCanvas;
+    
+    const ctx = srcCanvas.getContext('2d');
+    if (!ctx) return srcCanvas;
+    
+    const w = srcCanvas.width;
+    const h = srcCanvas.height;
+    const rad = angle * Math.PI / 180;
+    
+    // Calculate new canvas size to fit rotated image
+    const cos = Math.abs(Math.cos(rad));
+    const sin = Math.abs(Math.sin(rad));
+    const newW = Math.ceil(w * cos + h * sin);
+    const newH = Math.ceil(w * sin + h * cos);
+    
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = newW;
+    outCanvas.height = newH;
+    const outCtx = outCanvas.getContext('2d');
+    if (!outCtx) return srcCanvas;
+    
+    // Fill with white (paper color) to avoid black edges
+    outCtx.fillStyle = '#FFFFFF';
+    outCtx.fillRect(0, 0, newW, newH);
+    
+    // Translate to center, rotate, then draw
+    outCtx.translate(newW / 2, newH / 2);
+    outCtx.rotate(-rad); // Negative to correct the skew
+    outCtx.drawImage(srcCanvas, -w / 2, -h / 2);
+    
+    console.log(`[Skew] Rotated image by ${(-angle).toFixed(1)}° (${w}x${h} → ${newW}x${newH})`);
+    
+    return outCanvas;
+  };
+
+  // Apply skew correction to an image
+  const correctSkew = (srcCanvas: HTMLCanvasElement): HTMLCanvasElement => {
+    const ctx = srcCanvas.getContext('2d');
+    if (!ctx) return srcCanvas;
+    
+    const w = srcCanvas.width;
+    const h = srcCanvas.height;
+    
+    // Convert to grayscale for skew detection
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const grayscale = new Uint8Array(w * h);
+    for (let i = 0; i < imgData.data.length; i += 4) {
+      grayscale[i / 4] = Math.round(
+        0.299 * imgData.data[i] + 0.587 * imgData.data[i + 1] + 0.114 * imgData.data[i + 2]
+      );
+    }
+    
+    const angle = detectSkewAngle(grayscale, w, h);
+    
+    if (Math.abs(angle) < 1) {
+      console.log('[Skew] No significant skew detected');
+      return srcCanvas;
+    }
+    
+    return rotateCanvas(srcCanvas, angle);
   };
 
   // ─── IMAGE ENHANCEMENT: Adaptive brightness (no perspective warp) ───
@@ -354,6 +731,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     
     setProcessing(true);
     setMode('processing');
+    setAlignmentError(null); // Reset alignment error
     
     try {
       // Create an image element
@@ -375,10 +753,13 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
       
-      // Apply adaptive brightness enhancement (handles shadows / uneven lighting)
-      // No perspective warp — the 4-corner marker system handles skew implicitly
+      // Step 1: Apply skew correction (handles rotated sheets up to ±30°)
+      console.log('[Preprocess] Starting skew correction...');
+      const deskewedCanvas = correctSkew(canvas);
+      
+      // Step 2: Apply adaptive brightness enhancement (handles shadows / uneven lighting)
       console.log('[Enhance] Starting image enhancement...');
-      const enhancedCanvas = enhanceImage(canvas);
+      const enhancedCanvas = enhanceImage(deskewedCanvas);
       
       // Update the displayed image with the enhanced version
       setCapturedImage(enhancedCanvas.toDataURL('image/png'));
@@ -391,7 +772,25 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       console.log(`[OMR] Processing enhanced image: ${imageData.width}x${imageData.height}`);
       
       // Process the image to detect filled bubbles
-      const { studentId, answers, multipleAnswers, idDoubleShades, debugMarkers } = await detectBubbles(imageData, exam.num_items, exam.choices_per_item);
+      const { studentId, answers, multipleAnswers, idDoubleShades, rawIdDigits: detectedRawIdDigits, debugMarkers, markersFound, markerConfidence } = await detectBubbles(imageData, exam.num_items, exam.choices_per_item);
+      
+      // Check for alignment issues based on marker detection quality
+      if (!markersFound || markerConfidence < 0.5) {
+        // Marker detection failed or is unreliable
+        const missingMarkers = !markersFound;
+        const lowConfidence = markerConfidence < 0.5;
+        
+        let alignmentMsg = 'Sheet alignment error. ';
+        if (missingMarkers) {
+          alignmentMsg += 'Could not detect all 4 corner markers. ';
+        } else if (lowConfidence) {
+          alignmentMsg += 'Corner markers were partially obscured or unclear. ';
+        }
+        alignmentMsg += 'Please ensure the answer sheet is flat, well-lit, and all 4 corner markers are visible. Retake the photo.';
+        
+        setAlignmentError(alignmentMsg);
+        console.log(`[OMR] Alignment error: markersFound=${markersFound} confidence=${markerConfidence?.toFixed(2)}`);
+      }
       
       // Build debug info string for UI display
       const dbgLines: string[] = [];
@@ -404,6 +803,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const fw = Math.round(debugMarkers.topRight.x - debugMarkers.topLeft.x);
         const fh2 = Math.round(debugMarkers.bottomLeft.y - debugMarkers.topLeft.y);
         dbgLines.push(`Frame: ${fw}×${fh2}`);
+        if (markerConfidence !== undefined) {
+          dbgLines.push(`Conf: ${(markerConfidence * 100).toFixed(0)}%`);
+        }
         // Show first ID bubble pixel position for verification
         const layout = getTemplateLayout(exam.num_items);
         const firstIdPx = mapToPixel(debugMarkers, layout.id.firstColNX, layout.id.firstRowNY);
@@ -470,8 +872,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
           // Draw ID bubble sample positions as blue dots with column/row annotations
           // This lets us verify the grid is properly aligned with the ID bubbles
+          // We use 9 columns for 9-digit student IDs
           const layout = getTemplateLayout(exam.num_items);
-          for (let col = 0; col < 10; col++) {
+          for (let col = 0; col < 9; col++) {
             for (let row = 0; row < 10; row++) {
               const nx = layout.id.firstColNX + col * layout.id.colSpacingNX;
               const ny = layout.id.firstRowNY + row * layout.id.rowSpacingNY;
@@ -514,15 +917,30 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       setDetectedAnswers(answers);
       setMultipleAnswerQuestions(multipleAnswers);
       setIdDoubleShadeColumns(idDoubleShades);
+      setRawIdDigits(detectedRawIdDigits || []); // Store raw digit array for UI display
       
       // Validate student ID against class roster
+      // Consider alignment errors when classifying ID detection issues
       let idError: string | null = null;
       let matched: Student | null = null;
       
+      // If there's an alignment error and ID detection issues, prioritize the alignment message
+      const hasAlignmentIssue = !markersFound || markerConfidence < 0.5;
+      
       if (idDoubleShades.length > 0) {
-        idError = `Student ID has multiple bubbles shaded in column(s): ${idDoubleShades.join(', ')}. Each column must have only one bubble shaded. Please ask the student to correct their answer sheet or manually edit the ID below.`;
+        // Check if this might be caused by alignment issues
+        if (hasAlignmentIssue) {
+          // Don't set idError - let alignment error take precedence
+          // The alignment error message is more helpful
+        } else {
+          idError = `Student ID has multiple bubbles shaded in column(s): ${idDoubleShades.join(', ')}. Each column must have only one bubble shaded. Please ask the student to correct their answer sheet or manually edit the ID below.`;
+        }
       } else if (!studentId || /^0+$/.test(studentId)) {
-        idError = 'No Student ID was detected. Please check if the student properly shaded their ID bubbles.';
+        if (hasAlignmentIssue) {
+          // Alignment issue is likely the cause - don't duplicate the message
+        } else {
+          idError = 'No Student ID was detected. Please check if the student properly shaded their ID bubbles.';
+        }
       } else if (!classData) {
         idError = 'No class is linked to this exam. Please go to exam settings and assign a class before scanning.';
       } else {
@@ -530,7 +948,12 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         if (student) {
           matched = student;
         } else {
-          idError = `Student ID "${studentId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`;
+          // If alignment is poor but ID was detected, warn that the ID might be misread
+          if (hasAlignmentIssue) {
+            idError = `Student ID "${studentId}" may have been misread due to alignment issues. The ID is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Try retaking the photo with better alignment.`;
+          } else {
+            idError = `Student ID "${studentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`;
+          }
         }
       }
       
@@ -566,11 +989,20 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     } catch (error) {
       console.error('Error processing image:', error);
       toast.error('Failed to process image. Please try again with a clearer image.');
-      setMode('review');
+      isAutoCapturingRef.current = false;
+      setMode('camera');
+      startCamera();
     } finally {
       setProcessing(false);
     }
   }, [capturedImage, exam, answerKey, classData]);
+
+  // Auto-trigger processImage when mode is 'processing' and capturedImage is ready
+  useEffect(() => {
+    if (mode === 'processing' && capturedImage && exam) {
+      processImage();
+    }
+  }, [mode, capturedImage, exam, processImage]);
 
   // ─── CORNER MARKER DETECTION ───
   // Finds the 4 black alignment squares printed at the corners of every answer sheet.
@@ -578,19 +1010,25 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   // CHALLENGE: The paper may not fill the entire image — there can be dark desk/background
   // around the paper edges. The detector must find markers ON THE PAPER, not at image edges.
   //
+  // IMPORTANT FOR 100-ITEM: The bottom markers are at ~75% of page height (Y=222 on 297mm page),
+  // NOT at the page bottom. The marker frame aspect ratio is 197/215.5 ≈ 0.91 (wider than tall).
+  //
   // STRATEGY:
   //   1. Scan the ENTIRE image for dark, uniform, square-shaped regions
   //   2. Require bright PAPER background around each candidate (rejects desk edges/shadows)
   //   3. Collect ALL good candidates across the whole image
   //   4. Pick the 4 candidates that form the best axis-aligned rectangle
   //      (top-left-most, top-right-most, bottom-left-most, bottom-right-most)
+  //   5. For 100-item templates, prefer rectangles where bottom markers are at ~75% of image height
   const findCornerMarkers = (
     _binary: Uint8Array,
     width: number,
     height: number,
-    grayscale?: Uint8Array
+    grayscale?: Uint8Array,
+    templateType?: 20 | 50 | 100
   ): {
     found: boolean;
+    confidence: number;
     topLeft: { x: number; y: number };
     topRight: { x: number; y: number };
     bottomLeft: { x: number; y: number };
@@ -599,6 +1037,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     if (!grayscale) {
       return {
         found: false,
+        confidence: 0,
         topLeft: { x: width * 0.05, y: height * 0.05 },
         topRight: { x: width * 0.95, y: height * 0.05 },
         bottomLeft: { x: width * 0.05, y: height * 0.95 },
@@ -741,6 +1180,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       console.log('[OMR] Not enough candidates, using fallback positions');
       return {
         found: false,
+        confidence: merged.length / 4, // 0-0.75 if some markers found
         topLeft: { x: width * 0.1, y: height * 0.05 },
         topRight: { x: width * 0.9, y: height * 0.05 },
         bottomLeft: { x: width * 0.1, y: height * 0.85 },
@@ -748,8 +1188,40 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       };
     }
 
+    // For 100-item templates, pre-filter candidates to those near edges
+    // This removes false positives from section markers (■) inside the sheet
+    let filteredCandidates = merged;
+    if (templateType === 100) {
+      // For 100-item, the paper fills most of the image
+      // True corner markers should be in the outer 35% of image width/height
+      // (allowing for some paper rotation/offset)
+      const edgeMarginX = width * 0.35;
+      const edgeMarginY = height * 0.35;
+      
+      filteredCandidates = merged.filter(c => {
+        const nearLeftEdge = c.x < edgeMarginX;
+        const nearRightEdge = c.x > width - edgeMarginX;
+        const nearTopEdge = c.y < edgeMarginY;
+        const nearBottomEdge = c.y > height - edgeMarginY;
+        
+        // Must be near at least one horizontal AND one vertical edge
+        const nearHorizontalEdge = nearLeftEdge || nearRightEdge;
+        const nearVerticalEdge = nearTopEdge || nearBottomEdge;
+        
+        return nearHorizontalEdge && nearVerticalEdge;
+      });
+      
+      console.log(`[OMR] 100-item edge filter: ${merged.length} → ${filteredCandidates.length} candidates`);
+      
+      // If edge filtering removed too many, fall back to all candidates
+      if (filteredCandidates.length < 4) {
+        console.log('[OMR] Edge filter too aggressive, using all candidates');
+        filteredCandidates = merged;
+      }
+    }
+
     // Try all combinations of 4 candidates (limit to top 12 to keep it fast)
-    const topN = merged.slice(0, 12);
+    const topN = filteredCandidates.slice(0, 12);
     let bestCombo: { tl: MarkerCandidate; tr: MarkerCandidate; bl: MarkerCandidate; br: MarkerCandidate } | null = null;
     let bestRectScore = 0;
 
@@ -785,24 +1257,81 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             const hRatio = Math.min(leftH, rightH) / Math.max(leftH, rightH);
             if (wRatio < 0.85 || hRatio < 0.85) continue;
             
-            // Aspect ratio should match paper (roughly 0.7-1.5 for various templates)
+            // Aspect ratio check - varies by template type
+            // 100-item: marker frame is 197mm wide x 215.5mm tall → aspect ≈ 0.91
+            // 20/50-item: marker frame is more square-ish
             const avgW = (topW + botW) / 2;
             const avgH = (leftH + rightH) / 2;
             const aspect = avgW / avgH;
-            if (aspect < 0.4 || aspect > 2.0) continue;
+            
+            // For 100-item, the marker frame aspect ratio is ~0.91 (fw/fh = 197/215.5)
+            // Enforce stricter aspect ratio for 100-item templates
+            if (templateType === 100) {
+              // 100-item should have aspect ratio 0.7-1.1 (allowing for rotation/perspective)
+              if (aspect < 0.7 || aspect > 1.1) continue;
+            } else {
+              // Other templates: allow wider range
+              if (aspect < 0.4 || aspect > 2.0) continue;
+            }
             
             // Left edges should be roughly aligned (TL.x ≈ BL.x)
             const leftXDiff = Math.abs(tl.x - bl.x) / avgW;
             const rightXDiff = Math.abs(tr.x - br.x) / avgW;
             const topYDiff = Math.abs(tl.y - tr.y) / avgH;
             const botYDiff = Math.abs(bl.y - br.y) / avgH;
-            if (leftXDiff > 0.08 || rightXDiff > 0.08 || topYDiff > 0.08 || botYDiff > 0.08) continue;
+            // Allow more skew tolerance (up to 15% instead of 8%)
+            if (leftXDiff > 0.15 || rightXDiff > 0.15 || topYDiff > 0.15 || botYDiff > 0.15) continue;
             
             // Score: product of individual marker scores × rectangle quality
             const rectQuality = wRatio * hRatio;
-            // Prefer larger rectangles (actual markers span a large area of the paper)
+            
+            // For 100-item templates, add aspect ratio bonus - prefer rectangles closer to expected 0.91
+            let aspectBonus = 1.0;
+            if (templateType === 100) {
+              // Target aspect is 0.91, penalize deviation
+              const expectedAspect = 0.91;
+              const aspectDiff = Math.abs(aspect - expectedAspect);
+              aspectBonus = Math.max(0.5, 1.0 - aspectDiff); // Penalty increases with distance from 0.91
+            }
+            
+            // For 100-item templates, check if bottom markers are at approximately
+            // the right position (should be around 70-80% down from top markers if paper fills most of frame)
+            // The key insight: bottom markers should NOT be at the image bottom
+            let positionBonus = 1.0;
+            if (templateType === 100) {
+              // Check if bottom markers are in the expected vertical range
+              // If paper fills frame, bottom markers should be at ~75% of image height
+              // But if there's background below, they could be higher
+              const bottomY = (bl.y + br.y) / 2;
+              const topY = (tl.y + tr.y) / 2;
+              const markerFrameHeight = bottomY - topY;
+              
+              // For 100-item, the marker frame should be taller than wide (aspect ~0.91)
+              // If the frame height is less than ~60% of image height, likely wrong markers
+              const frameHeightRatio = markerFrameHeight / height;
+              
+              // Bottom markers should be in the range 50-90% of image height
+              // (They can't be at the very bottom because there's page content below)
+              const bottomYRatio = bottomY / height;
+              
+              // Prefer rectangles where:
+              // 1. Bottom markers are NOT at the very bottom of the image (< 95%)
+              // 2. The frame height is at least 40% of the image
+              if (bottomYRatio > 0.95) {
+                positionBonus = 0.3; // Penalize if bottom markers are at image edge
+              } else if (bottomYRatio < 0.50) {
+                positionBonus = 0.5; // Penalize if bottom markers are too high
+              } else if (frameHeightRatio < 0.35) {
+                positionBonus = 0.4; // Penalize very small frames
+              } else {
+                // Good position - bonus based on how close to expected
+                positionBonus = 1.0 + (frameHeightRatio * 0.5); // Prefer larger frames
+              }
+            }
+            
+            // Prefer larger rectangles but with position bonus and aspect bonus for 100-item
             const areaBonus = avgW * avgH / (width * height);
-            const totalScore = (tl.score + tr.score + bl.score + br.score) * rectQuality * areaBonus;
+            const totalScore = (tl.score + tr.score + bl.score + br.score) * rectQuality * areaBonus * positionBonus * aspectBonus;
             
             if (totalScore > bestRectScore) {
               bestRectScore = totalScore;
@@ -852,8 +1381,26 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
       console.log(`[OMR] Selected rectangle: TL=(${Math.round(tl.x)},${Math.round(tl.y)}) TR=(${Math.round(tr.x)},${Math.round(tr.y)}) BL=(${Math.round(bl.x)},${Math.round(bl.y)}) BR=(${Math.round(br.x)},${Math.round(br.y)}) rectScore=${bestRectScore.toFixed(0)}`);
 
+      // Calculate confidence based on rectangle quality and individual marker scores
+      // Normalize score: typical good score is 5000-20000, max out at ~1.0
+      const avgMarkerScore = (bestCombo.tl.score + bestCombo.tr.score + bestCombo.bl.score + bestCombo.br.score) / 4;
+      const normalizedMarkerScore = Math.min(1, avgMarkerScore / 200);
+      
+      // Check rectangle quality metrics
+      const topW = tr.x - tl.x;
+      const botW = br.x - bl.x;
+      const leftH = bl.y - tl.y;
+      const rightH = br.y - tr.y;
+      const wRatio = Math.min(topW, botW) / Math.max(topW, botW);
+      const hRatio = Math.min(leftH, rightH) / Math.max(leftH, rightH);
+      const rectQuality = wRatio * hRatio;
+      
+      const confidence = Math.min(1, normalizedMarkerScore * rectQuality * 1.2);
+      console.log(`[OMR] Marker confidence: ${(confidence * 100).toFixed(1)}% (markerScore=${avgMarkerScore.toFixed(0)}, rectQuality=${rectQuality.toFixed(2)})`);
+
       return {
         found: true,
+        confidence,
         topLeft: tl,
         topRight: tr,
         bottomLeft: bl,
@@ -878,6 +1425,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     return {
       found: false,
+      confidence: 0.3, // Low confidence for fallback
       topLeft: pickClosest(0, 0),
       topRight: pickClosest(width, 0),
       bottomLeft: pickClosest(0, height),
@@ -1149,6 +1697,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     answers: string[];
     multipleAnswers: number[];
     idDoubleShades: number[];
+    rawIdDigits: number[]; // Array of detected digits per column (-1 = unshaded)
+    markersFound: boolean;
+    markerConfidence: number;
     debugMarkers?: {
       topLeft: { x: number; y: number };
       topRight: { x: number; y: number };
@@ -1187,14 +1738,18 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     // 2. Find corner alignment markers using RAW grayscale (before contrast normalization)
     // This avoids shadows/noise being amplified into false marker candidates
     const dummyBinary = new Uint8Array(0); // not used by new marker detector
-    const markers = findCornerMarkers(dummyBinary, width, height, rawGrayscale);
+    
+    // Determine template type BEFORE finding markers (needed for position heuristics)
+    const templateType = numQuestions <= 20 ? 20 : numQuestions <= 50 ? 50 : 100;
+    
+    const markers = findCornerMarkers(dummyBinary, width, height, rawGrayscale, templateType);
     console.log('[OMR] Corner markers found:', markers.found,
       'TL:', Math.round(markers.topLeft.x), Math.round(markers.topLeft.y),
-      'BR:', Math.round(markers.bottomRight.x), Math.round(markers.bottomRight.y));
+      'BR:', Math.round(markers.bottomRight.x), Math.round(markers.bottomRight.y),
+      'Template:', templateType);
 
     // 3. Use found markers (even if geometry check failed, the positions are better than raw margins)
     // Only fall back to image-edge margins if NO markers were found at all (all scores = 0)
-    const templateType = numQuestions <= 20 ? 20 : numQuestions <= 50 ? 50 : 100;
     const fallbackMargin = templateType === 100 ? 0.04 : 0.02;
     const noMarkersAtAll = markers.topLeft.x === 0 && markers.topLeft.y === 0;
     const effectiveMarkers = noMarkersAtAll
@@ -1215,12 +1770,21 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const layout = getTemplateLayout(numQuestions);
 
     // 5. Detect student ID and answers using GRAYSCALE for bubble sampling
-    const { studentId, doubleShadeColumns } = detectStudentIdFromImage(grayscale, width, height, effectiveMarkers, layout);
+    const { studentId, doubleShadeColumns, rawIdDigits } = detectStudentIdFromImage(grayscale, width, height, effectiveMarkers, layout);
     const { answers, multipleAnswers } = detectAnswersFromImage(
       grayscale, width, height, effectiveMarkers, layout, numQuestions, choicesPerQuestion
     );
 
-    return { studentId, answers, multipleAnswers, idDoubleShades: doubleShadeColumns, debugMarkers: effectiveMarkers };
+    return { 
+      studentId, 
+      answers, 
+      multipleAnswers, 
+      idDoubleShades: doubleShadeColumns,
+      rawIdDigits, // Include raw digit array for UI display
+      markersFound: markers.found,
+      markerConfidence: noMarkersAtAll ? 0 : markers.confidence,
+      debugMarkers: effectiveMarkers 
+    };
   };
 
   // ─── BUBBLE SAMPLING (grayscale-based) ───
@@ -1277,7 +1841,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
   // ─── DETECT STUDENT ID ───
   // sampleBubbleAt returns RAW BRIGHTNESS (0-255): lower = darker = filled.
-  // For each ID column (10 digits 0-9), we find the DARKEST bubble.
+  // For each ID column (9 columns, digits 0-9), we find the DARKEST bubble.
   // Detection uses a robust approach:
   //   1. The darkest must be significantly darker than the MEDIAN of all 10 bubbles
   //   2. We use the gap between darkest and 2nd-darkest as additional confidence
@@ -1292,7 +1856,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       bottomRight: { x: number; y: number };
     },
     layout: TemplateLayout
-  ): { studentId: string; doubleShadeColumns: number[] } => {
+  ): { studentId: string; doubleShadeColumns: number[]; rawIdDigits: number[] } => {
     const { id } = layout;
     const idDigits: number[] = [];
     const doubleShadeColumns: number[] = [];
@@ -1310,14 +1874,15 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     // Log the pixel position of the first and last ID bubbles for visual verification
     const firstIdPx = mapToPixel(markers, id.firstColNX, id.firstRowNY);
-    const lastIdPx = mapToPixel(markers, id.firstColNX + 9 * id.colSpacingNX, id.firstRowNY + 9 * id.rowSpacingNY);
+    const lastIdPx = mapToPixel(markers, id.firstColNX + 8 * id.colSpacingNX, id.firstRowNY + 9 * id.rowSpacingNY);
     console.log(`[ID] First bubble px=(${Math.round(firstIdPx.px)},${Math.round(firstIdPx.py)}), Last bubble px=(${Math.round(lastIdPx.px)},${Math.round(lastIdPx.py)})`);
     console.log(`[ID] Frame: TL=(${Math.round(markers.topLeft.x)},${Math.round(markers.topLeft.y)}) BR=(${Math.round(markers.bottomRight.x)},${Math.round(markers.bottomRight.y)}) size=${Math.round(frameW)}x${Math.round(frameH)}`);
 
+    // Process 9 columns for 9-digit student IDs
     for (let col = 0; col < 9; col++) {
       const fills: number[] = []; // raw brightness values (lower = darker)
 
-      for (let row = 0; row < 9; row++) {
+      for (let row = 0; row < 10; row++) {
         const nx = id.firstColNX + col * id.colSpacingNX;
         const ny = id.firstRowNY + row * id.rowSpacingNY;
         const { px, py } = mapToPixel(markers, nx, ny);
@@ -1333,45 +1898,65 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       // This is more robust than median — unfilled bubbles should be bright
       const upperQ = sorted[7];
 
-      let detectedDigit = 0;
+      let detectedDigit: number | null = null; // null means no detection (unshaded column)
       let hasDetection = false;
 
-      // Detection criteria:
-      // 1. The darkest bubble must be < 65% of the upper quartile brightness (35%+ drop)
+      // Detection criteria (calibrated to 70% threshold):
+      // 1. The darkest bubble must be < 70% of the upper quartile brightness (30%+ drop)
+      //    This is stricter to avoid false positives from noise/dots
       // 2. OR: the gap between darkest and 2nd-darkest must be > 15% of upper quartile
-      //    AND darkest < 80% of upper quartile
+      //    AND darkest < 85% of upper quartile (clear separation indicates intentional mark)
       const darkRatio = upperQ > 20 ? darkest / upperQ : 1;
       const gapFromSecond = secondDark - darkest;
       const gapRatio = upperQ > 20 ? gapFromSecond / upperQ : 0;
 
-      if (darkRatio < 0.65) {
+      // Primary detection: darkest must be significantly darker than unfilled (30% drop = 70% threshold)
+      if (darkRatio < 0.70) {
         // Strong detection: darkest is much darker than unfilled
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
-      } else if (darkRatio < 0.80 && gapRatio > 0.12) {
+      } else if (darkRatio < 0.85 && gapRatio > 0.15) {
         // Moderate detection: darkest is somewhat dark AND clearly separated from 2nd
+        // Requires stronger gap (15% instead of 12%) to avoid light mark false positives
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
       }
 
-      if (hasDetection) {
+      if (hasDetection && detectedDigit !== null) {
         // Check for double-shade: is the 2nd-darkest ALSO significantly dark?
         const secondRatio = upperQ > 20 ? secondDark / upperQ : 1;
         const gapBetweenTopTwo = upperQ > 20 ? gapFromSecond / upperQ : 1;
         // Double shade if 2nd is also quite dark AND close to the darkest
-        if (secondRatio < 0.70 && gapBetweenTopTwo < 0.08) {
+        if (secondRatio < 0.75 && gapBetweenTopTwo < 0.08) {
           doubleShadeColumns.push(col + 1);
           console.log(`[ID] ⚠️ Col ${col} DOUBLE SHADE: darkest=${darkest.toFixed(0)} 2nd=${secondDark.toFixed(0)} upperQ=${upperQ.toFixed(0)}`);
+          // Mark as double-shade (-2) so it is excluded from cleanId and shown as '?' in UI
+          idDigits.push(-2);
+          continue;
         }
       }
 
-      console.log(`[ID] Col ${col}: brightness=[${fills.map(f => f.toFixed(0)).join(',')}] → ${hasDetection ? detectedDigit : '?'} (darkest=${darkest.toFixed(0)} upperQ=${upperQ.toFixed(0)} ratio=${darkRatio.toFixed(2)} gap=${gapRatio.toFixed(2)})`);
-      idDigits.push(hasDetection ? detectedDigit : 0);
+      // NULL LOGIC: If no bubble is shaded, use -1 placeholder (not '0')
+      // This prevents unshaded columns from corrupting the ID (e.g., 9 digits → 10)
+      // The digit '0' should ONLY appear if the '0' bubble is actually shaded
+      const digitChar = hasDetection && detectedDigit !== null ? String(detectedDigit) : '_';
+      
+      console.log(`[ID] Col ${col}: brightness=[${fills.map(f => f.toFixed(0)).join(',')}] → ${digitChar} (darkest=${darkest.toFixed(0)} upperQ=${upperQ.toFixed(0)} ratio=${darkRatio.toFixed(2)} gap=${gapRatio.toFixed(2)})`);
+      idDigits.push(hasDetection && detectedDigit !== null ? detectedDigit : -1); // -1 = unshaded, -2 = double-shade
     }
 
-    const raw = idDigits.join('');
-    console.log('[ID] Raw digits:', raw, doubleShadeColumns.length > 0 ? `(double-shade: cols ${doubleShadeColumns.join(',')})` : '');
-    return { studentId: raw, doubleShadeColumns };
+    // Convert digits to string, using '_' for unshaded (-1) and '?' for double-shade (-2)
+    // Then strip placeholders and return only the cleanly detected digits
+    const rawWithPlaceholders = idDigits.map(d => d === -1 ? '_' : d === -2 ? '?' : String(d)).join('');
+    
+    // For the final ID, exclude both unshaded (-1) and double-shaded (-2) columns
+    const cleanId = idDigits.filter(d => d >= 0).map(d => String(d)).join('');
+    
+    console.log('[ID] Raw with placeholders:', rawWithPlaceholders);
+    console.log('[ID] Clean ID:', cleanId, cleanId.length, 'digits', doubleShadeColumns.length > 0 ? `(double-shade: cols ${doubleShadeColumns.join(',')})` : '');
+    
+    // Return both the clean ID and the raw digit array for UI display
+    return { studentId: cleanId, doubleShadeColumns, rawIdDigits: idDigits };
   };
 
   // ─── DETECT ANSWERS ───
@@ -1437,11 +2022,14 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const gapFromSecond = secondDark - darkest;
         const gapRatio = ref > 20 ? gapFromSecond / ref : 0;
 
-        // Detection: darkest must be < 70% of brightest (30%+ drop)
-        // OR: darkest < 85% of brightest AND clear gap from 2nd
+        // Detection with 70% threshold (calibrated to avoid false positives from noise):
+        // Primary: darkest must be < 70% of brightest (30%+ drop) - clear intentional mark
+        // Secondary: darkest < 85% of brightest AND strong gap from 2nd (15%+)
+        //            This catches lighter but intentional marks that stand out
         if (darkRatio < 0.70) {
           selectedChoice = sorted[0].choice;
-        } else if (darkRatio < 0.85 && gapRatio > 0.10) {
+        } else if (darkRatio < 0.85 && gapRatio > 0.15) {
+          // Stricter gap requirement (was 0.10) to distinguish from noise
           selectedChoice = sorted[0].choice;
         }
 
@@ -1449,8 +2037,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         if (selectedChoice) {
           const secondRatio = ref > 20 ? secondDark / ref : 1;
           const gapBetweenTopTwo = ref > 20 ? gapFromSecond / ref : 1;
-          // Multiple answers: 2nd darkest is also quite dark AND close to darkest
-          if (secondRatio < 0.72 && gapBetweenTopTwo < 0.06) {
+          // Multiple answers: 2nd darkest is also quite dark (<75%) AND close to darkest (<8% gap)
+          // Stricter thresholds to reduce false positives from background noise
+          if (secondRatio < 0.75 && gapBetweenTopTwo < 0.08) {
             multipleAnswers.push(q);
             console.log(`[MULTI] Q${q}: ${sorted.slice(0, 3).map(f => `${f.choice}=${f.brightness.toFixed(0)}`).join(', ')} ref=${ref.toFixed(0)}`);
           }
@@ -1511,8 +2100,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     const student = classData.students.find(s => s.student_id === detectedStudentId);
     if (!student) {
-      toast.error(`Cannot save: Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.section_block}".`);
-      setStudentIdError(`Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class.`);
+      toast.error(`Cannot save: Student ID "${detectedStudentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}".`);
+      setStudentIdError(`Student ID "${detectedStudentId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class.`);
       return;
     }
     
@@ -1533,7 +2122,6 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       if (result.success) {
         toast.success('Scan saved successfully!');
         setRecentScans(prev => [scanResult, ...prev.slice(0, 9)]);
-        setDuplicateWarning(null);
         
         // Reset for next scan
         setScanResult(null);
@@ -1543,17 +2131,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         setStudentIdError(null);
         setMultipleAnswerQuestions([]);
         setIdDoubleShadeColumns([]);
+        setAlignmentError(null);
         setCapturedImage(null);
+        isAutoCapturingRef.current = false;
         setMode('camera');
         startCamera();
-      } else if (result.is_duplicate && result.duplicate_match) {
-        // Show duplicate override dialog with full match details
-        setDuplicateWarning({
-          message: result.error || 'Duplicate score detected.',
-          match: result.duplicate_match,
-        });
-        setShowOverrideDialog(true);
-        toast.error('Duplicate score detected – this student already has a score for this exam.');
       } else {
         toast.error(result.error || 'Failed to save scan');
       }
@@ -1565,59 +2147,35 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     }
   };
 
-  // Override duplicate and save anyway (faculty action)
-  // Called from the DuplicateScoreOverrideDialog with a reason
-  const saveScanResultWithOverride = async (overrideReason: string) => {
-    if (!scanResult || !user || !exam) return;
-
-    console.log(`[OMRScanner] Faculty override by ${user.id}, reason: ${overrideReason}`);
-    setSaving(true);
-    try {
-      const isNullId = !detectedStudentId || detectedStudentId === '0000000000';
-
-      const result = await ScanningService.saveScannedResult(
-        examId,
-        detectedStudentId || `NULL_${Date.now()}`,
-        detectedAnswers as AnswerChoice[],
-        answerKey,
-        user.id,
-        isNullId,
-        exam.choicePoints,
-        true // forceOverride
-      );
-
-      if (result.success) {
-        toast.success('Duplicate overridden — new score saved successfully.');
-        setRecentScans((prev) => [scanResult, ...prev.slice(0, 9)]);
-        setShowOverrideDialog(false);
-        setDuplicateWarning(null);
-
-        // Reset for next scan
-        setScanResult(null);
-        setDetectedAnswers([]);
-        setDetectedStudentId('');
-        setMatchedStudent(null);
+  // Edit a single digit in the Student ID digit boxes
+  const editIdDigit = (colIndex: number, newValue: string) => {
+    // Only allow 0-9 or empty
+    if (newValue !== '' && !/^[0-9]$/.test(newValue)) return;
+    const newDigits = [...rawIdDigits];
+    newDigits[colIndex] = newValue === '' ? -1 : parseInt(newValue, 10);
+    setRawIdDigits(newDigits);
+    // Clear double-shade flag for this column
+    setIdDoubleShadeColumns(prev => prev.filter(c => c !== colIndex + 1));
+    // Rebuild the detectedStudentId from the updated digits
+    const newId = newDigits.filter(d => d >= 0).map(d => String(d)).join('');
+    setDetectedStudentId(newId);
+    // Re-validate
+    if (!newId || /^0+$/.test(newId)) {
+      setStudentIdError('No Student ID provided. Please enter a valid Student ID.');
+      setMatchedStudent(null);
+    } else if (!classData) {
+      setStudentIdError('No class is linked to this exam.');
+      setMatchedStudent(null);
+    } else {
+      const student = classData.students.find(s => s.student_id === newId);
+      if (student) {
+        setMatchedStudent(student);
         setStudentIdError(null);
-        setMultipleAnswerQuestions([]);
-        setIdDoubleShadeColumns([]);
-        setCapturedImage(null);
-        setMode('camera');
-        startCamera();
       } else {
-        toast.error(result.error || 'Failed to save override');
+        setMatchedStudent(null);
+        setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
       }
-    } catch (error) {
-      console.error('Error overriding duplicate:', error);
-      toast.error('Failed to override duplicate scan');
-    } finally {
-      setSaving(false);
     }
-  };
-
-  // Cancel duplicate override (dismiss dialog without saving)
-  const cancelDuplicateOverride = () => {
-    setShowOverrideDialog(false);
-    setDuplicateWarning(null);
   };
 
   // Edit detected answer
@@ -1704,24 +2262,6 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
   return (
     <div className="space-y-6">
-      {/* Exam Code Warning Banner */}
-      {exam.examCode && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-            <div>
-              <p className="font-semibold text-amber-900">
-                Expected Exam Code: <span className="font-mono bg-amber-100 px-2 py-0.5 rounded">{exam.examCode}</span>
-              </p>
-              <p className="text-sm text-amber-700 mt-1">
-                Make sure the answer sheets you&apos;re scanning have this code printed on them. 
-                Scanning sheets from a different exam will result in incorrect scores.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -1770,21 +2310,40 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                   : t === 50
                   ? { width: '55%', aspectRatio: '105 / 297' }     // tall narrow
                   : { width: '90%', aspectRatio: '210 / 297' };    // A4 portrait — tight fit to minimize background
-                const label = t === 20
-                  ? 'Align answer sheet within the frame'
-                  : t === 50
-                  ? `Align ${t}-item sheet within the frame`
-                  : 'Fill the frame with the paper — edges close to border';
+                const borderColor = markersDetected ? 'border-green-400' : 'border-white/60';
+                const cornerColor = markersDetected ? 'border-green-400' : 'border-white';
+                const isManualCapture = t === 100; // 100-item uses manual capture
+                // Show different labels based on template type and marker detection
+                const label = isManualCapture
+                  ? markersDetected
+                    ? '✓ Ready — tap Capture below'
+                    : 'Align sheet and tap Capture when ready'
+                  : markersDetected
+                    ? stabilizationProgress >= 100
+                      ? '✓ Capturing now...'
+                      : `Hold steady... ${stabilizationProgress}%`
+                    : t === 20
+                    ? 'Align answer sheet within the frame'
+                    : `Align ${t}-item sheet within the frame`;
                 return (
                   <div className="relative" style={guideStyle}>
-                    <div className="absolute inset-0 border-2 border-white/60 rounded-lg" />
+                    <div className={`absolute inset-0 border-2 ${borderColor} rounded-lg transition-colors duration-200`} />
                     {/* Corner brackets */}
-                    <div className="absolute top-1 left-1 w-6 h-6 border-t-2 border-l-2 border-white rounded-tl" />
-                    <div className="absolute top-1 right-1 w-6 h-6 border-t-2 border-r-2 border-white rounded-tr" />
-                    <div className="absolute bottom-1 left-1 w-6 h-6 border-b-2 border-l-2 border-white rounded-bl" />
-                    <div className="absolute bottom-1 right-1 w-6 h-6 border-b-2 border-r-2 border-white rounded-br" />
+                    <div className={`absolute top-1 left-1 w-6 h-6 border-t-2 border-l-2 ${cornerColor} rounded-tl transition-colors duration-200`} />
+                    <div className={`absolute top-1 right-1 w-6 h-6 border-t-2 border-r-2 ${cornerColor} rounded-tr transition-colors duration-200`} />
+                    <div className={`absolute bottom-1 left-1 w-6 h-6 border-b-2 border-l-2 ${cornerColor} rounded-bl transition-colors duration-200`} />
+                    <div className={`absolute bottom-1 right-1 w-6 h-6 border-b-2 border-r-2 ${cornerColor} rounded-br transition-colors duration-200`} />
+                    {/* Stabilization progress bar when markers detected (only for auto-capture modes) */}
+                    {!isManualCapture && markersDetected && stabilizationProgress < 100 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30 rounded-b-lg overflow-hidden">
+                        <div 
+                          className="h-full bg-green-400 transition-all duration-150"
+                          style={{ width: `${stabilizationProgress}%` }}
+                        />
+                      </div>
+                    )}
                     {/* Label */}
-                    <p className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-white text-xs bg-black/60 px-3 py-1.5 rounded-full">
+                    <p className={`absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-white text-xs ${markersDetected ? 'bg-green-600/80' : 'bg-black/60'} px-3 py-1.5 rounded-full transition-colors duration-200`}>
                       {label}
                     </p>
                   </div>
@@ -1792,41 +2351,21 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               })()}
             </div>
           </div>
-          <div className="p-4 flex justify-center gap-4">
+          <div className="p-4 flex justify-center gap-3">
+            {/* Capture button for 100-item (manual capture) */}
+            {getTemplateType() === 100 && (
+              <Button 
+                onClick={captureAndProcess}
+                disabled={!markersDetected}
+                className={`${markersDetected ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
+              >
+                <Camera className="w-4 h-4 mr-2" />
+                Capture
+              </Button>
+            )}
             <Button variant="outline" onClick={stopCamera}>
               <X className="w-4 h-4 mr-2" />
               Cancel
-            </Button>
-            <Button onClick={capturePhoto} className="bg-[#1a472a] hover:bg-[#2d6b47]">
-              <Camera className="w-4 h-4 mr-2" />
-              Capture
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* Mode: Review */}
-      {mode === 'review' && capturedImage && (
-        <Card className="overflow-hidden">
-          <div className="relative bg-gray-100">
-            <img 
-              src={capturedImage} 
-              alt="Captured answer sheet"
-              className="w-full max-h-[60vh] object-contain mx-auto"
-            />
-          </div>
-          <div className="p-4 flex justify-center gap-4">
-            <Button variant="outline" onClick={() => {
-              setCapturedImage(null);
-              setMode('camera');
-              startCamera();
-            }}>
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Retake
-            </Button>
-            <Button onClick={processImage} className="bg-[#1a472a] hover:bg-[#2d6b47]">
-              <Scan className="w-4 h-4 mr-2" />
-              Process & Grade
             </Button>
           </div>
         </Card>
@@ -1867,6 +2406,45 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                   alt="Debug overlay"
                   className="w-full max-h-[50vh] object-contain mx-auto"
                 />
+              </div>
+            </Card>
+          )}
+
+          {/* Sheet Alignment Error - CRITICAL */}
+          {alignmentError && (
+            <Card className="p-4 border-red-400 bg-red-100">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-6 h-6 text-red-700 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="font-bold text-red-900">Sheet Alignment Error</h4>
+                  <p className="text-sm text-red-800 mt-1">{alignmentError}</p>
+                  <div className="mt-3 flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="border-red-400 text-red-700 hover:bg-red-200"
+                      onClick={() => {
+                        setScanResult(null);
+                        setDetectedAnswers([]);
+                        setDetectedStudentId('');
+                        setMatchedStudent(null);
+                        setStudentIdError(null);
+                        setMultipleAnswerQuestions([]);
+                        setIdDoubleShadeColumns([]);
+                        setCapturedImage(null);
+                        setAlignmentError(null);
+                        isAutoCapturingRef.current = false;
+                        setMode('camera');
+                        startCamera();
+                      }}
+                    >
+                      Retake Photo
+                    </Button>
+                  </div>
+                  <p className="text-xs text-red-600 mt-3">
+                    <strong>Tips:</strong> Ensure all 4 black corner markers are visible • Hold the camera steady • Avoid shadows on the paper • Keep the sheet flat
+                  </p>
+                </div>
               </div>
             </Card>
           )}
@@ -1926,27 +2504,28 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           )}
 
           {/* Score Summary */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                  (studentIdError || idDoubleShadeColumns.length > 0) ? 'bg-red-100' : matchedStudent ? 'bg-green-100' : 'bg-gray-100'
-                }`}>
-                  <User className={`w-8 h-8 ${
-                    (studentIdError || idDoubleShadeColumns.length > 0) ? 'text-red-600' : matchedStudent ? 'text-green-600' : 'text-gray-600'
-                  }`} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
+          <Card className="p-4 sm:p-6">
+            <div className="flex flex-col gap-4">
+              {/* Top row: student info + grade */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    (studentIdError || idDoubleShadeColumns.length > 0) ? 'bg-red-100' : matchedStudent ? 'bg-green-100' : 'bg-gray-100'
+                  }`}>
+                    <User className={`w-6 h-6 ${
+                      (studentIdError || idDoubleShadeColumns.length > 0) ? 'text-red-600' : matchedStudent ? 'text-green-600' : 'text-gray-600'
+                    }`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5">Student ID</p>
                     <input
                       type="text"
                       value={detectedStudentId}
                       onChange={(e) => {
                         const newId = e.target.value;
                         setDetectedStudentId(newId);
-                        // Clear double-shade error when user manually edits
                         setIdDoubleShadeColumns([]);
-                        // Re-validate student ID on change
+                        setRawIdDigits([]);
                         if (!newId || /^0+$/.test(newId)) {
                           setStudentIdError('No Student ID provided. Please enter a valid Student ID.');
                           setMatchedStudent(null);
@@ -1960,37 +2539,93 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                             setStudentIdError(null);
                           } else {
                             setMatchedStudent(null);
-                            setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
+                            setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name}${classData.year ? ` - ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
                           }
                         }
                       }}
-                      className={`text-xl font-bold bg-transparent border-b transition-colors focus:outline-none ${
+                      className={`text-lg font-bold bg-transparent border-b-2 transition-colors focus:outline-none w-full max-w-[180px] ${
                         (studentIdError || idDoubleShadeColumns.length > 0)
-                          ? 'text-red-700 border-red-300 hover:border-red-400 focus:border-red-500'
+                          ? 'text-red-700 border-red-300 focus:border-red-500'
                           : 'text-gray-900 border-transparent hover:border-gray-300 focus:border-[#1a472a]'
                       }`}
                       placeholder="Enter Student ID"
                     />
                     {matchedStudent && (
-                      <span className="text-sm text-green-600 bg-green-100 px-2 py-1 rounded">
+                      <p className="text-xs text-green-700 font-medium mt-0.5 break-words">
                         {matchedStudent.first_name} {matchedStudent.last_name}
-                      </span>
+                      </p>
                     )}
                   </div>
-                  <p className="text-gray-600">Student ID</p>
-                  {debugInfo && (
-                    <p className="text-xs text-gray-400 mt-1 font-mono break-all">{debugInfo}</p>
-                  )}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className={`inline-block px-3 py-1.5 rounded-lg text-2xl font-bold ${getGradeColor(scanResult.letterGrade)}`}>
+                    {scanResult.letterGrade}
+                  </div>
+                  <p className="text-gray-600 text-sm mt-1">
+                    {scanResult.score}/{scanResult.totalQuestions} ({scanResult.percentage}%)
+                  </p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className={`inline-block px-4 py-2 rounded-lg text-2xl font-bold ${getGradeColor(scanResult.letterGrade)}`}>
-                  {scanResult.letterGrade}
+
+              {/* Digit boxes: editable, one per column */}
+              {rawIdDigits.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Scanned ID Columns — tap a box to correct it:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rawIdDigits.map((digit, idx) => {
+                      const isUnshaded = digit === -1;
+                      const hasDoubleShade = digit === -2;
+                      return (
+                        <div key={idx} className="flex flex-col items-center gap-0.5">
+                          <span className="text-[10px] text-gray-400">{idx + 1}</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={1}
+                            value={hasDoubleShade || isUnshaded ? '' : String(digit)}
+                            placeholder={hasDoubleShade ? '?' : '–'}
+                            onChange={(e) => editIdDigit(idx, e.target.value)}
+                            className={`w-8 h-9 text-center text-sm font-bold rounded border-2 focus:outline-none focus:ring-2 transition-colors ${
+                              hasDoubleShade
+                                ? 'border-yellow-500 bg-yellow-100 text-yellow-700 placeholder-yellow-500 focus:ring-yellow-300'
+                                : isUnshaded
+                                  ? 'border-gray-300 bg-gray-100 text-gray-400 placeholder-gray-400 focus:ring-gray-300'
+                                  : 'border-green-500 bg-green-50 text-green-700 focus:ring-green-300'
+                            }`}
+                            title={
+                              hasDoubleShade
+                                ? `Column ${idx + 1}: Multiple bubbles — tap to fix`
+                                : isUnshaded
+                                  ? `Column ${idx + 1}: No bubble shaded — tap to fill`
+                                  : `Column ${idx + 1}: Digit ${digit}`
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded border-2 border-green-500 bg-green-50" />
+                      Detected
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded border-2 border-yellow-500 bg-yellow-100" />
+                      Double-shaded
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 rounded border-2 border-gray-300 bg-gray-100" />
+                      Unshaded
+                    </span>
+                  </div>
                 </div>
-                <p className="text-gray-600 mt-1">
-                  {scanResult.score}/{scanResult.totalQuestions} ({scanResult.percentage}%)
-                </p>
-              </div>
+              )}
+
+              {debugInfo && (
+                <p className="text-xs text-gray-400 font-mono break-all">{debugInfo}</p>
+              )}
             </div>
           </Card>
 
@@ -2097,69 +2732,24 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-red-100 border-2 border-red-500 rounded" />
-                <span className="text-gray-600">Incorrect (correct answer shown below)</span>
+                <span className="text-gray-600">Incorrect</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-gray-100 border-2 border-gray-300 rounded" />
+                <span className="text-gray-600">No answer detected</span>
               </div>
               {multipleAnswerQuestions.length > 0 && (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 bg-yellow-100 border-2 border-yellow-500 rounded relative">
                     <AlertTriangle className="absolute -top-1 -right-1 w-3 h-3 text-yellow-600" />
                   </div>
-                  <span className="text-yellow-700">Multiple answers detected</span>
+                  <span className="text-yellow-700">Multiple answers</span>
                 </div>
               )}
             </div>
           </Card>
 
-          <div className="flex justify-center gap-4 flex-wrap">
-
-            {/* Duplicate Warning Inline Banner (summary) */}
-            {duplicateWarning && (
-              <div className="w-full mb-2">
-                <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 space-y-3">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-semibold text-amber-800">Duplicate Score Detected</p>
-                      <p className="text-sm text-amber-700 mt-1">
-                        This student already has a recorded score for this exam:
-                        <span className="font-bold"> {duplicateWarning.match.existingScore}/{duplicateWarning.match.existingMaxScore} ({duplicateWarning.match.existingPercentage}%)</span>.
-                      </p>
-                      <p className="text-sm text-amber-700 mt-1">
-                        You can override the existing score or discard this scan.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={cancelDuplicateOverride}
-                    >
-                      Discard
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="bg-amber-600 hover:bg-amber-700 text-white"
-                      onClick={() => setShowOverrideDialog(true)}
-                    >
-                      Override Duplicate
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Duplicate Score Override Dialog (modal with reason input) */}
-            <DuplicateScoreOverrideDialog
-              open={showOverrideDialog}
-              duplicateMatch={duplicateWarning?.match ?? null}
-              newScore={scanResult?.score ?? 0}
-              newMaxScore={scanResult?.totalQuestions ?? 0}
-              onOverride={saveScanResultWithOverride}
-              onCancel={cancelDuplicateOverride}
-              isLoading={saving}
-            />
-
+          <div className="flex justify-center gap-4">
             <Button variant="outline" onClick={() => {
               setScanResult(null);
               setDetectedAnswers([]);
@@ -2168,7 +2758,10 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               setStudentIdError(null);
               setMultipleAnswerQuestions([]);
               setIdDoubleShadeColumns([]);
+              setRawIdDigits([]); // Clear raw ID digit display
+              setAlignmentError(null);
               setCapturedImage(null);
+              isAutoCapturingRef.current = false;
               setMode('camera');
               startCamera();
             }}>
@@ -2232,6 +2825,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       {/* Hidden canvases for processing */}
       <canvas ref={canvasRef} className="hidden" />
       <canvas ref={processingCanvasRef} className="hidden" />
+      <canvas ref={scanCanvasRef} className="hidden" />
     </div>
   );
 }

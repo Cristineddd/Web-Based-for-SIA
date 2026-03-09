@@ -433,7 +433,7 @@ export default function ReportHistory() {
                       <div>
                         <p className="font-medium text-foreground text-sm">{entry.title}</p>
                         {entry.description && (
-                          <p className="text-xs text-muted-foreground truncate max-w-[200px]">{entry.description}</p>
+                          <p className="text-xs text-muted-foreground break-words">{entry.description}</p>
                         )}
                         {entry.examTitle && (
                           <p className="text-xs text-muted-foreground">{entry.examTitle}</p>

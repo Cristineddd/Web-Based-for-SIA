@@ -68,6 +68,7 @@ interface Template {
   className?: string;
   examId?: string;
   examName?: string;
+  examCode?: string;
   createdAt: string;
   updatedAt?: string;
   updatedBy?: string;
@@ -351,8 +352,7 @@ export default function Templates() {
         choicesPerQuestion: template.choicesPerQuestion,
         examName: template.examName,
         className: template.className,
-        institutionName: branding?.institutionName,
-        logoUrl: branding?.logoUrl,
+        examCode: template.examCode, // Include exam code on template
       });
       toast.success(`✅ Downloaded ${template.name}`);
     } catch (error) {
@@ -470,12 +470,13 @@ export default function Templates() {
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
             Answer Sheet Templates
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             View and manage templates generated from exams. Templates are
             created automatically when you create an exam.
           </p>
@@ -989,22 +990,21 @@ export default function Templates() {
                     <div className="absolute bottom-[4px] right-[4px] w-[5px] h-[5px] bg-black"></div>
 
                     {/* Header */}
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      {branding?.logoUrl ? (
-                        <img
-                          src={branding.logoUrl}
-                          className="w-[10px] h-[10px] object-contain"
-                          alt="logo"
-                        />
-                      ) : (
-                        <div className="w-[10px] h-[10px] bg-green-700 rounded-full flex items-center justify-center text-white text-[5px] font-bold">
-                          G
-                        </div>
-                      )}
+                    <div className="flex items-center justify-center gap-1 mb-0.5">
+                      <div className="w-[10px] h-[10px] bg-green-700 rounded-full flex items-center justify-center text-white text-[5px] font-bold">
+                        G
+                      </div>
                       <span className="text-[7px] font-bold">
-                        {branding?.institutionName || "Gordon College"}
+                        Gordon College
                       </span>
                     </div>
+
+                    {/* Exam Code */}
+                    {previewTemplate?.examCode && (
+                      <div className="text-center text-[5px] text-gray-600 mb-0.5">
+                        Exam Code: {previewTemplate.examCode}
+                      </div>
+                    )}
 
                     {/* Name/Date */}
                     <div className="flex gap-1 mb-1 text-[5px]">
@@ -1287,7 +1287,9 @@ export default function Templates() {
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
             <span>
-              Use the <strong>&quot;Reuse for New Exam&quot;</strong> button to create a new exam pre-filled with an existing template&apos;s settings
+              Use the <strong>&quot;Reuse for New Exam&quot;</strong> button to
+              create a new exam pre-filled with an existing template&apos;s
+              settings
             </span>
           </li>
         </ul>

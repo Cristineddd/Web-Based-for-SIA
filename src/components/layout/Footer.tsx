@@ -7,28 +7,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Mail, Phone, MapPin, Github, Linkedin, Twitter } from 'lucide-react';
-
-const contactInfo = [
-  {
-    icon: Mail,
-    label: 'Email',
-    value: 'support@sia-system.com',
-    href: 'mailto:support@sia-system.com',
-  },
-  {
-    icon: Phone,
-    label: 'Phone',
-    value: '+1 (555) 123-4567',
-    href: 'tel:+15551234567',
-  },
-  {
-    icon: MapPin,
-    label: 'Address',
-    value: 'Olongapo City, Philippines',
-    href: '#',
-  },
-];
+import { Github, Linkedin, Twitter } from 'lucide-react';
 
 const socialLinks = [
   {
@@ -120,13 +99,6 @@ export function Footer() {
             >
               Terms of Service
             </Link>
-            <span className="text-sidebar-foreground/30">•</span>
-            <Link
-              href="/cookies"
-              className="text-sidebar-foreground/60 hover:text-sidebar-primary transition-colors"
-            >
-              Cookie Settings
-            </Link>
           </div>
 
           {/* Version Info */}
@@ -144,6 +116,9 @@ export function Footer() {
     </footer>
   );
 }
+
+// Default export for easier importing
+export default Footer;
 
 /**
  * Minimal Footer Component (for landing pages)
@@ -187,9 +162,9 @@ export function DashboardFooter() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-border bg-card py-6 mt-12">
+    <footer className="border-t border-border bg-card py-4 mt-8">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-4">
           {/* About */}
           <div>
             <h5 className="font-semibold text-foreground mb-2 text-sm">About SIA</h5>

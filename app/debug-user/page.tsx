@@ -8,7 +8,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 export default function UserDebugPage() {
-  const { user, firebaseUser } = useAuth();
+  const { user } = useAuth();
   const [firestoreData, setFirestoreData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,8 +33,8 @@ export default function UserDebugPage() {
   }, [user?.id]);
 
   useEffect(() => {
-    console.log('🔍 USER DEBUG PAGE - User object:', user);
-    console.log('🔍 USER DEBUG PAGE - InstructorId:', user?.instructorId);
+    console.log('[DEBUG] USER DEBUG PAGE - User object:', user);
+    console.log('[DEBUG] USER DEBUG PAGE - InstructorId:', user?.instructorId);
   }, [user]);
 
   return (
@@ -45,7 +45,7 @@ export default function UserDebugPage() {
         {/* Auth Context User */}
         <Card className="p-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            🔐 Auth Context User Object
+            [AUTH] Auth Context User Object
             <Button onClick={fetchFirestoreData} size="sm" variant="outline">
               Refresh
             </Button>
@@ -77,7 +77,7 @@ export default function UserDebugPage() {
             <div className={`p-3 rounded ${user?.instructorId ? 'bg-green-50' : 'bg-red-50'}`}>
               <div className="text-sm text-gray-600">Instructor ID</div>
               <div className="font-mono text-sm font-bold">
-                {user?.instructorId || '❌ MISSING'}
+                {user?.instructorId || '[MISSING]'}
               </div>
             </div>
           </div>
@@ -85,7 +85,7 @@ export default function UserDebugPage() {
 
         {/* Firestore Data */}
         <Card className="p-6">
-          <h2 className="text-xl font-bold mb-4">🔥 Firestore User Document</h2>
+          <h2 className="text-xl font-bold mb-4">[FIRESTORE] Firestore User Document</h2>
           
           {loading ? (
             <p>Loading...</p>
@@ -103,7 +103,7 @@ export default function UserDebugPage() {
                 <div className={`p-3 rounded ${firestoreData.instructorId ? 'bg-green-50' : 'bg-red-50'}`}>
                   <div className="text-sm text-gray-600">Instructor ID (Firestore)</div>
                   <div className="font-mono text-sm font-bold">
-                    {firestoreData.instructorId || '❌ MISSING IN FIRESTORE'}
+                    {firestoreData.instructorId || '[MISSING IN FIRESTORE]'}
                   </div>
                 </div>
                 <div className="p-3 bg-purple-50 rounded">
@@ -125,33 +125,33 @@ export default function UserDebugPage() {
 
         {/* Diagnosis */}
         <Card className="p-6 border-2 border-blue-500">
-          <h2 className="text-xl font-bold mb-4">🔍 Diagnosis</h2>
+          <h2 className="text-xl font-bold mb-4">[DIAGNOSIS] Diagnosis</h2>
           
           {!user ? (
             <div className="p-4 bg-red-50 rounded">
-              <p className="text-red-800">❌ No user logged in</p>
+              <p className="text-red-800">[ERROR] No user logged in</p>
             </div>
           ) : !firestoreData?.instructorId ? (
             <div className="p-4 bg-red-50 rounded">
-              <p className="text-red-800 font-bold mb-2">❌ Instructor ID is MISSING from Firestore!</p>
+              <p className="text-red-800 font-bold mb-2">[ERROR] Instructor ID is MISSING from Firestore!</p>
               <p className="text-sm">The user document in Firestore does not have an instructorId field.</p>
               <p className="text-sm mt-2">Solution: Go to <a href="/diagnostics" className="underline text-blue-600">/diagnostics</a> and click "Fix Instructor ID"</p>
             </div>
           ) : !user.instructorId ? (
             <div className="p-4 bg-yellow-50 rounded">
-              <p className="text-yellow-800 font-bold mb-2">⚠️ Instructor ID exists in Firestore but NOT loaded in Auth Context!</p>
+              <p className="text-yellow-800 font-bold mb-2">[WARNING] Instructor ID exists in Firestore but NOT loaded in Auth Context!</p>
               <p className="text-sm">Firestore has: <code className="bg-white px-2 py-1 rounded">{firestoreData.instructorId}</code></p>
               <p className="text-sm mt-2">Solution: Log out and log back in, or clear cache at <a href="/clear-cache" className="underline text-blue-600">/clear-cache</a></p>
             </div>
           ) : user.instructorId === firestoreData.instructorId ? (
             <div className="p-4 bg-green-50 rounded">
-              <p className="text-green-800 font-bold mb-2">✅ Everything looks good!</p>
+              <p className="text-green-800 font-bold mb-2">[SUCCESS] Everything looks good!</p>
               <p className="text-sm">Instructor ID: <code className="bg-white px-2 py-1 rounded font-bold">{user.instructorId}</code></p>
               <p className="text-sm mt-2">You should be able to create classes and exams with this instructor ID.</p>
             </div>
           ) : (
             <div className="p-4 bg-red-50 rounded">
-              <p className="text-red-800 font-bold">❌ Mismatch detected!</p>
+              <p className="text-red-800 font-bold">[ERROR] Mismatch detected!</p>
               <p className="text-sm">Auth Context: {user.instructorId}</p>
               <p className="text-sm">Firestore: {firestoreData.instructorId}</p>
             </div>

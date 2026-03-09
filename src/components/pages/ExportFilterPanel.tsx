@@ -727,10 +727,10 @@ export default function ExportFilterPanel({
                       className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">
+                        <p className="text-sm font-medium text-gray-800 break-words">
                           {preset.name}
                         </p>
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">
+                        <p className="text-xs text-gray-500 mt-0.5 break-words">
                           {filterDescriptions.join(' • ') || 'No filters'}
                         </p>
                       </div>

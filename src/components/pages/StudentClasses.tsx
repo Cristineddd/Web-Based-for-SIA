@@ -36,15 +36,18 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { StudentIDService } from "@/services/studentIDService";
 import { useAuth } from "@/contexts/AuthContext";
-import { createClass, deleteClass, updateClass } from "@/services/classService";
+import {
+  createClass,
+  deleteClass,
+  updateClass,
+  getClasses,
+} from "@/services/classService";
 import { OfficialRecordService } from "@/services/officialRecordService";
 import { IDChangeLogger } from "@/services/idChangeLogger";
 import { StudentFieldValidationService } from "@/services/studentFieldValidationService";
 import { DataQualityService } from "@/services/dataQualityService";
-import { collection, getDocs, doc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AuditLogger } from "@/services/auditLogger";
-import { ValidationActionLogger } from "@/services/validationActionLogger";
 import {
   Search,
   Plus,
@@ -85,7 +88,7 @@ export default function StudentClasses() {
 
   // Debug: Log user changes
   useEffect(() => {
-    console.log("👤 User state changed in StudentClasses:");
+    console.log("[USER] User state changed in StudentClasses:");
     console.log("  - User:", user);
     console.log("  - InstructorId:", user?.instructorId);
   }, [user]);
@@ -100,6 +103,9 @@ export default function StudentClasses() {
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
+  const [roomWarning, setRoomWarning] = useState(false);
+  const [classNameWarning, setClassNameWarning] = useState(false);
+  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
   const [currentTab, setCurrentTab] = useState("basic");
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
@@ -133,35 +139,14 @@ export default function StudentClasses() {
     }
 
     try {
-      const snapshot = await getDocs(collection(db, "classes"));
-      const fetchedClasses: Class[] = snapshot.docs
-        .map((docSnap) => {
-          const data = docSnap.data() as Record<string, any>;
-          const createdAtValue = data.created_at ?? data.createdAt;
+      const fetchedClasses = await getClasses(user.id);
 
-          return {
-            id: docSnap.id,
-            class_name: data.class_name ?? "",
-            course_subject: data.course_subject ?? "",
-            section_block: data.section_block ?? "",
-            room: data.room ?? "",
-            students: Array.isArray(data.students) ? data.students : [],
-            created_at:
-              typeof createdAtValue?.toDate === "function"
-                ? createdAtValue.toDate().toISOString()
-                : typeof createdAtValue === "string"
-                  ? createdAtValue
-                  : new Date().toISOString(),
-            schedule_day: data.schedule_day,
-            schedule_time: data.schedule_time,
-            semester: data.semester,
-            school_year: data.school_year,
-            isArchived: data.isArchived || false,
-          };
-        })
-        .filter((classItem) => !classItem.isArchived); // Filter out archived classes
+      // Filter out archived classes
+      const activeClasses = fetchedClasses.filter(
+        (classItem) => !(classItem as any).isArchived,
+      );
 
-      setClasses(fetchedClasses);
+      setClasses(activeClasses);
     } catch (error) {
       console.error("Error fetching classes:", error);
       toast.error("Failed to load classes");
@@ -171,7 +156,7 @@ export default function StudentClasses() {
   };
 
   const handleAddClass = async () => {
-    // Validation for Class Name - letters only
+    // Validation for Class Name - letters only and minimum 5 characters
     if (!newClass.class_name.trim()) {
       toast.error("Class Name is required");
       return;
@@ -180,10 +165,18 @@ export default function StudentClasses() {
       toast.warning("Class Name must contain letters only");
       return;
     }
+    if (newClass.class_name.trim().length < 5) {
+      toast.error("Class Name must be at least 5 characters long");
+      return;
+    }
 
-    // Validation for Course/Subject - required
+    // Validation for Course/Subject - required and minimum 5 characters
     if (!newClass.course_subject.trim()) {
       toast.error("Course/Subject is required");
+      return;
+    }
+    if (newClass.course_subject.trim().length < 5) {
+      toast.error("Course/Subject must be at least 5 characters long");
       return;
     }
 
@@ -198,10 +191,8 @@ export default function StudentClasses() {
       toast.warning("Room number is required");
       return;
     }
-    if (!/^[a-zA-Z0-9]+$/.test(newClass.room.trim())) {
-      toast.warning(
-        "Room must contain letters and numbers only (no spaces or symbols)",
-      );
+    if (!/^[0-9]{3}$/.test(newClass.room.trim())) {
+      toast.warning("Room must be exactly 3 digits (e.g., 101, 205, 312)");
       return;
     }
 
@@ -1076,7 +1067,7 @@ export default function StudentClasses() {
           <Button
             onClick={() => fileInputRef.current?.click()}
             variant="outline"
-            className="gap-2"
+            className="gap-2 hover:bg-transparent hover:text-current"
           >
             <Upload className="w-4 h-4" />
             Import Excel
@@ -1147,7 +1138,7 @@ export default function StudentClasses() {
                         {classItem.class_name}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {classItem.course_subject} • {classItem.section_block}
+                        {classItem.course_subject} - {classItem.section_block}
                       </p>
                     </div>
                   </div>
@@ -1257,50 +1248,111 @@ export default function StudentClasses() {
                       htmlFor="class_name"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Class Name *
+                      Program *
                     </Label>
                     <Input
                       id="class_name"
                       value={newClass.class_name}
-                      onChange={(e) =>
-                        setNewClass({ ...newClass, class_name: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewClass({ ...newClass, class_name: value });
+
+                        // Show warning if length exceeds 0 but is less than 5
+                        if (
+                          value.trim().length > 0 &&
+                          value.trim().length < 5
+                        ) {
+                          setClassNameWarning(true);
+                          setTimeout(() => setClassNameWarning(false), 2000);
+                        } else {
+                          setClassNameWarning(false);
+                        }
+                      }}
                       placeholder="e.g., Computer Science 101"
                       className={
                         !newClass.class_name.trim() ||
-                        !/^[a-zA-Z\s]+$/.test(newClass.class_name.trim())
+                        !/^[a-zA-Z\s]+$/.test(newClass.class_name.trim()) ||
+                        newClass.class_name.trim().length < 5
                           ? "border-red-300 focus:border-red-500"
                           : "border-green-300 focus:border-green-500"
                       }
                     />
-                    <p className="text-xs text-gray-600">
-                      Letters and spaces only, no numbers or symbols
-                    </p>
+                    {newClass.class_name.trim() &&
+                    newClass.class_name.trim().length >= 5 &&
+                    /^[a-zA-Z\s]+$/.test(newClass.class_name.trim()) ? (
+                      <p className="text-xs text-green-600">Valid class name</p>
+                    ) : (
+                      <p className="text-xs text-gray-600">
+                        Letters and spaces only, minimum 5 characters
+                        {newClass.class_name.trim() &&
+                          ` (${newClass.class_name.trim().length}/5)`}
+                      </p>
+                    )}
+                    {classNameWarning && (
+                      <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
+                        <AlertCircle className="w-3 h-3" />
+                        <span>
+                          Class Name must be at least 5 characters long
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-3">
                     <Label
                       htmlFor="course_subject"
                       className="text-sm font-medium text-gray-700"
                     >
-                      Course/Subject *
+                      Course *
                     </Label>
                     <Input
                       id="course_subject"
                       value={newClass.course_subject}
-                      onChange={(e) =>
-                        setNewClass({
-                          ...newClass,
-                          course_subject: e.target.value,
-                        })
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewClass({ ...newClass, course_subject: value });
+
+                        // Show warning if length exceeds 0 but is less than 5
+                        if (
+                          value.trim().length > 0 &&
+                          value.trim().length < 5
+                        ) {
+                          setCourseSubjectWarning(true);
+                          setTimeout(
+                            () => setCourseSubjectWarning(false),
+                            2000,
+                          );
+                        } else {
+                          setCourseSubjectWarning(false);
+                        }
+                      }}
                       placeholder="e.g., Introduction to Programming"
                       className={
-                        !newClass.course_subject.trim()
+                        !newClass.course_subject.trim() ||
+                        newClass.course_subject.trim().length < 5
                           ? "border-red-300 focus:border-red-500"
                           : "border-green-300 focus:border-green-500"
                       }
                     />
-                    <p className="text-xs text-gray-600">Required field</p>
+                    {newClass.course_subject.trim() &&
+                    newClass.course_subject.trim().length >= 5 ? (
+                      <p className="text-xs text-green-600">
+                        Valid course subject
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-600">
+                        Required field, minimum 5 characters
+                        {newClass.course_subject.trim() &&
+                          ` (${newClass.course_subject.trim().length}/5)`}
+                      </p>
+                    )}
+                    {courseSubjectWarning && (
+                      <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
+                        <AlertCircle className="w-3 h-3" />
+                        <span>
+                          Course/Subject must be at least 5 characters long
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-3">
                     <Label
@@ -1337,21 +1389,39 @@ export default function StudentClasses() {
                     </Label>
                     <Input
                       id="room"
+                      type="number"
                       value={newClass.room}
-                      onChange={(e) =>
-                        setNewClass({ ...newClass, room: e.target.value })
-                      }
-                      placeholder="e.g., 301, COMP1, LAB-A"
+                      onChange={(e) => {
+                        // Only allow exactly 3 numbers
+                        const inputValue = e.target.value.replace(
+                          /[^0-9]/g,
+                          "",
+                        );
+                        if (inputValue.length > 3) {
+                          setRoomWarning(true);
+                          setTimeout(() => setRoomWarning(false), 3000);
+                          return;
+                        }
+                        const value = inputValue.slice(0, 3);
+                        setNewClass({ ...newClass, room: value });
+                      }}
+                      placeholder="e.g., 101, 205, 312"
                       className={
                         !newClass.room.trim() ||
-                        !/^[a-zA-Z0-9]+$/.test(newClass.room.trim())
+                        !/^[0-9]{3}$/.test(newClass.room.trim())
                           ? "border-red-300 focus:border-red-500"
                           : "border-green-300 focus:border-green-500"
                       }
                     />
                     <p className="text-xs text-gray-600">
-                      Room number (letters/numbers only, e.g., 301, 204A, COMP1)
+                      Room number (exactly 3 digits, e.g., 101, 205, 312)
                     </p>
+                    {roomWarning && (
+                      <div className="flex items-center gap-2 text-xs text-red-600 animate-pulse">
+                        <div className="w-2 h-2 bg-red-500 rounded-full" />
+                        <span>Room number must be exactly 3 digits only</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1363,11 +1433,16 @@ export default function StudentClasses() {
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importing}
+                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   {importing ? "Importing..." : "Import CSV/Excel"}
                 </Button>
-                <Button variant="outline" onClick={downloadTemplate}>
+                <Button
+                  variant="outline"
+                  onClick={downloadTemplate}
+                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
+                >
                   <Download className="w-4 h-4 mr-2" />
                   Download Template
                 </Button>
@@ -1567,7 +1642,7 @@ export default function StudentClasses() {
                             <TableCell
                               className={!isValidEmail ? "text-red-600" : ""}
                             >
-                              {student.email || "—"}
+                              {student.email || "-"}
                               {!isValidEmail && (
                                 <span className="ml-1 text-red-500">!</span>
                               )}
@@ -1579,6 +1654,7 @@ export default function StudentClasses() {
                                 onClick={() =>
                                   handleRemoveStudent(student.student_id)
                                 }
+                                className="hover:bg-transparent hover:text-current"
                               >
                                 <X className="w-4 h-4 text-destructive" />
                               </Button>
@@ -1632,7 +1708,7 @@ export default function StudentClasses() {
                         });
                         return invalidStudents.length > 0
                           ? `${invalidStudents.length} student(s) with validation errors!`
-                          : "All students valid ✓";
+                          : "All students valid";
                       })()}
                     </span>
                   </div>
@@ -1669,7 +1745,11 @@ export default function StudentClasses() {
           </Tabs>
 
           <DialogFooter className="pt-6 border-t">
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowAddDialog(false)}
+              className="hover:bg-transparent hover:text-current"
+            >
               Cancel
             </Button>
             <Button
@@ -1837,7 +1917,7 @@ export default function StudentClasses() {
                       <TableRow key={`import-${idx}`}>
                         <TableCell>{student.student_id}</TableCell>
                         <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                        <TableCell>{student.email || "—"}</TableCell>
+                        <TableCell>{student.email || "-"}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1858,6 +1938,7 @@ export default function StudentClasses() {
               <Button
                 variant="outline"
                 onClick={() => fileInputRef.current?.click()}
+                className="hover:bg-transparent hover:text-current"
               >
                 Browse Files
               </Button>
@@ -1871,6 +1952,7 @@ export default function StudentClasses() {
                 setShowImportDialog(false);
                 setImportPreview([]);
               }}
+              className="hover:bg-transparent hover:text-current"
             >
               Cancel
             </Button>
@@ -1911,6 +1993,7 @@ export default function StudentClasses() {
                     setDataQualityResult(null);
                     setImportPreview([]);
                   }}
+                  className="hover:bg-transparent hover:text-current"
                 >
                   Cancel
                 </Button>
@@ -2018,17 +2101,7 @@ export default function StudentClasses() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Room</p>
-                  <p className="font-medium">{selectedClass.room || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Semester</p>
-                  <p className="font-medium">{selectedClass.semester || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">School Year</p>
-                  <p className="font-medium">
-                    {selectedClass.school_year || "—"}
-                  </p>
+                  <p className="font-medium">{selectedClass.room || "-"}</p>
                 </div>
               </div>
 
@@ -2051,7 +2124,7 @@ export default function StudentClasses() {
                           <TableRow key={`${selectedClass.id}-student-${idx}`}>
                             <TableCell>{student.student_id}</TableCell>
                             <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                            <TableCell>{student.email || "—"}</TableCell>
+                            <TableCell>{student.email || "-"}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -2084,10 +2157,16 @@ export default function StudentClasses() {
                   setCurrentTab("basic");
                 }
               }}
+              className="hover:bg-transparent hover:text-current"
             >
               Edit Class
             </Button>
-            <Button onClick={() => setShowViewDialog(false)}>Close</Button>
+            <Button
+              onClick={() => setShowViewDialog(false)}
+              className="hover:bg-transparent hover:text-current"
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

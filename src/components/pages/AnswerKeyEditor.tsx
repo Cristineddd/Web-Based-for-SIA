@@ -185,12 +185,10 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
 
       if (result.success) {
         setSaved(true);
-        toast.success('Answer key saved successfully');
+        toast.success('Answer key saved successfully! You can continue editing or navigate back when ready.');
         
-        // Navigate back to exam page after a short delay
-        setTimeout(() => {
-          router.push(`/exams/${params.id}`);
-        }, 1000);
+        // No automatic redirect - let user choose when to leave
+        // User can use the back button or navigate manually
       } else {
         setError(result.error || 'Failed to save answer key');
         showErrorDialog('Save Failed', result.error || 'Failed to save answer key. Please try again.');
@@ -433,6 +431,16 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
           </button>
         </div>
       </div>
+
+      {/* Success Alert */}
+      {saved && (
+        <Alert className="border-green-200 bg-green-50 text-green-800">
+          <Check className="h-4 w-4 text-green-600" />
+          <AlertDescription className="font-medium">
+            Answer key saved successfully! You can continue editing or use the back button when ready.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Error Alert */}
       {error && (

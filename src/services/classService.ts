@@ -18,14 +18,19 @@ export interface Student {
   first_name: string;
   last_name: string;
   email?: string;
+  section?: string;
+  grade?: string;
+  validation_status?: "official" | "unvalidated";
 }
 
 export interface Class {
   id: string;
   class_name: string;
   course_subject: string;
-  section_block: string;
-  room: string;
+  year?: string; // Optional year field
+  room?: string;
+  semester?: string;
+  school_year?: string;
   students: Student[];
   created_at: string;
   createdBy?: string;
@@ -45,13 +50,13 @@ export async function createClass(
   instructorId?: string, // Add instructorId parameter
 ): Promise<Class> {
   try {
-    console.log("📚 Creating class...");
+    console.log("[CREATE] Creating class...");
     console.log("  - Class data:", classData);
     console.log("  - User ID:", userId);
     console.log("  - Instructor ID:", instructorId);
 
     if (!instructorId) {
-      console.warn("⚠️ WARNING: instructorId is undefined or null!");
+      console.warn("[WARNING] WARNING: instructorId is undefined or null!");
     }
 
     const newClassData = {
@@ -62,29 +67,12 @@ export async function createClass(
       updatedAt: serverTimestamp(),
     };
 
-    // Helper: Recursively remove undefined fields (Firebase doesn't accept undefined)
-    const removeUndefined = (obj: any): any => {
-      if (Array.isArray(obj)) {
-        return obj.map(removeUndefined);
-      } else if (obj !== null && typeof obj === "object") {
-        // Skip Firestore FieldValues (like serverTimestamp)
-        if (typeof obj.isEqual === "function" && obj.toMillis) {
-          return obj;
-        }
-        return Object.fromEntries(
-          Object.entries(obj)
-            .filter(([_, v]) => v !== undefined)
-            .map(([k, v]) => [k, removeUndefined(v)]),
-        );
-      }
-      return obj;
-    };
-
-    const cleanData = removeUndefined(newClassData);
-
-    console.log("📤 Sending to Firestore:", cleanData);
-    const docRef = await addDoc(collection(db, CLASSES_COLLECTION), cleanData);
-    console.log("✅ Class created successfully with ID:", docRef.id);
+    console.log("[SEND] Sending to Firestore:", newClassData);
+    const docRef = await addDoc(
+      collection(db, CLASSES_COLLECTION),
+      newClassData,
+    );
+    console.log("[SUCCESS] Class created successfully with ID:", docRef.id);
 
     // Return the class with the generated ID (include instructorId)
     const newClass: Class = {
@@ -159,7 +147,7 @@ export async function getClasses(userId?: string): Promise<Class[]> {
         id: doc.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
-        section_block: data.section_block,
+        year: data.year,
         room: data.room,
         students: data.students || [],
         created_at:
@@ -201,7 +189,7 @@ export async function getClassById(classId: string): Promise<Class | null> {
         id: docSnap.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
-        section_block: data.section_block,
+        year: data.year,
         room: data.room,
         students: data.students || [],
         created_at:
@@ -219,6 +207,9 @@ export async function getClassById(classId: string): Promise<Class | null> {
     throw error;
   }
 }
+
+// Alias for getClassById for compatibility
+export const getClass = getClassById;
 
 /**
  * Update a class

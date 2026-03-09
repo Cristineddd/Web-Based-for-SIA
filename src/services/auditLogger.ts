@@ -104,10 +104,22 @@ export class AuditLogger {
         adminEmail,
         activity,
         description,
-        timestamp: logData.timestamp,
-        status: logData.status,
-        ...options,
-        createdAt: logData.timestamp,
+        timestamp: new Date().toISOString(),
+        ipAddress: options?.ipAddress,
+        userAgent: options?.userAgent,
+        fileName: options?.fileName,
+        fileType: options?.fileType,
+        fileSize: options?.fileSize,
+        filePath: options?.filePath,
+        entityId: options?.entityId,
+        entityType: options?.entityType,
+        entityName: options?.entityName,
+        status: options?.status || "success",
+        errorMessage: options?.errorMessage,
+        metadata: options?.metadata,
+        beforeValues: options?.beforeValues || null,
+        afterValues: options?.afterValues || null,
+        createdAt: new Date().toISOString(),
       } as unknown as AuditLog;
     } catch (error) {
       console.error("Error logging activity:", error);
@@ -273,6 +285,10 @@ export class AuditLogger {
 
       if (queryOpts?.activity) {
         constraints.push(where("activity", "==", queryOpts.activity));
+      }
+
+      if (queryOpts?.entityType) {
+        constraints.push(where("entityType", "==", queryOpts.entityType));
       }
 
       if (queryOpts?.status) {
