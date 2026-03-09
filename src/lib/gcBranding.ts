@@ -11,7 +11,7 @@ export const GC_INSTITUTION_NAME = 'Gordon College';
 export const GC_FULL_NAME = 'Gordon College';
 export const GC_TAGLINE = 'Excellence in Education';
 export const GC_ADDRESS = 'Olongapo City, Zambales, Philippines';
-export const GC_SYSTEM_NAME = 'Student Information & Assessment System';
+export const GC_SYSTEM_NAME = 'GC SMART CHECK';
 
 // ─── Logo ────────────────────────────────────────────────────────────────────
 
@@ -76,8 +76,8 @@ export const GC_FONT_PRIMARY = 'helvetica';
 
 /** Font sizes used across reports (in pt for jsPDF) */
 export const GC_FONT_SIZES = {
-  coverTitle: 24,
-  coverSubtitle: 11,
+  coverTitle: 14,
+  coverSubtitle: 9,
   sectionHeading: 13,
   body: 9.5,
   tableHeader: 8,
@@ -118,17 +118,22 @@ export interface ExcelExportMetadata {
  * When metadata is supplied, extra rows are appended before the spacer.
  */
 export function getExcelBrandingRows(metadata?: ExcelExportMetadata): (string | number)[][] {
+  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const rows: (string | number)[][] = [
-    [GC_FULL_NAME],
     [GC_SYSTEM_NAME],
-    [`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`],
+    [`Generated: ${dateStr}`],
   ];
   if (metadata?.instructorName) rows.push([`Instructor: ${metadata.instructorName}`]);
   if (metadata?.subject) rows.push([`Subject: ${metadata.subject}`]);
   if (metadata?.section) rows.push([`Section: ${metadata.section}`]);
-  if (metadata?.numItems) rows.push([`No. of Items: ${metadata.numItems}`]);
-  if (metadata?.choicesPerItem) rows.push([`Choices per Item: ${metadata.choicesPerItem}`]);
   if (metadata?.examCode) rows.push([`Exam Code: ${metadata.examCode}`]);
+  // Combine items-related fields on one row when both present
+  if (metadata?.numItems && metadata?.choicesPerItem) {
+    rows.push([`No. of Items: ${metadata.numItems}  |  Choices per Item: ${metadata.choicesPerItem}`]);
+  } else {
+    if (metadata?.numItems) rows.push([`No. of Items: ${metadata.numItems}`]);
+    if (metadata?.choicesPerItem) rows.push([`Choices per Item: ${metadata.choicesPerItem}`]);
+  }
   if (metadata?.examDate) rows.push([`Exam Date: ${metadata.examDate}`]);
   rows.push([]); // blank spacer row
   return rows;

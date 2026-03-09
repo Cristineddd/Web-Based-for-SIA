@@ -159,7 +159,7 @@ export async function generateAnswerSheetPDF(exam: Exam, copies: number = 1) {
     doc.setFontSize(7);
     doc.setTextColor(...GC_TEXT_MUTED);
     doc.text(
-      `${GC_FULL_NAME} \u2022 ${GC_SYSTEM_NAME} | ${new Date().toLocaleDateString()}`,
+      `${GC_SYSTEM_NAME} | ${new Date().toLocaleDateString()}`,
       margin,
       pageHeight - 5
     );

@@ -143,12 +143,21 @@ export async function getRecentExams(userId: string, limit: number = 5): Promise
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
 
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
       // Filter by userId on client-side and exclude archived exams
       if (data.createdBy === userId && !data.isArchived) {
+        // Back-fill examCode for legacy exams
+        let examCode = data.examCode;
+        if (!examCode) {
+          examCode = generateExamCode();
+          const docRef = doc(db, "exams", docSnap.id);
+          updateDoc(docRef, { examCode }).catch(err => {
+            console.warn('Failed to back-fill exam code:', err);
+          });
+        }
         exams.push({
-          id: doc.id,
+          id: docSnap.id,
           title: data.title,
           subject: data.subject,
           num_items: data.num_items,
@@ -164,6 +173,7 @@ export async function getRecentExams(userId: string, limit: number = 5): Promise
             data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
           className: data.className || undefined,
           isArchived: data.isArchived,
+          examCode: examCode,
         });
       }
     });
@@ -218,13 +228,22 @@ export async function getExams(userId?: string): Promise<Exam[]> {
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
 
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
       // Filter by userId if provided (additional client-side check)
       // Also filter out archived exams
       if ((!userId || data.createdBy === userId) && !data.isArchived) {
+        // Back-fill examCode for legacy exams that don't have one
+        let examCode = data.examCode;
+        if (!examCode) {
+          examCode = generateExamCode();
+          const docRef = doc(db, "exams", docSnap.id);
+          updateDoc(docRef, { examCode }).catch(err => {
+            console.warn('Failed to back-fill exam code:', err);
+          });
+        }
         exams.push({
-          id: doc.id,
+          id: docSnap.id,
           title: data.title,
           subject: data.subject,
           num_items: data.num_items,
@@ -240,6 +259,7 @@ export async function getExams(userId?: string): Promise<Exam[]> {
             data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
           className: data.className || undefined,
           isArchived: data.isArchived,
+          examCode: examCode,
         });
       }
     });
@@ -400,6 +420,7 @@ export async function getArchivedExams(userId: string): Promise<Exam[]> {
         isArchived: data.isArchived,
         archivedAt:
           data.archivedAt?.toDate?.().toISOString() || new Date().toISOString(),
+        examCode: data.examCode || undefined,
       });
     });
 

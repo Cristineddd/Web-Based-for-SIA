@@ -183,6 +183,7 @@ export function exportExamScoresToExcel(
   const statsHeaders = ['Metric', 'Value'];
   const statsData = [
     ['Exam Title', examTitle],
+    ...(metadata?.examCode ? [['Exam Code', metadata.examCode]] : []),
     ['Generated', new Date().toLocaleDateString()],
     ['', ''],
     ['Total Students', stats.total],
@@ -299,6 +300,8 @@ export function exportClassResultsToExcel(
   const statsHeaders = ['Metric', 'Value'];
   const statsData = [
     ['Class', className],
+    ...(metadata?.examCode ? [['Exam Code', metadata.examCode]] : []),
+    ...(metadata?.subject ? [['Subject', metadata.subject]] : []),
     ['Generated', new Date().toLocaleDateString()],
     ['', ''],
     ['Total Students', studentResults.length],
@@ -384,6 +387,8 @@ export function exportClassResultsToExcelBuffer(
   const statsHeaders = ['Metric', 'Value'];
   const statsData = [
     ['Class', className],
+    ...(metadata?.examCode ? [['Exam Code', metadata.examCode]] : []),
+    ...(metadata?.subject ? [['Subject', metadata.subject]] : []),
     ['Generated', new Date().toLocaleDateString()],
     ['', ''],
     ['Total Students', studentResults.length],

@@ -74,7 +74,7 @@ export default function Landing() {
             <div className="flex items-center gap-3">
               <Image src="/Sia.png" alt="SIA Logo" width={40} height={40} className="w-10 h-10 object-contain aspect-square flex-shrink-0" />
               <div>
-                <h1 className="text-lg font-bold text-[#166534]">SIA</h1>
+                <h1 className="text-lg font-bold text-[#166534]">GC SMART CHECK</h1>
                 <p className="text-xs text-gray-600">Smart Exam Checking</p>
               </div>
             </div>
@@ -95,7 +95,7 @@ export default function Landing() {
             {/* Left Content */}
             <div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
-                Smart Exam Checking & Auto-Grading System
+                GC SMART CHECK
               </h1>
               
               <p className="text-lg text-gray-600 mb-8 leading-relaxed">
