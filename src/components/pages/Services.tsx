@@ -182,7 +182,7 @@ export function Services() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <h1 className="text-4xl font-bold text-slate-900 mb-4">System Services</h1>
           <p className="text-lg text-slate-600 max-w-3xl">
-            Explore all the powerful features and tools available in GC SMART CHECK. From exam management
+            Explore all the powerful features and tools available in the GC Scan system. From exam management
             to comprehensive analytics, we provide everything you need for efficient exam administration.
           </p>
         </div>

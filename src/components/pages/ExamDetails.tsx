@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  ArrowLeft,
   Edit2,
   Smartphone,
   FileText,
@@ -24,6 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { toast } from "sonner";
+import { BackButton } from '@/components/ui/BackButton';
 import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
 
 interface ExamDetailsProps {
@@ -141,12 +141,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link
-            href="/exams"
-            className="p-2 hover:bg-muted rounded-md transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
+          <BackButton href="/exams" asLink />
           <div>
             <h1 className="text-3xl font-bold text-foreground">Loading...</h1>
           </div>
@@ -159,12 +154,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link
-            href="/exams"
-            className="p-2 hover:bg-muted rounded-md transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
+          <BackButton href="/exams" asLink />
           <div>
             <h1 className="text-3xl font-bold text-foreground">
               {error ? "Error loading exam" : "Exam not found"}
@@ -355,12 +345,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 sm:gap-4">
-        <Link
-          href="/exams"
-          className="p-2 hover:bg-muted rounded-md transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
+        <BackButton href="/exams" asLink />
         <div className="min-w-0 flex-1">
           <h1 className="text-xl sm:text-3xl font-bold text-foreground break-words">
             {exam.title}

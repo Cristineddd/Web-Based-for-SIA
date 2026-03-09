@@ -346,8 +346,7 @@ export default function Exams() {
       exam.title.toLowerCase().includes(search.toLowerCase()) ||
       exam.subject.toLowerCase().includes(search.toLowerCase()) ||
       (exam.className && exam.className.toLowerCase().includes(search.toLowerCase())) ||
-      exam.num_items.toString().includes(search) ||
-      exam.choices_per_item.toString().includes(search),
+      exam.num_items.toString().includes(search),
   );
 
   return (

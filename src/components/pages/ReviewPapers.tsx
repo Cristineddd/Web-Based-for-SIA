@@ -24,6 +24,7 @@ import { ScanningService } from '@/services/scanningService';
 import { getClassById, Class } from '@/services/classService';
 import { AnswerChoice, ScannedResult } from '@/types/scanning';
 import { toast } from 'sonner';
+import { BackButton } from '@/components/ui/BackButton';
 
 interface ReviewPapersProps {
   params: { id: string };
@@ -369,9 +370,7 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
   if (!exam) {
     return (
       <div className="space-y-6">
-        <Link href="/exams" className="p-2 hover:bg-muted rounded-md transition-colors inline-block">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
+        <BackButton href="/exams" asLink />
         <p className="text-foreground">Exam not found</p>
       </div>
     );
@@ -388,9 +387,7 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 sm:gap-4">
-        <Link href={`/exams/${examId}`} className="p-2 hover:bg-muted rounded-md transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
+        <BackButton href={`/exams/${examId}`} asLink />
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
             <FileText className="w-6 h-6 flex-shrink-0" />

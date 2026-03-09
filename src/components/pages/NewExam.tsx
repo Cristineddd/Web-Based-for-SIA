@@ -22,10 +22,11 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, FileText, ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { Loader2, FileText, ChevronRight, ChevronLeft, Check } from "lucide-react";
 import { z } from "zod";
 import { createExam } from "@/services/examService";
 import { getClasses, type Class } from "@/services/classService";
+import { Button as BackButton } from "@/components/ui/button";
 
 const examSchema = z.object({
   title: z
@@ -249,18 +250,13 @@ export default function NewExam() {
   };
 
   return (
-    <div className="page-container max-w-4xl pb-4">
+    <div className="page-container max-w-xl pb-4">
       {/* Header */}
       <div className="mb-4">
-        <Button
-          variant="ghost"
-          onClick={() => router.push("/exams")}
-          className="mb-4 -ml-2"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Exams
-        </Button>
-        <h1 className="text-3xl font-bold text-foreground">Create New Exam</h1>
+        <BackButton variant="outline" onClick={() => router.push('/exams')} className="mb-4 -ml-2">
+          ← Back to Exams
+        </BackButton>
+        <h1 className="text-2xl font-bold text-foreground">Create New Exam</h1>
         <div className="mt-2 space-y-1">
           <p className="text-muted-foreground">
             Step {currentStep} of {steps.length}: {steps[currentStep - 1].title}
@@ -285,11 +281,11 @@ export default function NewExam() {
               <div key={step.number} className="flex items-center">
                 <div className="flex items-center">
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all ${
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs transition-all ${
                       currentStep > step.number
                         ? "bg-green-500 text-white shadow-lg"
                         : currentStep === step.number
-                        ? "bg-blue-500 text-white shadow-lg ring-4 ring-blue-200"
+                        ? "bg-blue-500 text-white shadow-lg ring-2 ring-blue-200"
                         : "bg-gray-200 text-gray-500"
                     }`}
                   >
@@ -299,24 +295,14 @@ export default function NewExam() {
                       step.number
                     )}
                   </div>
-                  <div className="ml-3 hidden sm:block">
-                    <p className={`font-medium ${
+                  <div className="ml-2 hidden sm:block">
+                    <p className={`text-xs font-medium ${
                       currentStep >= step.number ? "text-blue-900" : "text-gray-500"
                     }`}>
                       {step.title}
                     </p>
-                    <p className="text-sm text-gray-600">
-                      {step.description}
-                    </p>
                   </div>
                 </div>
-                {index < steps.length - 1 && (
-                  <div
-                    className={`hidden sm:flex w-12 h-0.5 mx-4 ${
-                      currentStep > step.number ? "bg-green-400" : "bg-gray-300"
-                    }`}
-                  />
-                )}
               </div>
             ))}
           </div>
@@ -366,10 +352,10 @@ export default function NewExam() {
           )}
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-2">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {/* Step 1: Basic Information */}
             {currentStep === 1 && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
                   <h3 className="font-medium text-blue-900 mb-2">📝 Step 1: Exam Name</h3>
                   <p className="text-sm text-blue-700 mb-1">
@@ -531,22 +517,22 @@ export default function NewExam() {
                   <p className="text-sm text-muted-foreground mb-3">
                     📝 Choose a preset or enter a custom number of questions for your exam.
                   </p>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-2">
                     {[20, 50, 100].map((num) => (
                       <button
                         key={num}
                         type="button"
                         onClick={() => handleChange("num_items", num)}
-                        className={`py-3 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
+                        className={`py-2 px-3 rounded-lg font-semibold text-sm transition-all border-2 flex items-center justify-between ${
                           formData.num_items === num
-                            ? "bg-blue-500 text-white border-blue-500 shadow-md transform scale-105"
+                            ? "bg-blue-500 text-white border-blue-500 shadow-md"
                             : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
                         }`}
                       >
-                        {num} Questions
-                        <div className="text-xs opacity-75 mt-1">
-                          {num <= 20 ? 'Quick Quiz' : num <= 50 ? 'Standard Test' : 'Major Exam'}
-                        </div>
+                        <span>{num} Questions</span>
+                        <span className="text-xs opacity-75">
+                          {num <= 20 ? 'Quick' : num <= 50 ? 'Standard' : 'Major'}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -587,15 +573,15 @@ export default function NewExam() {
                   <p className="text-sm text-muted-foreground mb-2">
                     🔤 Select how many answer choices each question will have. Most common is 4 choices (A, B, C, D).
                   </p>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 gap-2">
                     {[2, 3, 4, 5].map((num) => (
                       <button
                         key={num}
                         type="button"
                         onClick={() => handleChange("choices_per_item", num)}
-                        className={`py-4 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
+                        className={`py-2 px-3 rounded-lg font-semibold text-sm transition-all border-2 ${
                           formData.choices_per_item === num
-                            ? "bg-blue-500 text-white border-blue-500 shadow-md transform scale-105"
+                            ? "bg-blue-500 text-white border-blue-500 shadow-md"
                             : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
                         }`}
                       >
@@ -803,7 +789,7 @@ Examples:
               ) : (
                 <Button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg"
+                  className="flex-1 gradient-primary"
                   disabled={loading || Object.keys(errors).length > 0}
                 >
                   {loading ? (

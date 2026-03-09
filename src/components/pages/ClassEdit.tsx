@@ -13,9 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Save, Users, BookOpen, Hash, Download, Upload, Plus, X } from 'lucide-react';
+import { Save, Users, BookOpen, Hash, Download, Upload, Plus, X } from 'lucide-react';
 import { getClassById, updateClass, Class, Student as BaseStudent } from '@/services/classService';
 import { toast } from 'sonner';
+import { BackButton } from '@/components/ui/BackButton';
 import { exportStudentRosterToExcel } from '@/services/excelExportService';
 import {
   Table,
@@ -32,10 +33,15 @@ interface Student extends BaseStudent {
   grade?: string;
 }
 
-export default function ClassEdit() {
+interface ClassEditProps {
+  classId?: string;
+}
+
+export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const classId = searchParams.get('id');
+  // Use prop classId if provided, otherwise fall back to search params
+  const classId = propClassId || searchParams.get('id');
   
   const [classData, setClassData] = useState<Class | null>(null);
   const [loading, setLoading] = useState(true);
@@ -304,19 +310,10 @@ export default function ClassEdit() {
     <div className="page-container pb-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/classes')}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
+        <div className="flex items-center gap-4 mb-6">
+          <BackButton href="/classes" />
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Edit Class</h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Update class information and manage students
-            </p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -324,7 +321,7 @@ export default function ClassEdit() {
             variant="outline" 
             onClick={handleExportStudents}
             disabled={!classData || classData.students.length === 0}
-            className="flex items-center gap-2"
+            className="flex items-center justify-center gap-2"
           >
             <Download className="w-4 h-4" />
             Export Students
@@ -338,14 +335,14 @@ export default function ClassEdit() {
             />
             <Button 
               variant="outline"
-              className="flex items-center gap-2"
+              className="flex items-center justify-center gap-2"
             >
               <Upload className="w-4 h-4" />
               Import Students
             </Button>
           </div>
-          <Button onClick={handleSave} disabled={saving}>
-            <Save className="w-4 h-4 mr-2" />
+          <Button onClick={handleSave} disabled={saving} className="flex items-center justify-center gap-2">
+            <Save className="w-4 h-4" />
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
@@ -453,7 +450,7 @@ export default function ClassEdit() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-4">
               <div className="text-center p-4 bg-muted rounded-lg">
                 <div className="text-2xl font-bold">{classData.students.length}</div>
                 <div className="text-sm text-muted-foreground">Total Students</div>

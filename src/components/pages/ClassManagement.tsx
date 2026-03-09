@@ -21,16 +21,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -65,11 +55,8 @@ export default function ClassManagement() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
-  const [editingClass, setEditingClass] = useState<Class | null>(null);
-  const [currentTab, setCurrentTab] = useState("basic");
   const [importing] = useState(false);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -84,6 +71,7 @@ export default function ClassManagement() {
     invalidEntries: Array<{student: Student, errors: string[]}>;
   } | null>(null);
   const [showUploadSummary, setShowUploadSummary] = useState(false);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
 
   const [newClass, setNewClass] = useState({
     class_name: "",
@@ -93,6 +81,8 @@ export default function ClassManagement() {
   });
 
   const [students, setStudents] = useState<Student[]>([]);
+  const [currentTab, setCurrentTab] = useState("basic");
+  const [editingClass] = useState<Class | null>(null);
   const [newStudent, setNewStudent] = useState({
     student_id: "",
     first_name: "",
@@ -215,23 +205,7 @@ export default function ClassManagement() {
     }
   };
 
-  const handleArchive = async () => {
-    if (!archiveId) return;
 
-    try {
-      const classToArchive = classes.find(c => c.id === archiveId);
-      if (!classToArchive) return;
-
-      const updatedClass = { ...classToArchive, isArchived: true };
-      await updateClass(archiveId, updatedClass);
-      setClasses(classes.filter((c) => c.id !== archiveId));
-      setArchiveId(null);
-      toast.success("Class archived successfully");
-    } catch (error) {
-      console.error("Error archiving class:", error);
-      toast.error("Failed to archive class");
-    }
-  };
 
   const handleAddStudent = async () => {
     if (
@@ -329,6 +303,29 @@ export default function ClassManagement() {
 
   const handleRemoveStudent = (studentId: string) => {
     setStudents(students.filter((s) => s.student_id !== studentId));
+  };
+
+  const handleArchive = async (classId?: string) => {
+    const idToArchive = classId || archiveId;
+    if (!idToArchive) return;
+    
+    try {
+      // Update the class to mark as archived
+      const classToArchive = classes.find(c => c.id === idToArchive);
+      if (classToArchive) {
+        const updatedClass = { ...classToArchive, isArchived: true };
+        await updateClass(idToArchive, updatedClass);
+        
+        // Remove from current list
+        setClasses(classes.filter(c => c.id !== idToArchive));
+        toast.success("Class archived successfully");
+      }
+    } catch (error) {
+      console.error("Error archiving class:", error);
+      toast.error("Failed to archive class");
+    } finally {
+      setArchiveId(null);
+    }
   };
 
   const handleFileUpload = async (
@@ -566,7 +563,6 @@ export default function ClassManagement() {
   };
 
   const filteredClasses = classes
-    .filter((classItem) => !classItem.isArchived) // Only show non-archived classes
     .filter((c) =>
       c.class_name.toLowerCase().includes(search.toLowerCase()) ||
       c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
@@ -577,12 +573,9 @@ export default function ClassManagement() {
     <div className="page-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Class</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage student roster and information
-          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Classes</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-4">
           <Button
             onClick={downloadTemplate}
             variant="outline"
@@ -706,8 +699,7 @@ export default function ClassManagement() {
               key={classItem.id}
               className="card-elevated hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => {
-                setEditingClass(classItem);
-                setShowViewDialog(true);
+                router.push(`/classes/edit/${classItem.id}`);
               }}
             >
               <CardContent className="p-6">
@@ -725,32 +717,34 @@ export default function ClassManagement() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        Total Students
+                      </p>
+                      <p className="text-sm font-medium flex items-center gap-1">
+                        <GraduationCap className="w-4 h-4 text-yellow-600" />
+                        {classItem.students.length}
+                      </p>
+                    </div>
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setArchiveId(classItem.id);
+                        if (confirm('Are you sure you want to archive this class? It will be moved to the archive and can be restored later.')) {
+                          handleArchive(classItem.id);
+                        }
                       }}
+                      className="p-1 h-auto text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                     >
                       <Archive className="w-4 h-4" />
                     </Button>
                   </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">
-                      Total Students
-                    </p>
-                    <p className="text-sm font-medium flex items-center gap-1">
-                      <GraduationCap className="w-4 h-4 text-yellow-600" />
-                      {classItem.students.length}
-                    </p>
-                  </div>
-                  <div className="text-right">
                     <p className="text-xs text-muted-foreground mb-1">Created</p>
                     <p className="text-xs text-muted-foreground">
                       {classItem.created_at
@@ -758,7 +752,7 @@ export default function ClassManagement() {
                             month: 'short',
                             day: 'numeric',
                             year: 'numeric',
-                          }) + ' &bull; ' + new Date(classItem.created_at).toLocaleTimeString('en-US', {
+                          }) + ' • ' + new Date(classItem.created_at).toLocaleTimeString('en-US', {
                             hour: 'numeric',
                             minute: '2-digit',
                             hour12: true,
@@ -1055,14 +1049,14 @@ export default function ClassManagement() {
                 />
               </div>
 
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 space-y-5">
+              <div className="bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-6 space-y-5">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-green-600" />
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <Plus className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-green-900">Add Student Manually</h4>
-                    <p className="text-sm text-green-700">Enter student information below</p>
+                    <h4 className="font-semibold text-foreground">Add Student Manually</h4>
+                    <p className="text-sm text-muted-foreground">Enter student information below</p>
                   </div>
                 </div>
                 
@@ -1083,13 +1077,13 @@ export default function ClassManagement() {
                       }
                       className={`transition-all duration-200 ${
                         newStudent.student_id.trim() 
-                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200' 
+                          ? 'border-primary/50 focus:border-primary focus:ring-primary/20' 
                           : 'focus:border-primary focus:ring-primary/20'
                       }`}
                     />
                     {newStudent.student_id.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <div className="flex items-center gap-1 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
                         Valid student ID
                       </div>
                     )}
@@ -1111,13 +1105,13 @@ export default function ClassManagement() {
                       }
                       className={`transition-all duration-200 ${
                         newStudent.first_name.trim() 
-                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200' 
+                          ? 'border-primary/50 focus:border-primary focus:ring-primary/20' 
                           : 'focus:border-primary focus:ring-primary/20'
                       }`}
                     />
                     {newStudent.first_name.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <div className="flex items-center gap-1 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
                         Valid first name
                       </div>
                     )}
@@ -1139,13 +1133,13 @@ export default function ClassManagement() {
                       }
                       className={`transition-all duration-200 ${
                         newStudent.last_name.trim() 
-                          ? 'border-green-500 focus:border-green-500 focus:ring-green-200' 
+                          ? 'border-primary/50 focus:border-primary focus:ring-primary/20' 
                           : 'focus:border-primary focus:ring-primary/20'
                       }`}
                     />
                     {newStudent.last_name.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <div className="flex items-center gap-1 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
                         Valid last name
                       </div>
                     )}
@@ -1166,16 +1160,16 @@ export default function ClassManagement() {
                       className="focus:border-primary focus:ring-primary/20 transition-all duration-200"
                     />
                     {newStudent.email.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <div className="flex items-center gap-1 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
                         Email provided
                       </div>
                     )}
                   </div>
                 </div>
                 
-                <div className="flex items-center justify-between pt-2 border-t border-green-200">
-                  <div className="text-sm text-green-700">
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <div className="text-sm text-muted-foreground">
                     <span className="font-medium">
                       {newStudent.student_id.trim() && newStudent.first_name.trim() && newStudent.last_name.trim() 
                         ? 'Ready to add' 
@@ -1185,7 +1179,7 @@ export default function ClassManagement() {
                   <Button 
                     onClick={handleAddStudent} 
                     disabled={!newStudent.student_id.trim() || !newStudent.first_name.trim() || !newStudent.last_name.trim()}
-                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 min-w-[120px]"
+                    className="bg-primary hover:bg-primary/90 min-w-[120px]"
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Student
@@ -1523,26 +1517,6 @@ export default function ClassManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Archive Confirmation Dialog */}
-      <AlertDialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Archive Class?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will move the class to the archive. You can restore it later from the Archive page if needed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleArchive}
-              className="bg-amber-600 text-white hover:bg-amber-700"
-            >
-              Archive
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

@@ -227,6 +227,7 @@ export async function getExams(userId?: string): Promise<Exam[]> {
     
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
+    const updatePromises: Promise<void>[] = [];
 
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
@@ -237,10 +238,13 @@ export async function getExams(userId?: string): Promise<Exam[]> {
         let examCode = data.examCode;
         if (!examCode) {
           examCode = generateExamCode();
+          // Queue background update (non-blocking)
           const docRef = doc(db, "exams", docSnap.id);
-          updateDoc(docRef, { examCode }).catch(err => {
-            console.warn('Failed to back-fill exam code:', err);
-          });
+          updatePromises.push(
+            updateDoc(docRef, { examCode }).catch(err => {
+              console.warn('Failed to back-fill exam code:', err);
+            })
+          );
         }
         exams.push({
           id: docSnap.id,
@@ -270,6 +274,13 @@ export async function getExams(userId?: string): Promise<Exam[]> {
       const dateB = new Date(b.updatedAt || b.created_at).getTime();
       return dateB - dateA;
     });
+
+    // Fire off background updates without waiting
+    if (updatePromises.length > 0) {
+      Promise.allSettled(updatePromises).then(() => {
+        console.log(`Updated ${updatePromises.length} exam codes in background`);
+      });
+    }
 
     return exams;
   } catch (error: any) {

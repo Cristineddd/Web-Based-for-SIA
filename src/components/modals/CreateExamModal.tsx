@@ -34,10 +34,20 @@ export function CreateExamModal({
 }: CreateExamModalProps) {
   const { user } = useAuth();
   const router = useRouter();
+  
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
   const [formData, setFormData] = useState<ExamFormData>({
     name: "",
     totalQuestions: 50,
-    date: new Date().toISOString().split("T")[0],
+    date: getTodayDate(),
     folder: "General",
     className: "",
     classId: undefined,
@@ -51,6 +61,58 @@ export function CreateExamModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsPicked, setQuestionsPicked] = useState(false);
   const [examTypePicked, setExamTypePicked] = useState(false);
+
+  // Reset form when modal is closed
+  useEffect(() => {
+    if (!isOpen) {
+      setFormData({
+        name: "",
+        totalQuestions: 50,
+        date: getTodayDate(),
+        folder: "General",
+        className: "",
+        classId: undefined,
+        choicesPerItem: 5,
+        examType: "board",
+      });
+      setStep(1);
+      setQuestionsPicked(false);
+      setExamTypePicked(false);
+    }
+  }, [isOpen]);
+
+  // Handle keyboard events
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen) return;
+      
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        
+        if (step < 6) {
+          // Trigger next step
+          const nextButton = document.querySelector('[data-testid="next-button"]') as HTMLButtonElement;
+          if (nextButton && !nextButton.disabled) {
+            nextButton.click();
+          }
+        } else {
+          // Trigger submit
+          const submitButton = document.querySelector('[data-testid="submit-button"]') as HTMLButtonElement;
+          if (submitButton && !submitButton.disabled) {
+            submitButton.click();
+          }
+        }
+      }
+      
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, step, onClose]);
 
   useEffect(() => {
     const fetchClassesData = async () => {
@@ -149,9 +211,10 @@ export function CreateExamModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-lg sm:max-w-xl md:max-w-2xl lg:max-w-4xl border-2 border-primary max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
+    <div className="fixed inset-0 bg-black/50 z-50 overflow-auto">
+      <div className="min-h-screen px-4 py-8 flex items-center justify-center">
+        <Card className="w-full max-w-lg sm:max-w-xl md:max-w-2xl lg:max-w-4xl border-2 border-primary max-h-[80vh] overflow-hidden flex flex-col my-8">
+          {/* Header */}
         <div className="flex-shrink-0 p-4 sm:p-6 border-b bg-gradient-to-r from-gray-50 to-slate-50">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900">Create New Exam</h2>
@@ -164,14 +227,13 @@ export function CreateExamModal({
           <div className="space-y-3">
             <div className="flex justify-between items-center text-sm">
               <span className="font-medium text-gray-800">Step {step} of 6</span>
-              <span className="text-green-600">{Math.round((step / 6) * 100)}% Complete</span>
             </div>
             <div className="flex space-x-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
                   className={`flex-1 h-2 rounded-full transition-all ${
-                    i + 1 <= step ? "bg-green-500" : "bg-gray-200"
+                    i + 1 <= step ? "bg-primary" : "bg-gray-200"
                   }`}
                 />
               ))}
@@ -190,16 +252,13 @@ export function CreateExamModal({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-4 sm:p-6 space-y-4 min-h-[400px]">
+          <div className="p-3 space-y-3">
           {step === 1 && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
+            <div className="space-y-3">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-2">
+                <div className="flex items-center gap-2 text-primary">
                   <span className="font-medium">Step 1: Exam Name</span>
                 </div>
-                <p className="text-sm text-green-700">
-                  Give your exam a clear, descriptive name that helps you identify it later.
-                </p>
               </div>
               
               <label className="block space-y-2">
@@ -213,14 +272,9 @@ export function CreateExamModal({
                   onChange={(e) => handleInputChange("name", e.target.value)}
                   placeholder="Enter exam name (e.g., Midterm Exam, Final Test, Quiz 1)"
                   className={`w-full px-4 py-3 border rounded-lg bg-background focus:outline-none focus:ring-2 transition-all ${
-                    formData.name.trim() ? "border-green-500 focus:ring-green-200" : "focus:ring-gray-200 border-gray-300"
+                    formData.name.trim() ? "border-primary focus:ring-primary/20" : "focus:ring-gray-200 border-gray-300"
                   }`}
                 />
-                {formData.name.trim() && (
-                  <div className="flex items-center gap-1 text-sm text-green-600">
-                    <span>Good exam name!</span>
-                  </div>
-                )}
                 {!formData.name.trim() && (
                   <p className="text-xs text-gray-600">
                     Try names like "Math Midterm", "Science Quiz 1", or "Final Exam"
@@ -232,13 +286,10 @@ export function CreateExamModal({
 
           {step === 2 && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-2">
+                <div className="flex items-center gap-2 text-primary">
                   <span className="font-medium">Step 2: Number of Questions</span>
                 </div>
-                <p className="text-sm text-green-700">
-                  Choose how many questions your exam will have. Select a preset or enter a custom number.
-                </p>
               </div>
               
               <label className="block space-y-3">
@@ -255,8 +306,8 @@ export function CreateExamModal({
                       }}
                       className={`py-4 px-3 rounded-lg font-semibold text-sm transition-all border-2 ${
                         formData.totalQuestions === num && questionsPicked
-                          ? "bg-green-500 text-white border-green-500 shadow-lg transform scale-105"
-                          : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                          ? "bg-primary text-primary-foreground border-primary shadow-lg transform scale-105"
+                          : "border-gray-300 hover:border-primary/40 hover:bg-primary/5"
                       }`}
                     >
                       <div className="font-bold text-lg">{num}</div>
@@ -267,11 +318,6 @@ export function CreateExamModal({
                   ))}
                 </div>
                 
-                {questionsPicked && (
-                  <div className="flex items-center gap-1 text-sm text-green-600">
-                    <span>{formData.totalQuestions} questions selected</span>
-                  </div>
-                )}
                 {!questionsPicked && (
                   <p className="text-xs text-amber-600 flex items-center gap-1">
                     <span>Please select the number of questions to continue</span>
@@ -283,13 +329,10 @@ export function CreateExamModal({
 
           {step === 3 && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-2">
+                <div className="flex items-center gap-2 text-primary">
                   <span className="font-medium">Step 3: Answer Format</span>
                 </div>
-                <p className="text-sm text-green-700">
-                  Choose how many answer choices each question will have. Most exams use 4 choices (A, B, C, D).
-                </p>
               </div>
               
               <label className="block space-y-3">
@@ -301,8 +344,8 @@ export function CreateExamModal({
                     onClick={() => handleInputChange("choicesPerItem", 4)}
                     className={`py-4 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
                       formData.choicesPerItem === 4
-                        ? "bg-green-500 text-white border-green-500 shadow-lg"
-                        : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                        ? "bg-primary text-primary-foreground border-primary shadow-lg"
+                        : "border-gray-300 hover:border-primary/40 hover:bg-primary/5"
                     }`}
                   >
                     <div className="font-bold text-lg">A, B, C, D</div>
@@ -312,8 +355,8 @@ export function CreateExamModal({
                     onClick={() => handleInputChange("choicesPerItem", 5)}
                     className={`py-4 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
                       formData.choicesPerItem === 5
-                        ? "bg-green-500 text-white border-green-500 shadow-lg"
-                        : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                        ? "bg-primary text-primary-foreground border-primary shadow-lg"
+                        : "border-gray-300 hover:border-primary/40 hover:bg-primary/5"
                     }`}
                   >
                     <div className="font-bold text-lg">A, B, C, D, E</div>
@@ -321,7 +364,7 @@ export function CreateExamModal({
                   </button>
                 </div>
                 
-                <div className="flex items-center gap-1 text-sm text-green-600">
+                <div className="flex items-center gap-1 text-sm text-primary">
                   <span>{formData.choicesPerItem} answer choices per question</span>
                 </div>
               </label>
@@ -330,13 +373,10 @@ export function CreateExamModal({
 
           {step === 4 && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-2">
+                <div className="flex items-center gap-2 text-primary">
                   <span className="font-medium">Step 4: Select Class</span>
                 </div>
-                <p className="text-sm text-green-700">
-                  Choose which class will take this exam. This helps track student performance.
-                </p>
               </div>
               
               <div>
@@ -381,20 +421,19 @@ export function CreateExamModal({
                       }}
                       className={`w-full text-left p-3 rounded-md border-2 transition-all ${
                         formData.classId === classItem.id
-                          ? "border-green-500 bg-green-50 shadow-md"
-                          : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                          ? "border-primary bg-primary/10 shadow-md"
+                          : "border-gray-300 hover:border-primary/40 hover:bg-primary/5"
                       }`}
                     >
                       <div className="font-medium text-sm sm:text-base">{classItem.class_name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {classItem.course_subject} • Section{" "}
-                        {classItem.section_block} • {classItem.students.length}{" "}
+                        {classItem.course_subject} • {classItem.students.length}{" "}
                         students
                       </div>
                     </button>
                   ))}
                   {formData.classId && (
-                    <div className="flex items-center gap-1 text-sm text-green-600 mt-2">
+                    <div className="flex items-center gap-1 text-sm text-primary mt-2">
                       <span>Class selected: {formData.className}</span>
                     </div>
                   )}
@@ -405,13 +444,10 @@ export function CreateExamModal({
 
           {step === 5 && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-2">
+                <div className="flex items-center gap-2 text-primary">
                   <span className="font-medium">Step 5: Exam Type</span>
                 </div>
-                <p className="text-sm text-green-700">
-                  Select the type of exam you want to create. This affects scoring and analysis.
-                </p>
               </div>
               
               <label className="block">
@@ -429,8 +465,8 @@ export function CreateExamModal({
                     }}
                     className={`p-4 rounded-lg border-2 transition-all text-left ${
                       formData.examType === "board" && examTypePicked
-                        ? "border-green-500 bg-green-50 shadow-lg"
-                        : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                        ? "border-primary bg-primary/10 shadow-lg"
+                        : "border-gray-300 hover:border-primary/40 hover:bg-primary/5"
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -447,8 +483,8 @@ export function CreateExamModal({
                     }}
                     className={`p-4 rounded-lg border-2 transition-all text-left ${
                       formData.examType === "diagnostic" && examTypePicked
-                        ? "border-green-500 bg-green-50 shadow-lg"
-                        : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                        ? "border-primary bg-primary/10 shadow-lg"
+                        : "border-gray-300 hover:border-primary/40 hover:bg-primary/5"
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -460,7 +496,7 @@ export function CreateExamModal({
                   </button>
                 </div>
                 {examTypePicked && (
-                  <div className="flex items-center gap-1 text-sm text-green-600 mt-3">
+                  <div className="flex items-center gap-1 text-sm text-primary mt-3">
                     <span>
                       {formData.examType === "board" ? "Board exam" : "Diagnostic test"} selected
                     </span>
@@ -477,13 +513,10 @@ export function CreateExamModal({
 
           {step === 6 && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-2">
+                <div className="flex items-center gap-2 text-primary">
                   <span className="font-medium">Step 6: Review & Create</span>
                 </div>
-                <p className="text-sm text-green-700">
-                  Review your exam details before creating. Make sure everything looks correct.
-                </p>
               </div>
               
               {/* Exam Summary */}
@@ -532,7 +565,8 @@ export function CreateExamModal({
                     type="date"
                     value={formData.date}
                     onChange={(e) => handleInputChange("date", e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-500 transition-all"
+                    min={getTodayDate()}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   />
                 </label>
 
@@ -545,7 +579,7 @@ export function CreateExamModal({
                     value={formData.folder}
                     onChange={(e) => handleInputChange("folder", e.target.value)}
                     placeholder="e.g., Mathematics, Science, English"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-500 transition-all"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   />
                 </label>
               </div>
@@ -565,6 +599,7 @@ export function CreateExamModal({
           )}
           {step < 6 ? (
             <button
+              data-testid="next-button"
               onClick={() => {
                 if (step === 1 && !formData.name.trim()) {
                   toast.error("Please enter an exam name to continue");
@@ -607,9 +642,10 @@ export function CreateExamModal({
             </button>
           ) : (
             <button
+              data-testid="submit-button"
               onClick={handleCreateExam}
               disabled={isSubmitting}
-              className="flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+              className="flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
             >
               {isSubmitting ? (
                 <>
@@ -625,6 +661,7 @@ export function CreateExamModal({
           )}
         </div>
       </Card>
+      </div>
     </div>
   );
 }

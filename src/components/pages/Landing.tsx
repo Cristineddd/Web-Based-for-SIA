@@ -72,10 +72,12 @@ export default function Landing() {
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <Image src="/Sia.png" alt="SIA Logo" width={40} height={40} className="w-10 h-10 object-contain aspect-square flex-shrink-0" />
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-lg">S</span>
+              </div>
               <div>
-                <h1 className="text-lg font-bold text-[#166534]">GC SMART CHECK</h1>
-                <p className="text-xs text-gray-600">Smart Exam Checking</p>
+                <h1 className="text-lg font-bold text-[#166534]">Smart Exam Checking</h1>
+                <p className="text-xs text-gray-600">GC Scan</p>
               </div>
             </div>
             <button 
@@ -95,7 +97,7 @@ export default function Landing() {
             {/* Left Content */}
             <div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
-                GC SMART CHECK
+                GC Scan: Smart Exam Checking System
               </h1>
               
               <p className="text-lg text-gray-600 mb-8 leading-relaxed">
@@ -146,7 +148,7 @@ export default function Landing() {
         <div className="w-full max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-              Why Choose SIA?
+              Why Choose GC Scan?
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Minimize manual work. Maximize accuracy. Save precious time.
@@ -205,7 +207,7 @@ export default function Landing() {
             Streamline Your Grading Process
           </h2>
           <p className="text-lg text-green-100 mb-8">
-            Focus on teaching. Let SIA handle the grading.
+            Focus on teaching. Let GC Scan handle the grading.
           </p>
           <button 
             onClick={() => setShowAuthModal(true)}

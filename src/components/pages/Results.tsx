@@ -32,6 +32,7 @@ import {
   RotateCcw,
   Archive,
   Loader2,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getClasses, Class } from '@/services/classService';
@@ -1183,7 +1184,6 @@ export default function Results() {
       <div className="page-container">
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
         </div>
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-4 border-[#1a472a] border-t-transparent rounded-full animate-spin" />
@@ -1200,22 +1200,28 @@ export default function Results() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-            <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
           </div>
+        </div>
+
+        {/* Classes Header */}
+        <div className="mb-4">
+          <h2 className="text-xl font-bold text-foreground">Classes</h2>
         </div>
 
         {/* Class Info Bar */}
         <div className="flex items-center gap-4">
-          <button 
+          <Button 
             onClick={() => {
               setSelectedClass(null);
               setClassExamsList([]);
               setSelectedExamIds(new Set());
             }}
-            className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors"
+            variant="ghost"
+            size="icon"
+            className="hover:bg-muted"
           >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
           <div className="flex-1">
             <h2 className="text-xl font-bold text-[#1a472a]">{selectedClass.className}</h2>
             <p className="text-gray-600 text-sm">
@@ -1491,7 +1497,6 @@ export default function Results() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-            <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground text-sm">Export as:</span>
@@ -1525,15 +1530,17 @@ export default function Results() {
         {/* Class / Exam Info Bar */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button 
+            <Button 
               onClick={() => {
                 setSelectedExam(null);
                 setStudentResults([]);
               }}
-              className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors"
+              variant="ghost"
+              size="icon"
+              className="hover:bg-muted"
             >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
             <div>
               <h2 className="text-xl font-bold text-[#1a472a]">{selectedExam.title}</h2>
               <p className="text-gray-600 text-sm">
@@ -1613,7 +1620,6 @@ export default function Results() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
         </div>
         {classResults.length > 0 && (
           <Button
@@ -1655,10 +1661,10 @@ export default function Results() {
 
       {/* Class Search & Filter Bar */}
       {classResults.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            {/* Search */}
-            <div className="relative flex-1">
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            {/* Search - more compact */}
+            <div className="relative sm:max-w-md">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search classes..."
@@ -1667,24 +1673,26 @@ export default function Results() {
                   setClassSearch(e.target.value);
                   updateURL({ cs: e.target.value || null });
                 }}
-                className="pl-9"
+                className="pl-9 h-9"
               />
             </div>
-            {/* Filters toggle */}
-            <Button
-              variant={showClassFilters ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setShowClassFilters(!showClassFilters)}
-              className={showClassFilters ? 'bg-[#1a472a] hover:bg-[#2d6b47] text-white' : ''}
-            >
-              <Filter className="h-4 w-4 mr-1.5" />
-              Filters
-              {classFilterCount > 0 && (
-                <Badge className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0 h-4 min-w-[16px] rounded-full">
-                  {classFilterCount}
-                </Badge>
-              )}
-            </Button>
+            {/* Filters - grouped closer to search */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant={showClassFilters ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowClassFilters(!showClassFilters)}
+                className={showClassFilters ? 'bg-[#1a472a] hover:bg-[#2d6b47] text-white' : ''}
+              >
+                <Filter className="h-4 w-4 mr-1.5" />
+                Filters
+                {classFilterCount > 0 && (
+                  <Badge className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0 h-4 min-w-[16px] rounded-full">
+                    {classFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </div>
           </div>
 
           {/* Collapsible class filter panel */}
@@ -1763,11 +1771,11 @@ export default function Results() {
           )}
 
           {/* Result count */}
-          {classFilterCount > 0 && (
+          <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               Showing {filteredClassResults.length} of {classResults.length} classes
             </p>
-          )}
+          </div>
         </div>
       )}
 
@@ -1794,34 +1802,35 @@ export default function Results() {
             return (
               <Card
                 key={classResult.classId}
-                className="p-6 border hover:shadow-md transition-shadow cursor-pointer"
+                className="p-5 border hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => handleClassClick(classResult)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                      <Folder className="w-6 h-6 text-amber-600" />
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Folder className="w-5 h-5 text-amber-600" />
                     </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-[#1a472a]">{classResult.className}</h3>
-                      <p className="text-sm text-gray-600 flex items-center gap-1">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-[#1a472a] truncate">{classResult.className}</h3>
+                      <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5">
                         📅 {classResult.schedule}
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                  <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Total Students</p>
-                    <p className="text-lg font-bold text-[#1a472a] flex items-center gap-1">
+                <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 mb-1">Total Students</p>
+                    <p className="text-lg font-bold text-[#1a472a] flex items-center justify-center gap-1">
                       <Users className="w-4 h-4" />
                       {classResult.totalStudents}
                     </p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Class Average</p>
+                  <div className="w-px h-8 bg-gray-300"></div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 mb-1">Class Average</p>
                     <p className="text-lg font-bold text-[#1a472a]">
                       {classResult.scannedCount > 0 ? `${classResult.averageScore}%` : '—'}
                     </p>

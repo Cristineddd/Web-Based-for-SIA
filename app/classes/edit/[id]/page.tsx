@@ -2,13 +2,19 @@ import ClassEdit from '@/components/pages/ClassEdit';
 import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
 
 export const metadata = {
-  title: "Edit Class - SIA",
+  title: "Edit Class - GC Scan",
 };
 
-export default function ClassEditPage() {
+interface ClassEditPageProps {
+  params: {
+    id: string;
+  };
+}
+
+export default function ClassEditPage({ params }: ClassEditPageProps) {
   return (
     <ProtectedLayout>
-      <ClassEdit />
+      <ClassEdit classId={params.id} />
     </ProtectedLayout>
   );
 }

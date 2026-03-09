@@ -44,7 +44,7 @@ export function Footer() {
             <div>
               <h3 className="text-xl font-bold text-sidebar-foreground">GC SMART CHECK</h3>
               <p className="text-sm text-sidebar-foreground/60 mt-1">
-                Smart Exam Checking & Auto-Grading System
+                GC SMART CHECK: Smart Exam Checking System
               </p>
             </div>
             <p className="text-sm text-sidebar-foreground/70 max-w-sm">
@@ -167,7 +167,7 @@ export function DashboardFooter() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-4">
           {/* About */}
           <div>
-            <h5 className="font-semibold text-foreground mb-2 text-sm">About SIA</h5>
+            <h5 className="font-semibold text-foreground mb-2 text-sm">About GC Scan</h5>
             <p className="text-xs text-muted-foreground">
               Streamline your exam management with automated checking and grading.
             </p>

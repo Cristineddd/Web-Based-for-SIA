@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
-  ArrowLeft,
   X,
   Loader2,
   AlertCircle,
@@ -21,6 +20,7 @@ import { AnswerKeyService } from '@/services/answerKeyService';
 import { ScanningService } from '@/services/scanningService';
 import { getClassById, getClasses, Class, Student } from '@/services/classService';
 import { toast } from 'sonner';
+import { BackButton } from '@/components/ui/BackButton';
 import { AnswerChoice } from '@/types/scanning';
 
 interface OMRScannerProps {
@@ -107,7 +107,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               const allClasses = await getClasses(user.id);
               const matchedClass = allClasses.find(c => 
                 c.class_name === examData.className || 
-                `${c.class_name} - ${c.section_block}` === examData.className
+                `${c.class_name} - ${c.course_subject}${c.year ? ` ${c.year}` : ''}` === examData.className
               );
               if (matchedClass) {
                 setClassData(matchedClass);
@@ -1074,9 +1074,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         } else {
           // If alignment is poor but ID was detected, warn that the ID might be misread
           if (hasAlignmentIssue) {
-            idError = `Student ID "${studentId}" may have been misread due to alignment issues. The ID is not registered in class "${classData.class_name} - ${classData.section_block}". Try retaking the photo with better alignment.`;
+            idError = `Student ID "${studentId}" may have been misread due to alignment issues. The ID is not registered in class "${classData.class_name} - ${classData.course_subject}${classData.year ? ` ${classData.year}` : ''}". Try retaking the photo with better alignment.`;
           } else {
-            idError = `Student ID "${studentId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`;
+            idError = `Student ID "${studentId}" is not registered in class "${classData.class_name} - ${classData.course_subject}${classData.year ? ` ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`;
           }
         }
       }
@@ -2236,8 +2236,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     const student = classData.students.find(s => s.student_id === detectedStudentId);
     if (!student) {
-      toast.error(`Cannot save: Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.section_block}".`);
-      setStudentIdError(`Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class.`);
+      toast.error(`Cannot save: Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.course_subject}${classData.year ? ` ${classData.year}` : ''}".`);
+      setStudentIdError(`Student ID "${detectedStudentId}" is not registered in class "${classData.class_name} - ${classData.course_subject}${classData.year ? ` ${classData.year}` : ''}". Please verify the student is enrolled in this class.`);
       return;
     }
     
@@ -2309,7 +2309,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         setStudentIdError(null);
       } else {
         setMatchedStudent(null);
-        setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
+        setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name} - ${classData.course_subject}${classData.year ? ` ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
       }
     }
   };
@@ -2361,10 +2361,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   if (!exam) {
     return (
       <div className="space-y-6">
-        <Link href="/exams" className="inline-flex items-center gap-2 text-gray-600 hover:text-[#1a472a]">
-          <ArrowLeft className="w-5 h-5" />
+        <BackButton href="/exams" asLink>
           Back to Exams
-        </Link>
+        </BackButton>
         <Card className="p-12 text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-900">Exam Not Found</h2>
@@ -2378,10 +2377,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   if (answerKey.length === 0) {
     return (
       <div className="space-y-6">
-        <Link href={`/exams/${examId}`} className="inline-flex items-center gap-2 text-gray-600 hover:text-[#1a472a]">
-          <ArrowLeft className="w-5 h-5" />
+        <BackButton href={`/exams/${examId}`} asLink>
           Back to Exam
-        </Link>
+        </BackButton>
         <Card className="p-12 text-center">
           <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-900">Answer Key Required</h2>
@@ -2401,9 +2399,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href={`/exams/${examId}`} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
+          <BackButton href={`/exams/${examId}`} asLink className="p-2 hover:bg-gray-100 rounded-lg transition-colors" />
           <div>
             <h1 className="text-2xl font-bold text-[#1a472a]">Scan Answer Sheets</h1>
             <p className="text-gray-600">{exam.title} • {exam.num_items} questions</p>
@@ -2639,7 +2635,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                             setStudentIdError(null);
                           } else {
                             setMatchedStudent(null);
-                            setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name} - ${classData.section_block}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
+                            setStudentIdError(`Student ID "${newId}" is not registered in class "${classData.class_name} - ${classData.course_subject}${classData.year ? ` ${classData.year}` : ''}". Please verify the student is enrolled in this class or check if the ID was shaded correctly.`);
                           }
                         }
                       }}

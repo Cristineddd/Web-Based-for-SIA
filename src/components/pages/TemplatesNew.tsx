@@ -371,7 +371,6 @@ export default function Templates() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Answer Sheet Templates</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">View and manage templates generated from exams. Templates are created automatically when you create an exam.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button

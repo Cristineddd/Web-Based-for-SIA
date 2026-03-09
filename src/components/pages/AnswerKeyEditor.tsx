@@ -370,7 +370,7 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
           {/* Download Answer Key Button */}
           <button
             onClick={handleDownloadAnswerKey}
-            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md font-semibold hover:bg-green-700 transition-colors text-sm"
+            className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors text-sm"
             title="Download current answer key"
             disabled={answersEntered === 0}
           >
@@ -465,15 +465,20 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
         </div>
       </Card>
 
-      {/* Answer Key Grid - responsive: 2 cols mobile, 3 sm, 5 md+ */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
+      {/* Answer Key Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {Array.from({ length: totalQuestions }, (_, i) => i + 1).map((questionNum) => (
-          <div key={questionNum} className={`p-3 rounded-lg border transition-all ${answers[questionNum] ? 'bg-blue-50 border-primary' : 'bg-background border-muted'}`}>
-            <div className="text-center mb-2">
-              <label className="text-xs font-semibold text-foreground block mb-2">
-                Q{questionNum}
-              </label>
-              <div className="flex flex-wrap justify-center gap-1">
+          <div key={questionNum} className={`p-2 rounded-lg border-2 transition-all ${answers[questionNum] ? 'bg-blue-50 border-primary' : 'bg-background border-gray-300'}`}>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-1 mb-2">
+                <label className="text-xs font-semibold text-foreground">
+                  Q{questionNum}
+                </label>
+                {answers[questionNum] && (
+                  <span className="text-xs font-bold text-primary">✓</span>
+                )}
+              </div>
+              <div className="flex justify-center gap-1">
                 {availableChoices.map(choice => (
                   <label key={choice} className="cursor-pointer">
                     <input
@@ -485,19 +490,16 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
                       disabled={isLocked}
                       className="hidden"
                     />
-                    <span className={`w-6 h-6 flex items-center justify-center rounded text-xs font-semibold transition-colors cursor-pointer block ${
+                    <span className={`w-8 h-8 flex items-center justify-center rounded-md text-sm font-semibold transition-all duration-200 cursor-pointer block hover:scale-105 ${
                       answers[questionNum] === choice
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted hover:bg-primary/20'
+                        ? 'bg-primary text-primary-foreground shadow-md'
+                        : 'bg-muted hover:bg-primary/20 border border-border'
                     }`}>
                       {choice}
                     </span>
                   </label>
                 ))}
               </div>
-              {answers[questionNum] && (
-                <span className="text-xs font-bold text-primary mt-1">✓</span>
-              )}
             </div>
           </div>
         ))}

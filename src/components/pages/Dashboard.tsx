@@ -312,15 +312,15 @@ export default function Dashboard() {
           return (
             <Card key={stat.title} className={`stat-card animate-slide-up border-2 ${stat.borderColor} hover:border-[#B38B00] transition-colors duration-200`}>
               <CardContent className="p-4 md:p-6">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-2 sm:gap-4">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#166534] break-words">{stat.title}</p>
                     <p className="text-2xl md:text-3xl font-bold mt-2 text-[#166534] font-mono tabular-nums">
                       {loading ? '-' : stat.value}
                     </p>
                   </div>
-                  <div className={`w-12 h-12 md:w-14 md:h-14 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}>
-                    <Icon className={`w-6 h-6 md:w-7 md:h-7 ${stat.color}`} />
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}>
+                    <Icon className={`w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 ${stat.color}`} />
                   </div>
                 </div>
               </CardContent>
@@ -337,7 +337,7 @@ export default function Dashboard() {
               Quick Actions
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 pt-0">
+          <CardContent className="space-y-6 pt-0">
             <Button 
               className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]" 
               variant="outline"

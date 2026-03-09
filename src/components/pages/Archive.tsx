@@ -19,9 +19,6 @@ export default function Archive() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-foreground">Archive</h1>
-        <p className="text-muted-foreground mt-1">
-          View and manage archived exams, classes, and report history
-        </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

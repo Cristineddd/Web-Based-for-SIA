@@ -6,7 +6,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, ArrowLeft, Mail, Lock, Eye, EyeOff, X } from 'lucide-react';
-import Image from 'next/image';
 
 interface LoginFormProps {
   onToggleMode: () => void;
@@ -76,19 +75,12 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   return (
     <>
       <div className="w-full">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center">
-            <Image src="/Sia.png" alt="SIA Logo" width={60} height={60} className="w-15 h-15 object-contain" />
-          </div>
-        </div>
-
         <div>
           {!showPasswordField ? (
             <>
               <h2 className="text-2xl font-bold mb-2 text-gray-900">Sign in</h2>
               <p className="text-sm mb-8 text-gray-600">
-                to continue to SIA
+                to continue to GC Scan
               </p>
 
               {error && (

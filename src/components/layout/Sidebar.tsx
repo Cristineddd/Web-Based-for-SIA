@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { 
@@ -12,10 +11,10 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart3,
-  Archive,
   Menu,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Archive
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebarContext } from '@/contexts/SidebarContext';
@@ -74,8 +73,10 @@ export function Sidebar() {
         >
           {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </button>
-        <Image src="/Sia.png" alt="SIA Logo" width={28} height={28} className="w-7 h-7 object-contain aspect-square flex-shrink-0" />
-        <h1 className="font-bold text-white text-sm">SIA</h1>
+        <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+          <span className="text-white font-bold text-sm">G</span>
+        </div>
+        <h1 className="font-bold text-white text-sm">GC SMART CHECK</h1>
       </div>
 
       {mobileOpen && (
@@ -97,15 +98,19 @@ export function Sidebar() {
         <div className="p-5 border-b border-[#F0E6D2]">
           {!collapsed ? (
             <div className="overflow-hidden flex items-center gap-3">
-              <Image src="/Sia.png" alt="SIA Logo" width={40} height={40} className="w-10 h-10 object-contain aspect-square flex-shrink-0" />
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-lg">G</span>
+              </div>
               <div>
-                <h1 className="font-bold text-white text-sm">SIA</h1>
+                <h1 className="font-bold text-white text-sm">GC SMART CHECK</h1>
                 <p className="text-xs text-white/60 break-words">Exam & Quiz Builder</p>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
-              <Image src="/Sia.png" alt="SIA Logo" width={32} height={32} className="w-8 h-8 object-contain aspect-square flex-shrink-0" />
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-sm">G</span>
+              </div>
             </div>
           )}
         </div>

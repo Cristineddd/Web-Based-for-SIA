@@ -163,7 +163,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             </div>
             <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Account Created</h2>
             <p className="mb-6" className="text-gray-600">
-              Welcome to SIA, <strong style={{ color: '#166534' }}>{fullName}</strong>!
+              Welcome to GC Scan, <strong style={{ color: '#166534' }}>{fullName}</strong>!
             </p>
             <p className="text-sm flex items-center justify-center gap-2" className="text-gray-600">
               <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#166534' }} />
@@ -177,17 +177,10 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
 
   return (
     <div className="w-full">
-      {/* Logo */}
-      <div className="text-center mb-8">
-        <div className="flex justify-center">
-          <Image src="/Sia.png" alt="SIA Logo" width={60} height={60} className="w-15 h-15 object-contain" />
-        </div>
-      </div>
-
       <div>
         <h2 className="text-2xl font-bold mb-2 text-gray-900">Create account</h2>
         <p className="text-sm mb-8 text-gray-600">
-          to get started with SIA
+          to get started with GC Scan
         </p>
 
           {error && (
