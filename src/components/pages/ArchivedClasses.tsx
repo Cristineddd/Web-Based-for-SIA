@@ -5,10 +5,9 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Archive as ArchiveIcon, Search, GraduationCap, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { getArchivedClasses, Class } from '@/services/classService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,20 +27,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-interface ArchivedClass {
-  id: string;
-  class_name: string;
-  course_subject: string;
-  section_block: string;
-  room: string;
-  students_count: number;
-  created_at: string;
-  isArchived: boolean;
-}
-
 export default function ArchivedClasses() {
   const { user } = useAuth();
-  const [archivedClasses, setArchivedClasses] = useState<ArchivedClass[]>([]);
+  const [archivedClasses, setArchivedClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -56,24 +44,7 @@ export default function ArchivedClasses() {
           return;
         }
 
-        const classesRef = collection(db, 'classes');
-        const q = query(classesRef, where('isArchived', '==', true));
-        const snapshot = await getDocs(q);
-
-        const classes = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            class_name: data.class_name || '',
-            course_subject: data.course_subject || '',
-            section_block: data.section_block || '',
-            room: data.room || '',
-            students_count: Array.isArray(data.students) ? data.students.length : 0,
-            created_at: data.created_at || '',
-            isArchived: data.isArchived || true,
-          } as ArchivedClass;
-        });
-
+        const classes = await getArchivedClasses(user.id);
         setArchivedClasses(classes);
       } catch (error) {
         console.error('Error fetching archived classes:', error);
@@ -89,7 +60,7 @@ export default function ArchivedClasses() {
   const filteredClasses = archivedClasses.filter((c) =>
     c.class_name.toLowerCase().includes(search.toLowerCase()) ||
     c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
-    c.section_block.toLowerCase().includes(search.toLowerCase())
+    (c.year && c.year.toLowerCase().includes(search.toLowerCase()))
   );
 
   const handleDelete = async () => {
@@ -139,7 +110,7 @@ export default function ArchivedClasses() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Search archived classes by program, course, or section..."
+            placeholder="Search archived classes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -161,66 +132,73 @@ export default function ArchivedClasses() {
         </Card>
       ) : (
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-x-auto max-w-full">
+            <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[150px]">Program</TableHead>
-                  <TableHead className="min-w-[120px]">Course</TableHead>
-                  <TableHead className="min-w-[100px] hidden sm:table-cell">Section</TableHead>
-                  <TableHead className="min-w-[80px] hidden md:table-cell">Room</TableHead>
-                  <TableHead className="text-center min-w-[100px]">Students</TableHead>
-                  <TableHead className="text-center min-w-[100px]">Actions</TableHead>
+                  <TableHead className="min-w-[120px] w-[40%]">Program</TableHead>
+                  <TableHead className="min-w-[100px] w-[25%] hidden sm:table-cell">Course</TableHead>
+                  <TableHead className="min-w-[70px] w-[15%] hidden lg:table-cell">Year</TableHead>
+                  <TableHead className="min-w-[70px] w-[15%] hidden lg:table-cell">Room</TableHead>
+                  <TableHead className="text-center min-w-[70px] w-[15%] hidden md:table-cell">Students</TableHead>
+                  <TableHead className="text-center min-w-[80px] w-[20%]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredClasses.map((archivedClass) => (
                   <TableRow key={archivedClass.id}>
                     <TableCell className="font-medium">
-                      <div className="break-words min-w-0" title={archivedClass.class_name}>
+                      <div className="break-words overflow-hidden text-ellipsis" style={{maxWidth: '120px'}} title={archivedClass.class_name}>
                         {archivedClass.class_name}
                       </div>
+                      <div className="text-xs text-muted-foreground sm:hidden mt-1">
+                        {archivedClass.course_subject}
+                        {archivedClass.year && ` • ${archivedClass.year}`}
+                        <span className="md:hidden"> • {archivedClass.students ? archivedClass.students.length : 0} students</span>
+                      </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="break-words min-w-0" title={archivedClass.course_subject}>
+                    <TableCell className="hidden sm:table-cell">
+                      <div className="break-words overflow-hidden text-ellipsis" style={{maxWidth: '100px'}} title={archivedClass.course_subject}>
                         {archivedClass.course_subject}
                       </div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <div className="break-words min-w-0" title={archivedClass.section_block}>
-                        {archivedClass.section_block}
+                      <div className="break-words overflow-hidden text-ellipsis" title={archivedClass.year || 'N/A'}>
+                        {archivedClass.year || 'N/A'}
                       </div>
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      <div className="break-words min-w-0" title={archivedClass.room}>
-                        {archivedClass.room}
+                    <TableCell className="hidden lg:table-cell">
+                      <div className="break-words overflow-hidden text-ellipsis" title={archivedClass.room || 'N/A'}>
+                        {archivedClass.room || 'N/A'}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center hidden md:table-cell">
                       <span className="inline-flex items-center gap-1">
                         <GraduationCap className="w-4 h-4" />
-                        {archivedClass.students_count}
+                        {archivedClass.students ? archivedClass.students.length : 0}
                       </span>
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="flex gap-2 justify-center">
+                      <div className="flex items-center justify-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-blue-600 hover:text-blue-700"
+                          className="text-blue-600 hover:text-blue-700 h-8 px-2 flex items-center justify-center"
                           onClick={() => setRestoreId(archivedClass.id)}
                           title="Restore class to active"
                         >
                           <RotateCcw className="w-4 h-4" />
+                          <span className="hidden md:inline ml-1">Restore</span>
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-destructive hover:text-destructive"
+                          className="text-destructive hover:text-destructive h-8 px-2 flex items-center justify-center"
                           onClick={() => setDeleteId(archivedClass.id)}
                           title="Permanently delete class"
                         >
                           <Trash2 className="w-4 h-4" />
+                          <span className="hidden md:inline ml-1">Delete</span>
                         </Button>
                       </div>
                     </TableCell>

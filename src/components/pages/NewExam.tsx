@@ -423,7 +423,7 @@ export default function NewExam() {
                     <SelectContent>
                       {classes.map((cls) => (
                         <SelectItem key={cls.id} value={cls.id}>
-                          {cls.class_name} ({cls.section_block}) - {cls.students.length} students
+                          {cls.class_name} ({cls.course_subject}) - {cls.students.length} students
                         </SelectItem>
                       ))}
                     </SelectContent>

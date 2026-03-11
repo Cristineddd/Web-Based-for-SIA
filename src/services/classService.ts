@@ -137,6 +137,12 @@ export async function getClasses(userId?: string): Promise<Class[]> {
 
     querySnapshot.forEach((doc) => {
       const data = doc.data() as any;
+      
+      // Skip archived classes in the main class list
+      if (data.isArchived === true) {
+        return;
+      }
+      
       classes.push({
         id: doc.id,
         class_name: data.class_name,
@@ -147,6 +153,7 @@ export async function getClasses(userId?: string): Promise<Class[]> {
         created_at: data.created_at || (data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()),
         createdBy: data.createdBy,
         updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
+        isArchived: data.isArchived || false,
       });
     });
 
@@ -311,6 +318,63 @@ export async function removeStudentFromClass(classId: string, studentId: string)
     }
   } catch (error) {
     console.error('Error removing student from class:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get archived classes for a specific user
+ */
+export async function getArchivedClasses(userId?: string): Promise<Class[]> {
+  try {
+    let q;
+    
+    if (userId) {
+      // Query archived classes by createdBy
+      q = query(
+        collection(db, CLASSES_COLLECTION),
+        where('createdBy', '==', userId),
+        where('isArchived', '==', true)
+      );
+    } else {
+      q = query(
+        collection(db, CLASSES_COLLECTION), 
+        where('isArchived', '==', true),
+        orderBy('createdAt', 'desc')
+      );
+    }
+
+    const querySnapshot = await getDocs(q);
+    const classes: Class[] = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data() as any;
+      classes.push({
+        id: doc.id,
+        class_name: data.class_name,
+        course_subject: data.course_subject,
+        year: data.year,
+        room: data.room,
+        students: data.students || [],
+        created_at: data.created_at || (data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()),
+        createdBy: data.createdBy,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
+        isArchived: data.isArchived || false,
+      });
+    });
+
+    // Sort in JavaScript if filtering by user
+    if (userId) {
+      classes.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA; // descending order (newest first)
+      });
+    }
+
+    return classes;
+  } catch (error) {
+    console.error('Error fetching archived classes:', error);
     throw error;
   }
 }

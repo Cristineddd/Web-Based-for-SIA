@@ -311,7 +311,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         }).then(() => {
-          console.log('✅ User document created in Firestore with instructorId:', instructorId);
+          console.log('User document created in Firestore with instructorId:', instructorId);
         });
 
         // Wait for both to complete - if user doc creation fails, this will throw
@@ -323,7 +323,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             url: window.location.origin + '/auth?verified=true',
             handleCodeInApp: false,
           });
-          console.log('✅ Verification email sent to:', email);
+          console.log('Verification email sent to:', email);
         } catch (emailError: any) {
           console.warn('⚠️ Could not send verification email:', emailError?.message);
           // Non-critical - account is created, user can resend later

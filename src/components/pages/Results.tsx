@@ -782,7 +782,7 @@ export default function Results() {
               chunkData[idx] = { totalScore, totalMaxScore, count };
 
               // Merge all chunks
-              let merged = { totalScore: 0, totalMaxScore: 0, count: 0 };
+              const merged = { totalScore: 0, totalMaxScore: 0, count: 0 };
               Object.values(chunkData).forEach((cd) => {
                 merged.totalScore += cd.totalScore;
                 merged.totalMaxScore += cd.totalMaxScore;

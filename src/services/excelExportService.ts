@@ -86,7 +86,7 @@ function stylizeHeaderRow(ws: XLSX.WorkSheet, headerCount: number, rowIndex: num
 function freezeHeaderRow(ws: XLSX.WorkSheet, frozenRows: number = 1): void {
   ws['!freeze'] = { xSplit: 0, ySplit: frozenRows };
   // Some consumers use '!views' instead
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   (ws as any)['!views'] = [{ state: 'frozen', ySplit: frozenRows }];
 }
 
@@ -115,10 +115,10 @@ function addDataValidation(
   allowedValues: string[],
 ): void {
   if (!ws['!dataValidation']) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (ws as any)['!dataValidation'] = [];
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   (ws as any)['!dataValidation'].push({
     type: 'list',
     operator: 'equal',

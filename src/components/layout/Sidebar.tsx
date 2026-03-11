@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -73,8 +74,14 @@ export function Sidebar() {
         >
           {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </button>
-        <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-          <span className="text-white font-bold text-sm">G</span>
+        <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
+          <Image
+            src="/gclogo.png"
+            alt="GC Logo"
+            width={24}
+            height={24}
+            className="object-contain"
+          />
         </div>
         <h1 className="font-bold text-white text-sm">GC SMART CHECK</h1>
       </div>
@@ -98,8 +105,14 @@ export function Sidebar() {
         <div className="p-5 border-b border-[#F0E6D2]">
           {!collapsed ? (
             <div className="overflow-hidden flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold text-lg">G</span>
+              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+                <Image
+                  src="/gclogo.png"
+                  alt="GC Logo"
+                  width={32}
+                  height={32}
+                  className="object-contain"
+                />
               </div>
               <div>
                 <h1 className="font-bold text-white text-sm">GC SMART CHECK</h1>
@@ -108,8 +121,14 @@ export function Sidebar() {
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold text-sm">G</span>
+              <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                <Image
+                  src="/gclogo.png"
+                  alt="GC Logo"
+                  width={24}
+                  height={24}
+                  className="object-contain"
+                />
               </div>
             </div>
           )}

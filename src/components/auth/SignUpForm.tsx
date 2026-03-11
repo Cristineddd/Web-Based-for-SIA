@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, CheckCircle, User, Mail, Lock, ArrowLeft } from 'lucide-react';
-import Image from 'next/image';
+import { Loader2, CheckCircle, User, Mail, Lock } from 'lucide-react';
 
 interface SignUpFormProps {
   onToggleMode: () => void;
@@ -82,10 +81,10 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.15)'
           }}>
             <div className="w-16 h-16 rounded-full bg-[gray-600]/10 flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-8 h-8" className="text-gray-600" />
+              <Mail className="w-8 h-8 text-gray-600" />
             </div>
             <h2 className="text-2xl font-bold mb-2 text-center" style={{ color: '#166534' }}>Verify Your Email</h2>
-            <p className="text-center mb-6" className="text-gray-600">
+            <p className="text-center mb-6 text-gray-600">
               We've sent a verification link to <strong style={{ color: '#166534' }}>{email}</strong>
             </p>
 
@@ -93,7 +92,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               <p className="text-sm mb-2" style={{ color: '#166534' }}>
                 <strong>📧 Check these places:</strong>
               </p>
-              <ul className="text-sm space-y-1 ml-4" className="text-gray-600">
+              <ul className="text-sm space-y-1 ml-4 text-gray-600">
                 <li>• Your <strong>Inbox</strong></li>
                 <li>• Your <strong>Spam</strong> or <strong>Junk</strong> folder</li>
                 <li>• Your <strong>Promotions</strong> tab (Gmail)</li>
@@ -108,7 +107,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             )}
 
             <div className="space-y-3">
-              <p className="text-sm text-center" className="text-gray-600">
+              <p className="text-sm text-center text-gray-600">
                 Didn't receive the email?
               </p>
               <button
@@ -162,10 +161,10 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               <CheckCircle className="w-8 h-8" style={{ color: '#166534' }} />
             </div>
             <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Account Created</h2>
-            <p className="mb-6" className="text-gray-600">
+            <p className="mb-6 text-gray-600">
               Welcome to GC Scan, <strong style={{ color: '#166534' }}>{fullName}</strong>!
             </p>
-            <p className="text-sm flex items-center justify-center gap-2" className="text-gray-600">
+            <p className="text-sm flex items-center justify-center gap-2 text-gray-600">
               <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#166534' }} />
               Redirecting to dashboard...
             </p>

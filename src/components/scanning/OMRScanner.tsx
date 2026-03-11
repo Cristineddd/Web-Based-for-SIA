@@ -664,7 +664,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         // Derive rotation angle from edge direction
         // Horizontal edges (gy dominant): edge angle ≈ ±90° → paper rotated by (angle − 90°)
         // Vertical edges (gx dominant):  edge angle ≈ 0°/180° → paper rotated by edge angle
-        let angle = Math.atan2(gy, gx) * 180 / Math.PI; // –180..+180
+        const angle = Math.atan2(gy, gx) * 180 / Math.PI; // –180..+180
         let rotation: number;
         if (Math.abs(gx) >= Math.abs(gy)) {
           // Vertical edge

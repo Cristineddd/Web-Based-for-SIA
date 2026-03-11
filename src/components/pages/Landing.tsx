@@ -72,17 +72,23 @@ export default function Landing() {
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold text-lg">S</span>
+              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+                <Image
+                  src="/gclogo.png"
+                  alt="GC Logo"
+                  width={32}
+                  height={32}
+                  className="object-contain"
+                />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-[#166534]">Smart Exam Checking</h1>
+                <h1 className="text-lg font-bold text-[#166534]">GC SMART CHECK</h1>
                 <p className="text-xs text-gray-600">GC Scan</p>
               </div>
             </div>
             <button 
               onClick={() => setShowAuthModal(true)}
-              className="px-6 py-2.5 rounded-lg font-semibold transition-all bg-[#166534] hover:bg-[#1a7a3e] text-white"
+              className="px-6 py-2.5 rounded-lg font-semibold transition-all border border-[#166534] text-[#166534] hover:bg-[#166534] hover:text-white"
             >
               Get Started
             </button>
@@ -97,7 +103,7 @@ export default function Landing() {
             {/* Left Content */}
             <div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
-                GC Scan: Smart Exam Checking System
+                GC SMART CHECK
               </h1>
               
               <p className="text-lg text-gray-600 mb-8 leading-relaxed">
@@ -109,7 +115,7 @@ export default function Landing() {
                   onClick={() => setShowAuthModal(true)}
                   className="px-8 py-4 rounded-lg font-semibold transition-all bg-[#166534] hover:bg-[#1a7a3e] text-white shadow-lg hover:shadow-xl"
                 >
-                  Start Now - It's Free
+                  Get Started
                 </button>
                 
                 <button 
@@ -213,7 +219,7 @@ export default function Landing() {
             onClick={() => setShowAuthModal(true)}
             className="px-8 py-4 rounded-lg font-semibold transition-all bg-white hover:bg-gray-100 text-[#166534] shadow-lg"
           >
-            Get Started Free
+            Get Started
           </button>
         </div>
       </section>
