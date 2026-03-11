@@ -500,7 +500,8 @@ export default function Exams() {
     (exam) =>
       exam.title.toLowerCase().includes(search.toLowerCase()) ||
       exam.subject.toLowerCase().includes(search.toLowerCase()) ||
-      (exam.className && exam.className.toLowerCase().includes(search.toLowerCase())) ||
+      (exam.className &&
+        exam.className.toLowerCase().includes(search.toLowerCase())) ||
       exam.num_items.toString().includes(search) ||
       exam.choices_per_item.toString().includes(search),
   );
@@ -510,7 +511,9 @@ export default function Exams() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Exams</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            Exams
+          </h1>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -538,7 +541,10 @@ export default function Exams() {
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <FileText className="w-4 h-4" />
-              <span>{filteredExams.length} exam{filteredExams.length !== 1 ? 's' : ''}</span>
+              <span>
+                {filteredExams.length} exam
+                {filteredExams.length !== 1 ? "s" : ""}
+              </span>
             </div>
           </div>
         </CardContent>
@@ -547,7 +553,8 @@ export default function Exams() {
       {/* Exam Information */}
       <div className="mb-6">
         <p className="text-sm text-muted-foreground">
-          Manage your exams and answer keys. Click on any exam row to view details or use the actions to edit or manage.
+          Manage your exams and answer keys. Click on any exam row to view
+          details or use the actions to edit or manage.
         </p>
       </div>
 
@@ -595,10 +602,10 @@ export default function Exams() {
               </TableRow>
             ) : (
               filteredExams.map((exam) => (
-                <TableRow 
-                  key={exam.id} 
+                <TableRow
+                  key={exam.id}
                   className="hover:bg-table-row-hover cursor-pointer"
-                  onClick={() => window.location.href = `/exams/${exam.id}`}
+                  onClick={() => (window.location.href = `/exams/${exam.id}`)}
                 >
                   <TableCell className="font-medium">{exam.title}</TableCell>
                   <TableCell className="text-muted-foreground hidden sm:table-cell">
@@ -613,9 +620,9 @@ export default function Exams() {
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
                       <Link href={`/exams/${exam.id}`}>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-8 w-8"
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -651,6 +658,7 @@ export default function Exams() {
         }}
         onCreateExam={handleCreateExam}
         fromTemplate={templateData}
+        existingExamTitles={exams.map((e) => e.title)}
       />
 
       {/* Edit Exam Dialog */}

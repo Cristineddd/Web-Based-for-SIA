@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, AlertTriangle } from "lucide-react";
 import { getClasses, type Class } from "@/services/classService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -22,6 +22,8 @@ interface CreateExamModalProps {
     classId?: string;
     className?: string;
   } | null;
+  /** Existing exam titles for duplicate detection at Step 1. */
+  existingExamTitles?: string[];
 }
 
 interface ExamFormData {
@@ -41,6 +43,7 @@ export function CreateExamModal({
   onClose,
   onCreateExam,
   fromTemplate,
+  existingExamTitles = [],
 }: CreateExamModalProps) {
   const { user } = useAuth();
   const router = useRouter();
@@ -61,6 +64,8 @@ export function CreateExamModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsPicked, setQuestionsPicked] = useState(false);
   const [examTypePicked, setExamTypePicked] = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
   // Pre-fill form when opening from a template reuse flow
   useEffect(() => {
@@ -99,6 +104,21 @@ export function CreateExamModal({
 
     fetchClassesData();
   }, [isOpen, user]);
+
+  // Recompute isDuplicate whenever the name changes
+  useEffect(() => {
+    const trimmed = formData.name.trim().toLowerCase();
+    if (!trimmed) {
+      setIsDuplicate(false);
+      return;
+    }
+    const found = existingExamTitles.some(
+      (t) => t.trim().toLowerCase() === trimmed,
+    );
+    setIsDuplicate(found);
+    // Reset confirmation if name changes
+    setConfirmDuplicate(false);
+  }, [formData.name, existingExamTitles]);
 
   const handleInputChange = (
     field: keyof ExamFormData,
@@ -146,10 +166,10 @@ export function CreateExamModal({
     try {
       // Wait for onCreateExam to complete - it may show duplicate dialog instead
       await onCreateExam(formData);
-      
+
       // Note: Success toast is now shown in the parent component (Exams.tsx)
       // This allows the duplicate detection flow to work properly
-      
+
       // Reset form and close modal
       setFormData({
         name: "",
@@ -182,17 +202,26 @@ export function CreateExamModal({
         {/* Header */}
         <div className="flex-shrink-0 p-4 sm:p-6 border-b bg-gradient-to-r from-gray-50 to-slate-50">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Create New Exam</h2>
-            <button onClick={onClose} className="p-1 hover:bg-white/50 rounded-md">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+              Create New Exam
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-white/50 rounded-md"
+            >
               <X className="w-5 h-5 text-gray-700" />
             </button>
           </div>
-          
+
           {/* Step Progress */}
           <div className="space-y-3">
             <div className="flex justify-between items-center text-sm">
-              <span className="font-medium text-gray-800">Step {step} of 6</span>
-              <span className="text-green-600">{Math.round((step / 6) * 100)}% Complete</span>
+              <span className="font-medium text-gray-800">
+                Step {step} of 6
+              </span>
+              <span className="text-green-600">
+                {Math.round((step / 6) * 100)}% Complete
+              </span>
             </div>
             <div className="flex space-x-2">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -204,7 +233,7 @@ export function CreateExamModal({
                 />
               ))}
             </div>
-            
+
             {/* Step Description */}
             <div className="text-sm text-gray-700 font-medium">
               {step === 1 && "What's the name of your exam?"}
@@ -219,376 +248,466 @@ export function CreateExamModal({
 
         <div className="flex-1 overflow-y-auto">
           <div className="p-4 sm:p-6 space-y-4 min-h-[400px]">
-          {step === 1 && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
-                  <span className="font-medium">Step 1: Exam Name</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  Give your exam a clear, descriptive name that helps you identify it later.
-                </p>
-              </div>
-              
-              <label className="block space-y-2">
-                <span className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  Exam Name *
-                  <span className="text-xs text-muted-foreground">(e.g., "Midterm Exam", "Quiz 1")</span>
-                </span>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
-                  placeholder="Enter exam name (e.g., Midterm Exam, Final Test, Quiz 1)"
-                  className={`w-full px-4 py-3 border rounded-lg bg-background focus:outline-none focus:ring-2 transition-all ${
-                    formData.name.trim() ? "border-green-500 focus:ring-green-200" : "focus:ring-gray-200 border-gray-300"
-                  }`}
-                />
-                {formData.name.trim() && (
-                  <div className="flex items-center gap-1 text-sm text-green-600">
-                    <span>Good exam name!</span>
+            {step === 1 && (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-800 mb-2">
+                    <span className="font-medium">Step 1: Exam Name</span>
                   </div>
-                )}
-                {!formData.name.trim() && (
-                  <p className="text-xs text-gray-600">
-                    Try names like "Math Midterm", "Science Quiz 1", or "Final Exam"
+                  <p className="text-sm text-green-700">
+                    Give your exam a clear, descriptive name that helps you
+                    identify it later.
                   </p>
-                )}
-              </label>
-            </div>
-          )}
+                </div>
 
-          {step === 2 && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
-                  <span className="font-medium">Step 2: Number of Questions</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  Choose how many questions your exam will have. Select a preset or enter a custom number.
-                </p>
-              </div>
-              
-              <label className="block space-y-3">
-                <span className="text-sm font-semibold text-foreground">
-                  How many questions? *
-                </span>
-                <div className="grid grid-cols-3 gap-3">
-                  {[20, 50, 100].map((num) => (
-                    <button
-                      key={num}
-                      onClick={() => {
-                        handleInputChange("totalQuestions", num);
-                        setQuestionsPicked(true);
-                      }}
-                      className={`py-4 px-3 rounded-lg font-semibold text-sm transition-all border-2 ${
-                        formData.totalQuestions === num && questionsPicked
-                          ? "bg-green-500 text-white border-green-500 shadow-lg transform scale-105"
-                          : "border-gray-300 hover:border-green-400 hover:bg-green-50"
-                      }`}
-                    >
-                      <div className="font-bold text-lg">{num}</div>
-                      <div className="text-xs opacity-75">
-                        {num === 20 ? 'Quick Quiz' : num === 50 ? 'Standard Test' : 'Major Exam'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                
-                {questionsPicked && (
-                  <div className="flex items-center gap-1 text-sm text-green-600">
-                    <span>{formData.totalQuestions} questions selected</span>
-                  </div>
-                )}
-                {!questionsPicked && (
-                  <p className="text-xs text-amber-600 flex items-center gap-1">
-                    <span>Please select the number of questions to continue</span>
-                  </p>
-                )}
-              </label>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
-                  <span className="font-medium">Step 3: Answer Format</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  Choose how many answer choices each question will have. Most exams use 4 choices (A, B, C, D).
-                </p>
-              </div>
-              
-              <label className="block space-y-3">
-                <span className="text-sm font-semibold text-foreground">
-                  Number of answer choices per question *
-                </span>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleInputChange("choicesPerItem", 4)}
-                    className={`py-4 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
-                      formData.choicesPerItem === 4
-                        ? "bg-green-500 text-white border-green-500 shadow-lg"
-                        : "border-gray-300 hover:border-green-400 hover:bg-green-50"
-                    }`}
-                  >
-                    <div className="font-bold text-lg">A, B, C, D</div>
-                    <div className="text-xs opacity-75">4 Choices (Most Common)</div>
-                  </button>
-                  <button
-                    onClick={() => handleInputChange("choicesPerItem", 5)}
-                    className={`py-4 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
-                      formData.choicesPerItem === 5
-                        ? "bg-green-500 text-white border-green-500 shadow-lg"
-                        : "border-gray-300 hover:border-green-400 hover:bg-green-50"
-                    }`}
-                  >
-                    <div className="font-bold text-lg">A, B, C, D, E</div>
-                    <div className="text-xs opacity-75">5 Choices (Extended)</div>
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-1 text-sm text-green-600">
-                  <span>{formData.choicesPerItem} answer choices per question</span>
-                </div>
-              </label>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
-                  <span className="font-medium">Step 4: Select Class</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  Choose which class will take this exam. This helps track student performance.
-                </p>
-              </div>
-              
-              <div>
-                <span className="text-sm font-semibold text-foreground mb-3 block">
-                  Select Class *
-                </span>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Choose which class this exam is for
-                </p>
-              </div>
-              {loadingClasses ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    Loading classes...
-                  </span>
-                </div>
-              ) : classes.length === 0 ? (
-                <div className="text-center py-8 space-y-4">
-                  <p className="text-muted-foreground">
-                    No classes available yet
-                  </p>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      router.push('/classes');
-                    }}
-                    variant="default"
-                  >
-                    Create a New Class
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-48 sm:max-h-60 md:max-h-72 overflow-y-auto">
-                  {classes.map((classItem) => (
-                    <button
-                      key={classItem.id}
-                      onClick={() => {
-                        handleInputChange("className", classItem.class_name);
-                        handleInputChange("classId", classItem.id);
-                      }}
-                      className={`w-full text-left p-3 rounded-md border-2 transition-all ${
-                        formData.classId === classItem.id
-                          ? "border-green-500 bg-green-50 shadow-md"
-                          : "border-gray-300 hover:border-green-400 hover:bg-green-50"
-                      }`}
-                    >
-                      <div className="font-medium text-sm sm:text-base">{classItem.class_name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {classItem.course_subject} • Section{" "}
-                        {classItem.section_block} • {classItem.students.length}{" "}
-                        students
-                      </div>
-                    </button>
-                  ))}
-                  {formData.classId && (
-                    <div className="flex items-center gap-1 text-sm text-green-600 mt-2">
-                      <span>Class selected: {formData.className}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 5 && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
-                  <span className="font-medium">Step 5: Exam Type</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  Select the type of exam you want to create. This affects scoring and analysis.
-                </p>
-              </div>
-              
-              <label className="block">
-                <span className="text-sm font-semibold text-foreground mb-3 block">
-                  Exam Type *
-                </span>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Select the type of exam
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => {
-                      handleInputChange("examType", "board");
-                      setExamTypePicked(true);
-                    }}
-                    className={`p-4 rounded-lg border-2 transition-all text-left ${
-                      formData.examType === "board" && examTypePicked
-                        ? "border-green-500 bg-green-50 shadow-lg"
-                        : "border-gray-300 hover:border-green-400 hover:bg-green-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="font-semibold">Board Exam</div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Regular exam assessment
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleInputChange("examType", "diagnostic");
-                      setExamTypePicked(true);
-                    }}
-                    className={`p-4 rounded-lg border-2 transition-all text-left ${
-                      formData.examType === "diagnostic" && examTypePicked
-                        ? "border-green-500 bg-green-50 shadow-lg"
-                        : "border-gray-300 hover:border-green-400 hover:bg-green-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="font-semibold">Diagnostic Test</div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Diagnostic assessment
-                    </div>
-                  </button>
-                </div>
-                {examTypePicked && (
-                  <div className="flex items-center gap-1 text-sm text-green-600 mt-3">
-                    <span>
-                      {formData.examType === "board" ? "Board exam" : "Diagnostic test"} selected
+                <label className="block space-y-2">
+                  <span className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    Exam Name *
+                    <span className="text-xs text-muted-foreground">
+                      (e.g., "Midterm Exam", "Quiz 1")
                     </span>
-                  </div>
-                )}
-                {!examTypePicked && (
-                  <p className="text-xs text-amber-600 flex items-center gap-1 mt-3">
-                    <span>Please select an exam type to continue</span>
-                  </p>
-                )}
-              </label>
-            </div>
-          )}
-
-          {step === 6 && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-800 mb-2">
-                  <span className="font-medium">Step 6: Review & Create</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  Review your exam details before creating. Make sure everything looks correct.
-                </p>
-              </div>
-              
-              {/* Exam Summary */}
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-                <h4 className="font-semibold text-gray-900 border-b pb-2">Exam Summary</h4>
-                
-                <div className="grid grid-cols-1 gap-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Exam Name:</span>
-                    <span className="font-medium">{formData.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Questions:</span>
-                    <span className="font-medium">{formData.totalQuestions} questions</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Answer Format:</span>
-                    <span className="font-medium">{formData.choicesPerItem} choices per question</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Class:</span>
-                    <span className="font-medium">{formData.className}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Type:</span>
-                    <span className="font-medium capitalize">{formData.examType}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Date:</span>
-                    <span className="font-medium">{new Date(formData.date).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Folder:</span>
-                    <span className="font-medium">{formData.folder}</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Additional Settings */}
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="text-sm font-semibold text-foreground mb-2 block">
-                    Exam Date *
-                  </span>
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => handleInputChange("date", e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-500 transition-all"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="text-sm font-semibold text-foreground mb-2 block">
-                    Folder / Subject *
                   </span>
                   <input
                     type="text"
-                    value={formData.folder}
-                    onChange={(e) => handleInputChange("folder", e.target.value)}
-                    placeholder="e.g., Mathematics, Science, English"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-500 transition-all"
+                    value={formData.name}
+                    onChange={(e) => handleInputChange("name", e.target.value)}
+                    placeholder="Enter exam name (e.g., Midterm Exam, Final Test, Quiz 1)"
+                    className={`w-full px-4 py-3 border rounded-lg bg-background focus:outline-none focus:ring-2 transition-all ${
+                      formData.name.trim()
+                        ? "border-green-500 focus:ring-green-200"
+                        : "focus:ring-gray-200 border-gray-300"
+                    }`}
                   />
+                  {formData.name.trim() && !isDuplicate && (
+                    <div className="flex items-center gap-1 text-sm text-green-600">
+                      <span>Good exam name!</span>
+                    </div>
+                  )}
+                  {!formData.name.trim() && (
+                    <p className="text-xs text-gray-600">
+                      Try names like "Math Midterm", "Science Quiz 1", or "Final
+                      Exam"
+                    </p>
+                  )}
+
+                  {/* Duplicate warning banner */}
+                  {isDuplicate && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-800">
+                          Duplicate Exam Name Detected
+                        </p>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                          An exam named{" "}
+                          <strong>&quot;{formData.name.trim()}&quot;</strong>{" "}
+                          already exists. You may still proceed, but this could
+                          cause confusion during grading.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Inline duplicate confirmation */}
+                  {confirmDuplicate && (
+                    <div className="flex flex-col gap-2 p-3 bg-amber-100 border-2 border-amber-400 rounded-lg">
+                      <p className="text-sm font-semibold text-amber-900">
+                        Are you sure you want to continue with a duplicate name?
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDuplicate(false)}
+                          className="flex-1 px-3 py-1.5 border border-amber-500 rounded-md text-sm font-semibold text-amber-800 hover:bg-amber-50 transition-colors"
+                        >
+                          Go Back
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmDuplicate(false);
+                            setStep(2);
+                          }}
+                          className="flex-1 px-3 py-1.5 bg-amber-500 text-white rounded-md text-sm font-semibold hover:bg-amber-600 transition-colors"
+                        >
+                          Continue Anyway
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </label>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="flex gap-1 pt-4">
-            {[1, 2, 3, 4, 5, 6, 7].map((s) => (
-              <div
-                key={s}
-                className={`flex-1 h-1 rounded-full ${s <= step ? "bg-primary" : "bg-muted"}`}
-              />
-            ))}
+            {step === 2 && (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-800 mb-2">
+                    <span className="font-medium">
+                      Step 2: Number of Questions
+                    </span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    Choose how many questions your exam will have. Select a
+                    preset or enter a custom number.
+                  </p>
+                </div>
+
+                <label className="block space-y-3">
+                  <span className="text-sm font-semibold text-foreground">
+                    How many questions? *
+                  </span>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[20, 50, 100].map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => {
+                          handleInputChange("totalQuestions", num);
+                          setQuestionsPicked(true);
+                        }}
+                        className={`py-4 px-3 rounded-lg font-semibold text-sm transition-all border-2 ${
+                          formData.totalQuestions === num && questionsPicked
+                            ? "bg-green-500 text-white border-green-500 shadow-lg transform scale-105"
+                            : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                        }`}
+                      >
+                        <div className="font-bold text-lg">{num}</div>
+                        <div className="text-xs opacity-75">
+                          {num === 20
+                            ? "Quick Quiz"
+                            : num === 50
+                              ? "Standard Test"
+                              : "Major Exam"}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {questionsPicked && (
+                    <div className="flex items-center gap-1 text-sm text-green-600">
+                      <span>{formData.totalQuestions} questions selected</span>
+                    </div>
+                  )}
+                  {!questionsPicked && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                      <span>
+                        Please select the number of questions to continue
+                      </span>
+                    </p>
+                  )}
+                </label>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-800 mb-2">
+                    <span className="font-medium">Step 3: Answer Format</span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    Choose how many answer choices each question will have. Most
+                    exams use 4 choices (A, B, C, D).
+                  </p>
+                </div>
+
+                <label className="block space-y-3">
+                  <span className="text-sm font-semibold text-foreground">
+                    Number of answer choices per question *
+                  </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleInputChange("choicesPerItem", 4)}
+                      className={`py-4 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
+                        formData.choicesPerItem === 4
+                          ? "bg-green-500 text-white border-green-500 shadow-lg"
+                          : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                      }`}
+                    >
+                      <div className="font-bold text-lg">A, B, C, D</div>
+                      <div className="text-xs opacity-75">
+                        4 Choices (Most Common)
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleInputChange("choicesPerItem", 5)}
+                      className={`py-4 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
+                        formData.choicesPerItem === 5
+                          ? "bg-green-500 text-white border-green-500 shadow-lg"
+                          : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                      }`}
+                    >
+                      <div className="font-bold text-lg">A, B, C, D, E</div>
+                      <div className="text-xs opacity-75">
+                        5 Choices (Extended)
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-sm text-green-600">
+                    <span>
+                      {formData.choicesPerItem} answer choices per question
+                    </span>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {step === 4 && (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-800 mb-2">
+                    <span className="font-medium">Step 4: Select Class</span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    Choose which class will take this exam. This helps track
+                    student performance.
+                  </p>
+                </div>
+
+                <div>
+                  <span className="text-sm font-semibold text-foreground mb-3 block">
+                    Select Class *
+                  </span>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Choose which class this exam is for
+                  </p>
+                </div>
+                {loadingClasses ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      Loading classes...
+                    </span>
+                  </div>
+                ) : classes.length === 0 ? (
+                  <div className="text-center py-8 space-y-4">
+                    <p className="text-muted-foreground">
+                      No classes available yet
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        router.push("/classes");
+                      }}
+                      variant="default"
+                    >
+                      Create a New Class
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 sm:max-h-60 md:max-h-72 overflow-y-auto">
+                    {classes.map((classItem) => (
+                      <button
+                        key={classItem.id}
+                        onClick={() => {
+                          handleInputChange("className", classItem.class_name);
+                          handleInputChange("classId", classItem.id);
+                        }}
+                        className={`w-full text-left p-3 rounded-md border-2 transition-all ${
+                          formData.classId === classItem.id
+                            ? "border-green-500 bg-green-50 shadow-md"
+                            : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                        }`}
+                      >
+                        <div className="font-medium text-sm sm:text-base">
+                          {classItem.class_name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {classItem.course_subject} • Section{" "}
+                          {classItem.section_block} •{" "}
+                          {classItem.students.length} students
+                        </div>
+                      </button>
+                    ))}
+                    {formData.classId && (
+                      <div className="flex items-center gap-1 text-sm text-green-600 mt-2">
+                        <span>Class selected: {formData.className}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 5 && (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-800 mb-2">
+                    <span className="font-medium">Step 5: Exam Type</span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    Select the type of exam you want to create. This affects
+                    scoring and analysis.
+                  </p>
+                </div>
+
+                <label className="block">
+                  <span className="text-sm font-semibold text-foreground mb-3 block">
+                    Exam Type *
+                  </span>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Select the type of exam
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        handleInputChange("examType", "board");
+                        setExamTypePicked(true);
+                      }}
+                      className={`p-4 rounded-lg border-2 transition-all text-left ${
+                        formData.examType === "board" && examTypePicked
+                          ? "border-green-500 bg-green-50 shadow-lg"
+                          : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="font-semibold">Board Exam</div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Regular exam assessment
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleInputChange("examType", "diagnostic");
+                        setExamTypePicked(true);
+                      }}
+                      className={`p-4 rounded-lg border-2 transition-all text-left ${
+                        formData.examType === "diagnostic" && examTypePicked
+                          ? "border-green-500 bg-green-50 shadow-lg"
+                          : "border-gray-300 hover:border-green-400 hover:bg-green-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="font-semibold">Diagnostic Test</div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Diagnostic assessment
+                      </div>
+                    </button>
+                  </div>
+                  {examTypePicked && (
+                    <div className="flex items-center gap-1 text-sm text-green-600 mt-3">
+                      <span>
+                        {formData.examType === "board"
+                          ? "Board exam"
+                          : "Diagnostic test"}{" "}
+                        selected
+                      </span>
+                    </div>
+                  )}
+                  {!examTypePicked && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1 mt-3">
+                      <span>Please select an exam type to continue</span>
+                    </p>
+                  )}
+                </label>
+              </div>
+            )}
+
+            {step === 6 && (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-green-800 mb-2">
+                    <span className="font-medium">Step 6: Review & Create</span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    Review your exam details before creating. Make sure
+                    everything looks correct.
+                  </p>
+                </div>
+
+                {/* Exam Summary */}
+                <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+                  <h4 className="font-semibold text-gray-900 border-b pb-2">
+                    Exam Summary
+                  </h4>
+
+                  <div className="grid grid-cols-1 gap-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Exam Name:</span>
+                      <span className="font-medium">{formData.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Questions:</span>
+                      <span className="font-medium">
+                        {formData.totalQuestions} questions
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Answer Format:</span>
+                      <span className="font-medium">
+                        {formData.choicesPerItem} choices per question
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Class:</span>
+                      <span className="font-medium">{formData.className}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Type:</span>
+                      <span className="font-medium capitalize">
+                        {formData.examType}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Date:</span>
+                      <span className="font-medium">
+                        {new Date(formData.date).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Folder:</span>
+                      <span className="font-medium">{formData.folder}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Settings */}
+                <div className="space-y-3">
+                  <label className="block">
+                    <span className="text-sm font-semibold text-foreground mb-2 block">
+                      Exam Date *
+                    </span>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) =>
+                        handleInputChange("date", e.target.value)
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-500 transition-all"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold text-foreground mb-2 block">
+                      Folder / Subject *
+                    </span>
+                    <input
+                      type="text"
+                      value={formData.folder}
+                      onChange={(e) =>
+                        handleInputChange("folder", e.target.value)
+                      }
+                      placeholder="e.g., Mathematics, Science, English"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-500 transition-all"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-1 pt-4">
+              {[1, 2, 3, 4, 5, 6, 7].map((s) => (
+                <div
+                  key={s}
+                  className={`flex-1 h-1 rounded-full ${s <= step ? "bg-primary" : "bg-muted"}`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
         </div>
 
         <div className="flex-shrink-0 flex gap-3 p-4 sm:p-6 border-t bg-gray-50">
@@ -607,8 +726,15 @@ export function CreateExamModal({
                   toast.error("Please enter an exam name to continue");
                   return;
                 }
+                // Duplicate check on Step 1 — require confirmation before advancing
+                if (step === 1 && isDuplicate && !confirmDuplicate) {
+                  setConfirmDuplicate(true);
+                  return;
+                }
                 if (step === 2 && !questionsPicked) {
-                  toast.error("Please select a number of questions to continue");
+                  toast.error(
+                    "Please select a number of questions to continue",
+                  );
                   return;
                 }
                 if (step === 4 && !formData.className) {
@@ -654,9 +780,7 @@ export function CreateExamModal({
                   Creating Exam...
                 </>
               ) : (
-                <>
-                  Create Exam
-                </>
+                <>Create Exam</>
               )}
             </button>
           )}

@@ -473,8 +473,13 @@ export default function Templates() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Answer Sheet Templates</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">View and manage templates generated from exams. Templates are created automatically when you create an exam.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            Answer Sheet Templates
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            View and manage templates generated from exams. Templates are
+            created automatically when you create an exam.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -886,7 +891,7 @@ export default function Templates() {
                 }) => (
                   <div>
                     {/* Header: ■ A B C D */}
-                    <div className="flex items-center gap-[2px] mb-[2px]">
+                    <div className="flex justify-center gap-[2px] mb-[3px]">
                       <div className="w-[6px] h-[6px] bg-black flex-shrink-0"></div>
                       <div className="w-[14px]"></div>
                       {choiceLetters.map((c) => (
@@ -902,7 +907,7 @@ export default function Templates() {
                     {Array.from({ length: endQ - startQ + 1 }).map((_, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-[2px] mb-[1px]"
+                        className="flex items-center gap-[3px] mb-[2px]"
                       >
                         <div className="w-[6px]"></div>
                         <div className="w-[14px] text-right text-[6px] font-bold leading-none pr-[2px]">
@@ -911,7 +916,7 @@ export default function Templates() {
                         {choiceLetters.map((_, j) => (
                           <div
                             key={j}
-                            className="w-[10px] h-[10px] rounded-full border border-gray-800 bg-white flex-shrink-0"
+                            className="w-[10px] h-[10px] rounded-full border-[1px] border-black bg-white flex-shrink-0"
                           ></div>
                         ))}
                       </div>
@@ -922,29 +927,29 @@ export default function Templates() {
                 // Reusable: ID section
                 const IdSection = ({ small }: { small?: boolean }) => (
                   <div
-                    className={`border border-black ${small ? "p-1" : "p-1.5"}`}
+                    className={`inline-flex flex-col border-[1.5px] border-black ${small ? "p-1" : "p-[4px]"}`}
                   >
                     <div
-                      className={`${small ? "text-[6px]" : "text-[7px]"} font-bold mb-0.5`}
+                      className={`${small ? "text-[6.5px]" : "text-[6px]"} font-bold mb-1 leading-none`}
                     >
                       Student ZipGrade ID
                     </div>
                     {/* Input boxes */}
-                    <div className="flex gap-[2px] mb-[2px]">
+                    <div className="flex justify-start gap-[1px] mb-[4px]">
                       {Array.from({ length: 10 }).map((_, i) => (
                         <div
                           key={i}
-                          className={`${small ? "w-[8px] h-[7px]" : "w-[10px] h-[8px]"} border border-black`}
+                          className={`${small ? "w-[9px] h-[8px]" : "w-[12px] h-[10px]"} border border-black`}
                         ></div>
                       ))}
                     </div>
                     {/* Bubble grid */}
-                    <div className="flex gap-[1px] items-start">
+                    <div className="flex gap-[1px] items-start justify-start">
                       <div className="flex flex-col">
                         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
                           <div
                             key={n}
-                            className={`${small ? "h-[8px] text-[5px]" : "h-[10px] text-[6px]"} flex items-center font-bold w-[8px] justify-end pr-[1px]`}
+                            className={`${small ? "h-[8.5px] text-[5.5px]" : "h-[11px] text-[7.5px]"} flex items-center font-bold w-[5px] justify-start`}
                           >
                             {n}
                           </div>
@@ -955,7 +960,7 @@ export default function Templates() {
                           {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((row) => (
                             <div
                               key={row}
-                              className={`${small ? "w-[7px] h-[7px] m-[0.5px]" : "w-[9px] h-[9px] m-[0.5px]"} rounded-full border border-gray-800 bg-white`}
+                              className={`${small ? "w-[7.5px] h-[7.5px] m-[0.5px]" : "w-[10px] h-[10px] m-[0.5px]"} rounded-full border border-black bg-white flex-shrink-0`}
                             ></div>
                           ))}
                         </div>
@@ -976,58 +981,67 @@ export default function Templates() {
                 }) => (
                   <div
                     className="bg-white border border-black relative"
-                    style={{ width: sheetW, height: sheetH, padding: "6px" }}
+                    style={{ width: sheetW, height: sheetH, padding: "8px" }}
                   >
                     {/* Corner markers */}
-                    <div className="absolute top-[4px] left-[4px] w-[5px] h-[5px] bg-black"></div>
-                    <div className="absolute top-[4px] right-[4px] w-[5px] h-[5px] bg-black"></div>
-                    <div className="absolute bottom-[4px] left-[4px] w-[5px] h-[5px] bg-black"></div>
-                    <div className="absolute bottom-[4px] right-[4px] w-[5px] h-[5px] bg-black"></div>
 
-                  {/* Header */}
-                  <div className="flex items-center justify-center gap-1 mb-0.5">
-                    <div className="w-[10px] h-[10px] bg-green-700 rounded-full flex items-center justify-center text-white text-[5px] font-bold">G</div>
-                    <span className="text-[7px] font-bold">Gordon College</span>
-                  </div>
-                  
-                  {/* Exam Code */}
-                  {previewTemplate?.examCode && (
-                    <div className="text-center text-[5px] text-gray-600 mb-0.5">
-                      Exam Code: {previewTemplate.examCode}
+                    <div className="absolute bottom-[4px] left-[4px] w-[8px] h-[8px] bg-black"></div>
+                    <div className="absolute bottom-[4px] right-[4px] w-[8px] h-[8px] bg-black"></div>
+
+                    {/* Header */}
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      <img
+                        src={branding?.logoUrl || "/gclogo.png"}
+                        className="w-[18px] h-[18px] object-contain"
+                        alt="logo"
+                      />
+                      <span className="text-[10px] font-bold text-black tracking-tight">
+                        {branding?.institutionName || "Gordon College"}
+                      </span>
                     </div>
-                  )}
+
+                    {/* Exam Code */}
+                    {previewTemplate?.examCode && (
+                      <div className="text-center text-[7px] text-gray-800 font-medium mb-1">
+                        Exam Code: {previewTemplate.examCode}
+                      </div>
+                    )}
 
                     {/* Name/Date */}
-                    <div className="flex gap-1 mb-1 text-[5px]">
-                      <div className="flex-1">
-                        <span className="font-semibold">Name:</span>
-                        <div className="border-b border-black mt-[1px]"></div>
+                    <div className="flex items-center gap-[3px] mb-2 text-[7px]">
+                      <div className="w-[8px] h-[8px] bg-black flex-shrink-0"></div>
+                      <div className="flex-1 flex gap-2 items-end">
+                        <div className="flex-[3] flex items-end">
+                          <span className="text-[5px]">Name:</span>
+                          <div className="flex-1 border-b-[1.5px] border-black h-[1px]"></div>
+                        </div>
+                        <div className="flex-[2] flex items-end">
+                          <span className="text-[7px]">Date:</span>
+                          <div className="flex-1 border-b-[1.5px] border-black h-[1px]"></div>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <span className="font-semibold">Date:</span>
-                        <div className="border-b border-black mt-[1px]"></div>
-                      </div>
+                      <div className="w-[8px] h-[8px] bg-black flex-shrink-0"></div>
                     </div>
 
                     {/* ID Section */}
-                    <div className="mb-1">
-                      <IdSection small />
+                    <div className="mb-2">
+                      <IdSection />
                     </div>
 
                     {/* Answer blocks */}
                     {questions === 20 ? (
-                      <div className="flex gap-2 mt-1">
+                      <div className="flex gap-2 mt-2">
                         <QBlock startQ={1} endQ={10} />
                         <QBlock startQ={11} endQ={20} />
                       </div>
                     ) : (
-                      <div className="flex gap-1 mt-1">
-                        <div className="space-y-1">
+                      <div className="flex gap-2 justify-center mt-2">
+                        <div className="space-y-2">
                           <QBlock startQ={1} endQ={10} />
                           <QBlock startQ={11} endQ={20} />
                           <QBlock startQ={21} endQ={30} />
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                           <QBlock startQ={31} endQ={40} />
                           <QBlock startQ={41} endQ={50} />
                         </div>
@@ -1083,60 +1097,61 @@ export default function Templates() {
                       }}
                     >
                       {/* Corner markers */}
-                      <div className="absolute top-[4px] left-[4px] w-[8px] h-[8px] bg-black"></div>
-                      <div className="absolute top-[4px] right-[4px] w-[8px] h-[8px] bg-black"></div>
-                      <div className="absolute bottom-[4px] left-[4px] w-[8px] h-[8px] bg-black"></div>
-                      <div className="absolute bottom-[4px] right-[4px] w-[8px] h-[8px] bg-black"></div>
+                      <div className="absolute top-[4px] left-[4px] w-[14px] h-[14px] bg-black"></div>
+                      <div className="absolute top-[4px] right-[4px] w-[14px] h-[14px] bg-black"></div>
+                      <div className="absolute bottom-[4px] left-[4px] w-[14px] h-[14px] bg-black"></div>
+                      <div className="absolute bottom-[4px] right-[4px] w-[14px] h-[14px] bg-black"></div>
 
                       {/* Header */}
-                      <div className="flex items-center justify-center gap-1.5 mb-1.5">
-                        {branding?.logoUrl ? (
-                          <img
-                            src={branding.logoUrl}
-                            className="w-[14px] h-[14px] object-contain"
-                            alt="logo"
-                          />
-                        ) : (
-                          <div className="w-[14px] h-[14px] bg-green-700 rounded-full flex items-center justify-center text-white text-[7px] font-bold">
-                            G
-                          </div>
-                        )}
-                        <span className="text-[11px] font-bold">
+                      <div className="flex items-center justify-center gap-1 mb-3 mt-2">
+                        <img
+                          src={branding?.logoUrl || "/gclogo.png"}
+                          className="w-[32px] h-[32px] object-contain"
+                          alt="logo"
+                        />
+                        <span className="text-[12px] font-bold text-black tracking-tight">
                           {branding?.institutionName || "Gordon College"}
                         </span>
                       </div>
 
-                      {/* Name/Date */}
-                      <div className="flex gap-3 mb-2 text-[7px]">
-                        <div className="flex-[3]">
-                          <span className="font-bold">Name:</span>
-                          <div className="border-b border-black mt-[1px] ml-1"></div>
+                      {/* Exam Code */}
+                      {previewTemplate?.examCode && (
+                        <div className="text-center text-[10px] text-gray-800 font-medium mb-2">
+                          Exam Code: {previewTemplate.examCode}
                         </div>
-                        <div className="flex-[2]">
-                          <span className="font-bold">Date:</span>
-                          <div className="border-b border-black mt-[1px] ml-1"></div>
+                      )}
+
+                      {/* Name/Date */}
+                      <div className="flex gap-4  mb-4 text-[10px] items-end">
+                        <div className="flex-[3] flex items-end">
+                          <span className="font-bold mr-1">Name:</span>
+                          <div className="flex-1 border-b-[2px] border-black h-[1px]"></div>
+                        </div>
+                        <div className="flex-[2] flex items-end">
+                          <span className="font-bold mr-1">Date:</span>
+                          <div className="flex-1 border-b-[2px] border-black h-[1px]"></div>
                         </div>
                       </div>
 
                       {/* Top section: ID + Q41-50 + Q71-80 */}
-                      <div className="flex gap-2 mb-2 items-start">
+                      <div className="flex justify-evenly gap-4 mb-4 items-start">
                         <div className="flex-shrink-0">
                           <IdSection />
                         </div>
-                        <div className="flex gap-2 mt-3">
+                        <div className="flex gap-4 mt-6">
                           <QBlock startQ={41} endQ={50} />
                           <QBlock startQ={71} endQ={80} />
                         </div>
                       </div>
 
                       {/* Bottom: 4 cols x 2 rows */}
-                      <div className="flex gap-2 mb-1">
+                      <div className="flex gap-4 mb-2">
                         <QBlock startQ={1} endQ={10} />
                         <QBlock startQ={21} endQ={30} />
                         <QBlock startQ={51} endQ={60} />
                         <QBlock startQ={81} endQ={90} />
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-4">
                         <QBlock startQ={11} endQ={20} />
                         <QBlock startQ={31} endQ={40} />
                         <QBlock startQ={61} endQ={70} />
@@ -1144,7 +1159,7 @@ export default function Templates() {
                       </div>
 
                       {/* Footer */}
-                      <div className="absolute bottom-[6px] left-0 right-0 text-center text-[5px] text-gray-500 italic">
+                      <div className="absolute bottom-[10px] left-0 right-0 text-center text-[7px] text-gray-600 italic">
                         Do not fold, staple, or tear this answer sheet.
                       </div>
                     </div>
@@ -1278,7 +1293,9 @@ export default function Templates() {
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
             <span>
-              Use the <strong>&quot;Reuse for New Exam&quot;</strong> button to create a new exam pre-filled with an existing template&apos;s settings
+              Use the <strong>&quot;Reuse for New Exam&quot;</strong> button to
+              create a new exam pre-filled with an existing template&apos;s
+              settings
             </span>
           </li>
         </ul>

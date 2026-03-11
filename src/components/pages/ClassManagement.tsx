@@ -85,6 +85,7 @@ export default function ClassManagement() {
     invalidEntries: Array<{ student: Student; errors: string[] }>;
   } | null>(null);
   const [showUploadSummary, setShowUploadSummary] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [newClass, setNewClass] = useState({
     class_name: "",
@@ -162,7 +163,9 @@ export default function ClassManagement() {
 
     // Validate that class has students
     if (students.length === 0) {
-      toast.error("Cannot create a class without students. Please add at least one student.");
+      toast.error(
+        "Cannot create a class without students. Please add at least one student.",
+      );
       return;
     }
 
@@ -351,12 +354,14 @@ export default function ClassManagement() {
       return;
     }
 
-    // Check for duplicate student name (first name + last name combination)
+    // Check for duplicate student name (first name + last name combination) - Case Insensitive
     if (
       students.some(
         (s) =>
-          s.first_name === newStudent.first_name &&
-          s.last_name === newStudent.last_name,
+          s.first_name.trim().toLowerCase() ===
+            newStudent.first_name.trim().toLowerCase() &&
+          s.last_name.trim().toLowerCase() ===
+            newStudent.last_name.trim().toLowerCase(),
       )
     ) {
       toast.error(
@@ -392,6 +397,49 @@ export default function ClassManagement() {
         );
       }
       return;
+    }
+
+    // Check for duplicate email (if provided)
+    if (newStudent.email && newStudent.email.trim()) {
+      const normalizedEmail = newStudent.email.trim().toLowerCase();
+      if (
+        students.some((s) => s.email?.trim().toLowerCase() === normalizedEmail)
+      ) {
+        toast.error(
+          `Email "${newStudent.email}" is already used by another student in this class`,
+        );
+
+        // Log duplicate email attempt
+        if (user?.id) {
+          await InvalidRecordLogger.logInvalidRecord(
+            "grade",
+            {
+              student_id: newStudent.student_id,
+              first_name: newStudent.first_name,
+              last_name: newStudent.last_name,
+              email: newStudent.email,
+            },
+            [
+              {
+                field: "email",
+                message: "Duplicate email in class",
+                value: newStudent.email,
+              },
+            ],
+            user.id,
+            {
+              entity_id: newStudent.student_id,
+              user_email: user.email,
+              metadata: {
+                action: "manual_add_student",
+                context: "class_management",
+                reason: "duplicate_email",
+              },
+            },
+          );
+        }
+        return;
+      }
     }
 
     const student: Student = {
@@ -494,22 +542,61 @@ export default function ClassManagement() {
             }
           }
 
-          // Check for duplicates against current class roster
+          // Check for duplicates against current class roster (ID, Name, or Email)
           const existingIds = new Set(students.map((s) => s.student_id));
-          const duplicates = validStudents.filter((s) =>
-            existingIds.has(s.student_id),
+          const existingNames = new Set(
+            students.map(
+              (s) =>
+                `${s.first_name.trim().toLowerCase()}|${s.last_name.trim().toLowerCase()}`,
+            ),
           );
-          const newStudents = validStudents.filter(
-            (s) => !existingIds.has(s.student_id),
+          const existingEmails = new Set(
+            students
+              .filter((s) => s.email)
+              .map((s) => s.email!.trim().toLowerCase()),
           );
+
+          const duplicates: Student[] = [];
+          const newStudents: Student[] = [];
+
+          for (const s of validStudents) {
+            const idMatch = existingIds.has(s.student_id);
+            const nameMatch = existingNames.has(
+              `${s.first_name.trim().toLowerCase()}|${s.last_name.trim().toLowerCase()}`,
+            );
+            const emailMatch =
+              s.email && existingEmails.has(s.email.trim().toLowerCase());
+
+            if (idMatch || nameMatch || emailMatch) {
+              duplicates.push(s);
+            } else {
+              newStudents.push(s);
+            }
+          }
 
           // Also check for duplicates within the file itself
           const seenIds = new Set<string>();
+          const seenNames = new Set<string>();
+          const seenEmails = new Set<string>();
           const uniqueNewStudents: Student[] = [];
+
           for (const s of newStudents) {
-            if (!seenIds.has(s.student_id)) {
+            const sNameKey = `${s.first_name.trim().toLowerCase()}|${s.last_name.trim().toLowerCase()}`;
+            const sEmailKey = s.email?.trim().toLowerCase();
+
+            const isDuplicateInFile =
+              seenIds.has(s.student_id) ||
+              seenNames.has(sNameKey) ||
+              (sEmailKey && seenEmails.has(sEmailKey));
+
+            if (!isDuplicateInFile) {
               seenIds.add(s.student_id);
+              seenNames.add(sNameKey);
+              if (sEmailKey) seenEmails.add(sEmailKey);
               uniqueNewStudents.push(s);
+            } else {
+              // Track internal file duplicates as duplicates in summary
+              duplicates.push(s);
             }
           }
 
@@ -964,7 +1051,10 @@ export default function ClassManagement() {
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-3">
-                  <Label htmlFor="class_name" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Label
+                    htmlFor="class_name"
+                    className="text-sm font-semibold text-gray-700 flex items-center gap-2"
+                  >
                     Program <span className="text-red-500">*</span>
                   </Label>
                   <div className="relative">
@@ -1033,7 +1123,10 @@ export default function ClassManagement() {
                   )}
                 </div>
                 <div className="space-y-3">
-                  <Label htmlFor="course_subject" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Label
+                    htmlFor="course_subject"
+                    className="text-sm font-semibold text-gray-700 flex items-center gap-2"
+                  >
                     Course <span className="text-red-500">*</span>
                   </Label>
                   <div className="relative">
@@ -1474,16 +1567,10 @@ export default function ClassManagement() {
           </Tabs>
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={handleCloseAddDialog}
-            >
+            <Button variant="outline" onClick={handleCloseAddDialog}>
               Cancel
             </Button>
-            <Button
-              onClick={handleAddClass}
-              className="gradient-primary"
-            >
+            <Button onClick={handleAddClass} className="gradient-primary">
               Add Class
             </Button>
           </DialogFooter>
@@ -1653,13 +1740,15 @@ export default function ClassManagement() {
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="flex-shrink-0 p-4 sm:p-6 border-b">
-            <DialogTitle className="text-lg sm:text-xl">{editingClass?.class_name}</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">
+              {editingClass?.class_name}
+            </DialogTitle>
             <DialogDescription className="text-sm">
               {editingClass?.course_subject} - Block{" "}
               {editingClass?.section_block}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-h-0">
             {editingClass && (
               <div className="space-y-4">
@@ -1677,15 +1766,22 @@ export default function ClassManagement() {
                     </h4>
                   </div>
                   {editingClass.students.length > 0 ? (
-                  <div className="space-y-4">
+                    <div className="space-y-4">
                       {/* Mobile Card Layout */}
                       <div className="block sm:hidden space-y-3">
                         {editingClass.students.map((student, idx) => (
-                          <div key={`${editingClass.id}-mobile-${idx}`} className="bg-card border rounded-lg p-3">
+                          <div
+                            key={`${editingClass.id}-mobile-${idx}`}
+                            className="bg-card border rounded-lg p-3"
+                          >
                             <div className="flex-1 min-w-0">
-                              <div className="font-mono text-sm font-medium">{student.student_id}</div>
+                              <div className="font-mono text-sm font-medium">
+                                {student.student_id}
+                              </div>
                               <div className="text-sm font-medium truncate">{`${student.first_name} ${student.last_name}`}</div>
-                              <div className="text-xs text-muted-foreground truncate">{student.email || "No email"}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {student.email || "No email"}
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1698,21 +1794,34 @@ export default function ClassManagement() {
                             <Table>
                               <TableHeader className="sticky top-0 bg-background">
                                 <TableRow>
-                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">ID</TableHead>
-                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">Name</TableHead>
-                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">Email</TableHead>
+                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">
+                                    ID
+                                  </TableHead>
+                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">
+                                    Name
+                                  </TableHead>
+                                  <TableHead className="text-xs sm:text-sm px-2 sm:px-3">
+                                    Email
+                                  </TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {editingClass.students.map((student, idx) => (
-                                  <TableRow key={`${editingClass.id}-view-${idx}`} className="hover:bg-muted/50">
+                                  <TableRow
+                                    key={`${editingClass.id}-view-${idx}`}
+                                    className="hover:bg-muted/50"
+                                  >
                                     <TableCell className="font-mono text-xs sm:text-sm p-2 sm:p-3">
-                                      <div className="truncate">{student.student_id}</div>
+                                      <div className="truncate">
+                                        {student.student_id}
+                                      </div>
                                     </TableCell>
                                     <TableCell className="text-xs sm:text-sm p-2 sm:p-3">
                                       <div className="truncate font-medium text-xs sm:text-sm">{`${student.first_name} ${student.last_name}`}</div>
                                     </TableCell>
-                                    <TableCell className="text-xs sm:text-sm p-2 sm:p-3">{student.email || "---"}</TableCell>
+                                    <TableCell className="text-xs sm:text-sm p-2 sm:p-3">
+                                      {student.email || "---"}
+                                    </TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
@@ -1730,17 +1839,17 @@ export default function ClassManagement() {
               </div>
             )}
           </div>
-          
+
           <DialogFooter className="flex-shrink-0 p-4 sm:p-6 border-t">
             <div className="flex gap-2 w-full sm:w-auto">
-              <Button 
+              <Button
                 variant="outline"
                 onClick={() => setShowViewDialog(false)}
                 className="flex-1 sm:flex-none"
               >
                 Close
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   if (editingClass) {
                     setShowViewDialog(false);
