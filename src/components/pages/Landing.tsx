@@ -69,29 +69,23 @@ export default function Landing() {
     <div className="min-h-screen bg-white">
       {/* Navigation */}
       <nav className="border-b bg-white sticky top-0 z-50 shadow-sm">
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center flex-shrink-0">
                 <Image
                   src="/gclogo.png"
                   alt="GC Logo"
-                  width={32}
-                  height={32}
-                  className="object-contain"
+                  width={28}
+                  height={28}
+                  className="object-contain sm:w-8 sm:h-8"
                 />
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-[#166534]">GC SMART CHECK</h1>
-                <p className="text-xs text-gray-600">GC Scan</p>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-lg font-bold text-[#166534] truncate">GC SMART CHECK</h1>
+                <p className="text-xs text-gray-600 hidden sm:block">Exam & Quiz Builder</p>
               </div>
             </div>
-            <button 
-              onClick={() => setShowAuthModal(true)}
-              className="px-6 py-2.5 rounded-lg font-semibold transition-all border border-[#166534] text-[#166534] hover:bg-[#166534] hover:text-white"
-            >
-              Get Started
-            </button>
           </div>
         </div>
       </nav>
