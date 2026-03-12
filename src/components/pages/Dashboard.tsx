@@ -294,7 +294,9 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#166534]">Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#166534]">
+            Dashboard
+          </h1>
           <p className="text-sm sm:text-base text-[#B38B00] mt-1">
             Welcome back! Here's an overview of your exam management system.
           </p>
@@ -317,16 +319,23 @@ export default function Dashboard() {
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.title} className={`stat-card animate-slide-up border-2 ${stat.borderColor} hover:border-[#B38B00] transition-colors duration-200`}>
+            <Card
+              key={stat.title}
+              className={`stat-card animate-slide-up border-2 ${stat.borderColor} hover:border-[#B38B00] transition-colors duration-200`}
+            >
               <CardContent className="p-4 md:p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#166534] truncate">{stat.title}</p>
+                    <p className="text-sm font-medium text-[#166534] truncate">
+                      {stat.title}
+                    </p>
                     <p className="text-2xl md:text-3xl font-bold mt-2 text-[#166534] font-mono tabular-nums">
-                      {loading ? '-' : stat.value}
+                      {loading ? "-" : stat.value}
                     </p>
                   </div>
-                  <div className={`w-12 h-12 md:w-14 md:h-14 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}>
+                  <div
+                    className={`w-12 h-12 md:w-14 md:h-14 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}
+                  >
                     <Icon className={`w-6 h-6 md:w-7 md:h-7 ${stat.color}`} />
                   </div>
                 </div>
@@ -380,7 +389,7 @@ export default function Dashboard() {
                 variant="outline"
               >
                 <History className="w-4 h-4 text-[#B38B00]" />
-                Audit Logs
+                Template and Log History
               </Button>
             </Link>
           </CardContent>

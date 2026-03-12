@@ -36,9 +36,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuditLogger } from "@/services/auditLogger";
 import { AuditLog, ActivityType, GradeSnapshot } from "@/types/audit";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  Timestamp,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import {
   Download,
   AlertCircle,
@@ -85,8 +94,30 @@ const ACTIVITY_TYPES: ActivityType[] = [
   "validation_reset",
 ];
 
+/** Shape of a record from the `templates` Firestore collection */
+interface TemplateRecord {
+  id: string;
+  name: string;
+  examName?: string;
+  className?: string;
+  classId?: string; // Used to back-fill className for old records
+  examId?: string; // Used to back-fill classId for old records
+  examCode?: string;
+  numQuestions: number;
+  choicesPerQuestion: number;
+  createdBy: string; // Firebase UID
+  createdByName?: string; // Resolved from users collection
+  createdByEmail?: string; // May not exist for old records
+  instructorId?: string;
+  createdAt: string | Timestamp;
+  isArchived?: boolean;
+}
+
 export default function AuditLogsViewer() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<"activity" | "templates">(
+    "activity",
+  );
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -104,6 +135,20 @@ export default function AuditLogsViewer() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  // Template history state — sourced directly from `templates` Firestore collection
+  const [templateLogs, setTemplateLogs] = useState<TemplateRecord[]>([]);
+  const [filteredTemplateLogs, setFilteredTemplateLogs] = useState<
+    TemplateRecord[]
+  >([]);
+  const [tplSearch, setTplSearch] = useState("");
+  const [tplDateFilter, setTplDateFilter] = useState("");
+  const [tplUserFilter, setTplUserFilter] = useState("all");
+  const [tplPage, setTplPage] = useState(1);
+  const [tplPerPage, setTplPerPage] = useState(10);
+  const [showTplExportDialog, setShowTplExportDialog] = useState(false);
+  const [tplExportType, setTplExportType] = useState<"csv" | "xlsx">("xlsx");
+  const [tplLoading, setTplLoading] = useState(false);
+
   const uniqueReviewers = React.useMemo(() => {
     const reviewers = new Set(
       logs.map((log) => log.adminEmail).filter(Boolean),
@@ -111,16 +156,23 @@ export default function AuditLogsViewer() {
     return Array.from(reviewers).sort();
   }, [logs]);
 
+  const uniqueTplUsers = React.useMemo(() => {
+    const users = new Set(
+      templateLogs.map((t) => t.createdByName || t.createdBy).filter(Boolean),
+    );
+    return Array.from(users as Set<string>).sort();
+  }, [templateLogs]);
+
   useEffect(() => {
     loadLogs();
-  }, []);
+    loadTemplateLogs();
+  }, [user?.instructorId]);
 
   const loadLogs = async () => {
     try {
       setLoading(true);
-      // Get all logs (in a real app, this would be paginated)
-      const allLogs = await AuditLogger.getLogs({ limit: 300 });
-      setLogs(allLogs);
+      const allLogs = await AuditLogger.getLogs({ limit: 500 });
+      setLogs(allLogs.filter((l) => l.activity !== "template_generated"));
     } catch (error) {
       console.error("Error loading audit logs:", error);
       toast.error("Failed to load audit logs");
@@ -129,19 +181,165 @@ export default function AuditLogsViewer() {
     }
   };
 
+  /** Load template history directly from the `templates` Firestore collection */
+  const loadTemplateLogs = async () => {
+    if (!user?.instructorId) return;
+    try {
+      setTplLoading(true);
+      const q = query(
+        collection(db, "templates"),
+        where("instructorId", "==", user.instructorId),
+      );
+      const snap = await getDocs(q);
+      const toMs = (raw: string | Timestamp) =>
+        raw instanceof Timestamp
+          ? raw.toMillis()
+          : new Date(raw as string).getTime();
+
+      // Build initial records
+      const rawRecords = snap.docs.map((d) => ({
+        id: d.id,
+        name: d.data().name ?? "",
+        examName: d.data().examName,
+        className: d.data().className as string | undefined,
+        classId: d.data().classId as string | undefined,
+        examId: d.data().examId as string | undefined,
+        examCode: d.data().examCode,
+        numQuestions: d.data().numQuestions ?? 0,
+        choicesPerQuestion: d.data().choicesPerQuestion ?? 4,
+        createdBy: d.data().createdBy ?? "",
+        createdByEmail: d.data().createdByEmail as string | undefined,
+        instructorId: d.data().instructorId,
+        createdAt: d.data().createdAt,
+        isArchived: d.data().isArchived ?? false,
+      }));
+
+      // ── Resolve display names from `users` collection ──────────────────
+      const uniqueUids = [
+        ...new Set(rawRecords.map((r) => r.createdBy).filter(Boolean)),
+      ];
+      const nameMap: Record<string, string> = {};
+      await Promise.all(
+        uniqueUids.map(async (uid) => {
+          try {
+            const { getDoc: _getDoc, doc: _doc } =
+              await import("firebase/firestore");
+            const userSnap = await _getDoc(_doc(db, "users", uid));
+            if (userSnap.exists()) {
+              nameMap[uid] =
+                userSnap.data().fullName || userSnap.data().displayName || uid;
+            }
+          } catch {
+            // fall back to UID
+          }
+        }),
+      );
+
+      // ── Step 1: Resolve Exam Data for templates missing Class info ─────
+      const templatesNeedingExams = rawRecords.filter(
+        (r) => !r.className && !r.classId && r.examId,
+      );
+      const uniqueExamIds = [
+        ...new Set(templatesNeedingExams.map((r) => r.examId as string)),
+      ];
+      const examMap: Record<string, { classId?: string; className?: string }> =
+        {};
+
+      await Promise.all(
+        uniqueExamIds.map(async (examId) => {
+          try {
+            const { getDoc: _getDoc, doc: _doc } =
+              await import("firebase/firestore");
+            const examSnap = await _getDoc(_doc(db, "exams", examId));
+            if (examSnap.exists()) {
+              examMap[examId] = {
+                classId: examSnap.data().classId,
+                className: examSnap.data().className,
+              };
+            }
+          } catch (e) {
+            console.error("Failed to resolve exam for template:", examId, e);
+          }
+        }),
+      );
+
+      // ── Step 2: Resolve Class names from `classes` collection ──────────
+      // Collect all classIds we have now (direct or via exams)
+      const classIdResolver = (r: (typeof rawRecords)[0]) => {
+        if (r.classId) return r.classId;
+        if (r.examId && examMap[r.examId]) return examMap[r.examId].classId;
+        return undefined;
+      };
+
+      const classNameResolver = (r: (typeof rawRecords)[0]) => {
+        if (r.className) return r.className;
+        if (r.examId && examMap[r.examId]) return examMap[r.examId].className;
+        return undefined;
+      };
+
+      const resolvedClassIds = [
+        ...new Set(
+          rawRecords
+            .filter((r) => !classNameResolver(r))
+            .map(classIdResolver)
+            .filter(Boolean) as string[],
+        ),
+      ];
+
+      const classMap: Record<string, string> = {};
+      await Promise.all(
+        resolvedClassIds.map(async (classId) => {
+          try {
+            const { getDoc: _getDoc, doc: _doc } =
+              await import("firebase/firestore");
+            const classSnap = await _getDoc(_doc(db, "classes", classId));
+            if (classSnap.exists()) {
+              classMap[classId] =
+                classSnap.data().class_name ||
+                classSnap.data().className ||
+                classId;
+            }
+          } catch {
+            // fall back to classId
+          }
+        }),
+      );
+
+      const records: TemplateRecord[] = rawRecords
+        .map((r) => {
+          const directClassName = classNameResolver(r);
+          const cId = classIdResolver(r);
+          return {
+            ...r,
+            createdByName:
+              nameMap[r.createdBy] ?? r.createdByEmail ?? r.createdBy,
+            className: directClassName || (cId ? classMap[cId] : undefined),
+          };
+        })
+        .sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
+
+      setTemplateLogs(records);
+    } catch (error) {
+      console.error("Error loading template history:", error);
+      toast.error("Failed to load template history");
+    } finally {
+      setTplLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Filter logs based on search and selected filters
     let filtered = logs;
 
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (log) =>
-          log.description.toLowerCase().includes(query) ||
-          log.adminEmail.toLowerCase().includes(query) ||
-          log.fileName?.toLowerCase().includes(query) ||
-          log.entityName?.toLowerCase().includes(query) ||
-          log.activity.toLowerCase().includes(query),
+          log.description.toLowerCase().includes(q) ||
+          log.adminEmail.toLowerCase().includes(q) ||
+          log.fileName?.toLowerCase().includes(q) ||
+          log.entityName?.toLowerCase().includes(q) ||
+          log.activity.toLowerCase().includes(q),
       );
     }
 
@@ -161,16 +359,14 @@ export default function AuditLogsViewer() {
       filtered = filtered.filter((log) => {
         const logDate = new Date(log.timestamp);
         logDate.setHours(0, 0, 0, 0);
-
         const filterDate = new Date(dateFilter);
         filterDate.setHours(0, 0, 0, 0);
-
         return logDate.getTime() === filterDate.getTime();
       });
     }
 
     setFilteredLogs(filtered);
-    setCurrentPage(1); // Reset to first page when any filter changes
+    setCurrentPage(1);
   }, [
     logs,
     searchQuery,
@@ -180,14 +376,62 @@ export default function AuditLogsViewer() {
     dateFilter,
   ]);
 
+  // Filter template logs (TemplateRecord fields)
+  useEffect(() => {
+    let filtered = templateLogs;
+
+    if (tplSearch) {
+      const q = tplSearch.toLowerCase();
+      filtered = filtered.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          (t.createdByName ?? t.createdBy).toLowerCase().includes(q) ||
+          (t.examName ?? "").toLowerCase().includes(q) ||
+          (t.className ?? "").toLowerCase().includes(q) ||
+          (t.examCode ?? "").toLowerCase().includes(q),
+      );
+    }
+
+    if (tplUserFilter !== "all") {
+      filtered = filtered.filter(
+        (t) => (t.createdByName ?? t.createdBy) === tplUserFilter,
+      );
+    }
+
+    if (tplDateFilter) {
+      filtered = filtered.filter((t) => {
+        const raw = t.createdAt;
+        const logDate =
+          raw instanceof Timestamp ? raw.toDate() : new Date(raw as string);
+        logDate.setHours(0, 0, 0, 0);
+        const filterDate = new Date(tplDateFilter);
+        filterDate.setHours(0, 0, 0, 0);
+        return logDate.getTime() === filterDate.getTime();
+      });
+    }
+
+    setFilteredTemplateLogs(filtered);
+    setTplPage(1);
+  }, [templateLogs, tplSearch, tplUserFilter, tplDateFilter]);
+
   const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
   const currentLogs = filteredLogs.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
 
+  const tplTotalPages = Math.ceil(filteredTemplateLogs.length / tplPerPage);
+  const currentTplLogs = filteredTemplateLogs.slice(
+    (tplPage - 1) * tplPerPage,
+    tplPage * tplPerPage,
+  );
+
   const handlePageChange = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const handleTplPageChange = (page: number) => {
+    setTplPage(Math.max(1, Math.min(page, tplTotalPages)));
   };
 
   const getStatusIcon = (status: string) => {
@@ -370,6 +614,79 @@ export default function AuditLogsViewer() {
     setShowExportDialog(false);
   };
 
+  const handleTplExport = () => {
+    if (tplExportType === "csv") {
+      downloadTplCsv();
+    } else {
+      downloadTplExcel();
+    }
+    setShowTplExportDialog(false);
+  };
+
+  const downloadTplCsv = () => {
+    const toDate = (raw: string | Timestamp) =>
+      raw instanceof Timestamp ? raw.toDate() : new Date(raw as string);
+
+    const csv = [
+      [
+        "Created At",
+        "Created By",
+        "Template Name",
+        "Exam Name",
+        "Questions",
+        "Class",
+        "Exam Code",
+      ],
+      ...filteredTemplateLogs.map((t) => [
+        toDate(t.createdAt).toLocaleString(),
+        sanitizeForExport(t.createdByName ?? t.createdBy),
+        sanitizeForExport(t.name),
+        sanitizeForExport(t.examName ?? "-"),
+        String(t.numQuestions),
+        sanitizeForExport(t.className ?? "-"),
+        sanitizeForExport(t.examCode ?? "-"),
+      ]),
+    ]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute(
+      "download",
+      `template-history-${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("CSV download started");
+  };
+
+  const downloadTplExcel = () => {
+    const toDate = (raw: string | Timestamp) =>
+      raw instanceof Timestamp ? raw.toDate() : new Date(raw as string);
+
+    const data = filteredTemplateLogs.map((t) => ({
+      "Created At": toDate(t.createdAt).toLocaleString(),
+      "Created By": sanitizeForExport(t.createdByName ?? t.createdBy),
+      "Template Name": sanitizeForExport(t.name),
+      "Exam Name": sanitizeForExport(t.examName ?? "-"),
+      Questions: t.numQuestions,
+      Class: sanitizeForExport(t.className ?? "-"),
+      "Exam Code": sanitizeForExport(t.examCode ?? "-"),
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Template History");
+    XLSX.writeFile(
+      workbook,
+      `template-history-${new Date().toISOString().split("T")[0]}.xlsx`,
+    );
+    toast.success("Excel download started");
+  };
+
   /** Sanitize string for CSV/Excel to prevent formula injection */
   const sanitizeForExport = (
     value: string | number | null | undefined,
@@ -526,9 +843,12 @@ export default function AuditLogsViewer() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Audit Logs</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            Template and Log History
+          </h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Monitor all upload, administrative, and grade modification activities
+            Monitor all upload, administrative, and grade modification
+            activities
           </p>
         </div>
       </div>
@@ -555,8 +875,8 @@ export default function AuditLogsViewer() {
             color: "indigo",
           },
           {
-            label: "Grade Changes",
-            value: logs.filter((l) => isGradeActivity(l.activity)).length,
+            label: "Templates Generated",
+            value: templateLogs.length,
             icon: BarChart3,
             color: "amber",
           },
@@ -579,291 +899,607 @@ export default function AuditLogsViewer() {
         ))}
       </div>
 
-      {/* Filters */}
-      <Card className="mb-6 shadow-sm">
-        <CardContent className="py-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search logs..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-
-            <Select
-              value={selectedActivity}
-              onValueChange={(value) =>
-                setSelectedActivity(value as ActivityType | "all")
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Activity Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Everywhere</SelectItem>
-                {ACTIVITY_TYPES.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type.replace("_", " ").toUpperCase()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={selectedStatus}
-              onValueChange={(value) =>
-                setSelectedStatus(
-                  value as "all" | "success" | "failed" | "pending",
-                )
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Execution Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="success">Success</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={selectedReviewer}
-              onValueChange={setSelectedReviewer}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Reviewer" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Reviewer</SelectItem>
-                {uniqueReviewers.map((reviewer) => (
-                  <SelectItem key={reviewer} value={reviewer}>
-                    {reviewer}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex gap-2">
-              <Input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full"
-                title="Filter Date"
-              />
-            </div>
-
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as "activity" | "templates")}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <TabsList>
+            <TabsTrigger value="activity">Activity Log</TabsTrigger>
+            <TabsTrigger value="templates">Template History</TabsTrigger>
+          </TabsList>
+          <div className="flex gap-2">
+            {activeTab === "activity" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowExportDialog(true)}
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </Button>
+            )}
+            {activeTab === "templates" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowTplExportDialog(true)}
+                disabled={filteredTemplateLogs.length === 0}
+              >
+                <Download className="w-4 h-4" />
+                Export History
+              </Button>
+            )}
             <Button
               variant="ghost"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedActivity("all");
-                setSelectedStatus("all");
-                setSelectedReviewer("all");
-                setDateFilter("");
-              }}
-              className="text-muted-foreground hover:text-foreground"
+              size="sm"
+              onClick={loadLogs}
+              disabled={loading}
+              className="gap-2"
             >
-              Clear filters
+              <RefreshCcw
+                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+              />
+              Refresh
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Table */}
-      <Card className="table-container overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-table-header hover:bg-table-header">
-                <TableHead className="w-[180px]">Timestamp</TableHead>
-                <TableHead>Administrator</TableHead>
-                <TableHead>Activity</TableHead>
-                <TableHead className="w-[30%]">Details</TableHead>
-                <TableHead>Metadata</TableHead>
-                <TableHead className="text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      Loading activities...
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : filteredLogs.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center py-12 text-muted-foreground"
-                  >
-                    No activities found matching filters
-                  </TableCell>
-                </TableRow>
-              ) : (
-                currentLogs.map((log) => (
-                  <TableRow key={log.id} className="hover:bg-table-row-hover">
-                    <TableCell className="text-sm">
-                      <div className="font-medium">
-                        {new Date(log.timestamp).toLocaleDateString()}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(log.timestamp).toLocaleTimeString()}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className="text-sm font-medium break-all line-clamp-2 max-w-[200px]"
-                        title={log.adminEmail}
-                      >
-                        {log.adminEmail}
-                      </span>
-                    </TableCell>
-                    <TableCell>{getActivityBadge(log.activity)}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1 max-w-[300px]">
-                        <p
-                          className="text-sm font-medium leading-tight break-words line-clamp-3"
-                          title={log.description}
-                        >
-                          {log.description}
-                        </p>
-                        {(log.fileName || log.entityName) && (
-                          <div
-                            className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1"
-                            title={log.fileName || log.entityName}
-                          >
-                            <FileText className="w-3 h-3 mt-0.5 shrink-0" />
-                            <span className="break-all line-clamp-2">
-                              {log.fileName || log.entityName}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{renderMetadataDetails(log)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {getStatusIcon(log.status)}
-                        <span className="text-sm font-medium capitalize">
-                          {log.status}
-                        </span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
         </div>
 
-        {/* Pagination */}
-        {!loading && filteredLogs.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-slate-100 bg-white gap-4">
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="text-sm text-muted-foreground font-medium whitespace-nowrap">
-                Showing{" "}
-                <span className="text-foreground">
-                  {(currentPage - 1) * itemsPerPage + 1}
-                </span>{" "}
-                to{" "}
-                <span className="text-foreground">
-                  {Math.min(currentPage * itemsPerPage, filteredLogs.length)}
-                </span>{" "}
-                of{" "}
-                <span className="text-foreground">{filteredLogs.length}</span>{" "}
-                results
-              </div>
+        {/* ── Activity Log Tab ── */}
+        <TabsContent value="activity">
+          {/* Filters */}
+          <Card className="mb-6 shadow-sm">
+            <CardContent className="py-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search logs..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  Show:
-                </span>
                 <Select
-                  value={String(itemsPerPage)}
-                  onValueChange={(value) => {
-                    setItemsPerPage(Number(value));
-                    setCurrentPage(1);
-                  }}
+                  value={selectedActivity}
+                  onValueChange={(value) =>
+                    setSelectedActivity(value as ActivityType | "all")
+                  }
                 >
-                  <SelectTrigger className="h-8 w-[70px] text-xs">
-                    <SelectValue placeholder={String(itemsPerPage)} />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Activity Type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
+                    <SelectItem value="all">Everywhere</SelectItem>
+                    {ACTIVITY_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type.replace("_", " ").toUpperCase()}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="h-9 w-9 p-0 rounded-lg hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00] transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum: number;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
+                <Select
+                  value={selectedStatus}
+                  onValueChange={(value) =>
+                    setSelectedStatus(
+                      value as "all" | "success" | "failed" | "pending",
+                    )
                   }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Execution Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="success">Success</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                  </SelectContent>
+                </Select>
 
-                  return (
-                    <Button
-                      key={pageNum}
-                      variant={currentPage === pageNum ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handlePageChange(pageNum)}
-                      className={`h-9 w-9 p-0 rounded-lg transition-all ${
-                        currentPage === pageNum
-                          ? "bg-[#166534] hover:bg-[#1a7a3e] text-white shadow-sm"
-                          : "hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00]"
-                      }`}
-                    >
-                      {pageNum}
-                    </Button>
-                  );
-                })}
+                <Select
+                  value={selectedReviewer}
+                  onValueChange={setSelectedReviewer}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Reviewer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Reviewer</SelectItem>
+                    {uniqueReviewers.map((reviewer) => (
+                      <SelectItem key={reviewer} value={reviewer}>
+                        {reviewer}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    className="w-full"
+                    title="Filter Date"
+                  />
+                </div>
+
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedActivity("all");
+                    setSelectedStatus("all");
+                    setSelectedReviewer("all");
+                    setDateFilter("");
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Clear filters
+                </Button>
               </div>
+            </CardContent>
+          </Card>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="h-9 w-9 p-0 rounded-lg hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00] transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+          {/* Table */}
+          <Card className="table-container overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-table-header hover:bg-table-header">
+                    <TableHead className="w-[180px]">Timestamp</TableHead>
+                    <TableHead>Administrator</TableHead>
+                    <TableHead>Activity</TableHead>
+                    <TableHead className="w-[30%]">Details</TableHead>
+                    <TableHead>Metadata</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                          Loading activities...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-12 text-muted-foreground"
+                      >
+                        No activities found matching filters
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    currentLogs.map((log) => (
+                      <TableRow
+                        key={log.id}
+                        className="hover:bg-table-row-hover"
+                      >
+                        <TableCell className="text-sm">
+                          <div className="font-medium">
+                            {new Date(log.timestamp).toLocaleDateString()}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className="text-sm font-medium break-all line-clamp-2 max-w-[200px]"
+                            title={log.adminEmail}
+                          >
+                            {log.adminEmail}
+                          </span>
+                        </TableCell>
+                        <TableCell>{getActivityBadge(log.activity)}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1 max-w-[300px]">
+                            <p
+                              className="text-sm font-medium leading-tight break-words line-clamp-3"
+                              title={log.description}
+                            >
+                              {log.description}
+                            </p>
+                            {(log.fileName || log.entityName) && (
+                              <div
+                                className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1"
+                                title={log.fileName || log.entityName}
+                              >
+                                <FileText className="w-3 h-3 mt-0.5 shrink-0" />
+                                <span className="break-all line-clamp-2">
+                                  {log.fileName || log.entityName}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{renderMetadataDetails(log)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {getStatusIcon(log.status)}
+                            <span className="text-sm font-medium capitalize">
+                              {log.status}
+                            </span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
-          </div>
-        )}
-      </Card>
 
-      {/* Export Confirmation Dialog */}
+            {/* Pagination */}
+            {!loading && filteredLogs.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-slate-100 bg-white gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <div className="text-sm text-muted-foreground font-medium whitespace-nowrap">
+                    Showing{" "}
+                    <span className="text-foreground">
+                      {(currentPage - 1) * itemsPerPage + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="text-foreground">
+                      {Math.min(
+                        currentPage * itemsPerPage,
+                        filteredLogs.length,
+                      )}
+                    </span>{" "}
+                    of{" "}
+                    <span className="text-foreground">
+                      {filteredLogs.length}
+                    </span>{" "}
+                    results
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      Show:
+                    </span>
+                    <Select
+                      value={String(itemsPerPage)}
+                      onValueChange={(value) => {
+                        setItemsPerPage(Number(value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[70px] text-xs">
+                        <SelectValue placeholder={String(itemsPerPage)} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="h-9 w-9 p-0 rounded-lg hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00] transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum: number;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={
+                            currentPage === pageNum ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`h-9 w-9 p-0 rounded-lg transition-all ${
+                            currentPage === pageNum
+                              ? "bg-[#166534] hover:bg-[#1a7a3e] text-white shadow-sm"
+                              : "hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00]"
+                          }`}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="h-9 w-9 p-0 rounded-lg hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00] transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+        {/* end Activity Log tab */}
+
+        {/* ── Template History Tab ── */}
+        <TabsContent value="templates">
+          {/* Filters */}
+          <Card className="mb-6 shadow-sm">
+            <CardContent className="py-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search template, exam, class..."
+                    value={tplSearch}
+                    onChange={(e) => setTplSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                <Select value={tplUserFilter} onValueChange={setTplUserFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Generated By" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Users</SelectItem>
+                    {uniqueTplUsers.map((u) => (
+                      <SelectItem key={u} value={u}>
+                        {u}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Input
+                  type="date"
+                  value={tplDateFilter}
+                  onChange={(e) => setTplDateFilter(e.target.value)}
+                  className="w-full"
+                  title="Filter by date"
+                />
+
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setTplSearch("");
+                    setTplUserFilter("all");
+                    setTplDateFilter("");
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Clear filters
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Table */}
+          <Card className="table-container overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-table-header hover:bg-table-header">
+                    <TableHead className="w-[180px]">Date &amp; Time</TableHead>
+                    <TableHead>Generated By</TableHead>
+                    <TableHead>Template Name</TableHead>
+                    <TableHead>Exam</TableHead>
+                    <TableHead className="text-center">Questions</TableHead>
+                    <TableHead>Class</TableHead>
+                    <TableHead>Exam Code</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tplLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                          Loading template history...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredTemplateLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="text-center py-12 text-muted-foreground"
+                      >
+                        {tplSearch || tplUserFilter !== "all" || tplDateFilter
+                          ? "No templates found matching your filters"
+                          : "No templates have been generated yet"}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    currentTplLogs.map((t) => {
+                      const toDate = (raw: string | Timestamp) =>
+                        raw instanceof Timestamp
+                          ? raw.toDate()
+                          : new Date(raw as string);
+                      const dateObj = toDate(t.createdAt);
+
+                      return (
+                        <TableRow
+                          key={t.id}
+                          className="hover:bg-table-row-hover"
+                        >
+                          <TableCell className="text-sm">
+                            <div className="font-medium">
+                              {dateObj.toLocaleDateString()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {dateObj.toLocaleTimeString()}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className="text-sm font-medium break-all line-clamp-2 max-w-[180px]"
+                              title={t.createdByName}
+                            >
+                              {t.createdByName}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm font-semibold">
+                              {t.name || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm">{t.examName ?? "—"}</span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant="outline"
+                              className="bg-blue-50 text-blue-700 border-blue-200"
+                            >
+                              {t.numQuestions} Q
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {t.className ?? "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {t.examCode ?? "—"}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Pagination */}
+            {!tplLoading && filteredTemplateLogs.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-slate-100 bg-white gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-muted-foreground font-medium whitespace-nowrap">
+                    Showing{" "}
+                    <span className="text-foreground">
+                      {(tplPage - 1) * tplPerPage + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="text-foreground">
+                      {Math.min(
+                        tplPage * tplPerPage,
+                        filteredTemplateLogs.length,
+                      )}
+                    </span>{" "}
+                    of{" "}
+                    <span className="text-foreground">
+                      {filteredTemplateLogs.length}
+                    </span>{" "}
+                    results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Show:</span>
+                    <Select
+                      value={String(tplPerPage)}
+                      onValueChange={(value) => {
+                        setTplPerPage(Number(value));
+                        setTplPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[70px] text-xs">
+                        <SelectValue placeholder={String(tplPerPage)} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleTplPageChange(tplPage - 1)}
+                    disabled={tplPage === 1}
+                    className="h-9 w-9 p-0 rounded-lg hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00] transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from(
+                      { length: Math.min(5, tplTotalPages) },
+                      (_, i) => {
+                        let pageNum: number;
+                        if (tplTotalPages <= 5) pageNum = i + 1;
+                        else if (tplPage <= 3) pageNum = i + 1;
+                        else if (tplPage >= tplTotalPages - 2)
+                          pageNum = tplTotalPages - 4 + i;
+                        else pageNum = tplPage - 2 + i;
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={
+                              tplPage === pageNum ? "default" : "outline"
+                            }
+                            size="sm"
+                            onClick={() => handleTplPageChange(pageNum)}
+                            className={`h-9 w-9 p-0 rounded-lg transition-all ${
+                              tplPage === pageNum
+                                ? "bg-[#166534] hover:bg-[#1a7a3e] text-white shadow-sm"
+                                : "hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00]"
+                            }`}
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      },
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleTplPageChange(tplPage + 1)}
+                    disabled={tplPage === tplTotalPages}
+                    className="h-9 w-9 p-0 rounded-lg hover:bg-[#B38B00]/10 hover:text-[#166534] hover:border-[#B38B00] transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+        {/* end Template History tab */}
+      </Tabs>
+
+      {/* Activity Log Export Dialog */}
       <AlertDialog open={showExportDialog} onOpenChange={setShowExportDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -905,6 +1541,60 @@ export default function AuditLogsViewer() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleExport}
+              className="gradient-primary"
+            >
+              Download File
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Template History Export Dialog */}
+      <AlertDialog
+        open={showTplExportDialog}
+        onOpenChange={setShowTplExportDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Export Template History</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose your preferred format to download the template history.
+              This will export {filteredTemplateLogs.length} current matching
+              entries.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <button
+              onClick={() => setTplExportType("xlsx")}
+              className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                tplExportType === "xlsx"
+                  ? "border-primary bg-primary/5"
+                  : "border-slate-100 hover:border-slate-200"
+              }`}
+            >
+              <FileSpreadsheet
+                className={`w-8 h-8 ${tplExportType === "xlsx" ? "text-primary" : "text-slate-400"}`}
+              />
+              <span className="text-sm font-bold">Excel (.xlsx)</span>
+            </button>
+            <button
+              onClick={() => setTplExportType("csv")}
+              className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                tplExportType === "csv"
+                  ? "border-primary bg-primary/5"
+                  : "border-slate-100 hover:border-slate-200"
+              }`}
+            >
+              <FileText
+                className={`w-8 h-8 ${tplExportType === "csv" ? "text-primary" : "text-slate-400"}`}
+              />
+              <span className="text-sm font-bold">CSV (.csv)</span>
+            </button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleTplExport}
               className="gradient-primary"
             >
               Download File

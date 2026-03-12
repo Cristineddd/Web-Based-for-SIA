@@ -114,7 +114,7 @@ export class AuditLogger {
         entityId: options?.entityId,
         entityType: options?.entityType,
         entityName: options?.entityName,
-        status: options?.status || 'success',
+        status: options?.status || "success",
         errorMessage: options?.errorMessage,
         metadata: options?.metadata,
         beforeValues: options?.beforeValues || null,
@@ -273,6 +273,36 @@ export class AuditLogger {
   }
 
   /**
+   * Log template generated / downloaded activity
+   */
+  static async logTemplateGenerated(
+    adminId: string,
+    adminEmail: string,
+    templateName: string,
+    examName: string,
+    numQuestions: number,
+    className?: string,
+    examCode?: string,
+  ): Promise<AuditLog | null> {
+    return this.logActivity(
+      adminId,
+      adminEmail,
+      "template_generated",
+      `Generated template: "${templateName}" for exam "${examName}"`,
+      {
+        entityType: "template",
+        entityName: templateName,
+        metadata: {
+          examName,
+          numQuestions,
+          ...(className && { className }),
+          ...(examCode && { examCode }),
+        },
+      },
+    );
+  }
+
+  /**
    * Retrieve audit logs with filtering
    */
   static async getLogs(queryOpts?: AuditLogQuery): Promise<AuditLog[]> {
@@ -284,11 +314,11 @@ export class AuditLogger {
       }
 
       if (queryOpts?.activity) {
-        constraints.push(where('activity', '==', queryOpts.activity));
+        constraints.push(where("activity", "==", queryOpts.activity));
       }
 
       if (queryOpts?.entityType) {
-        constraints.push(where('entityType', '==', queryOpts.entityType));
+        constraints.push(where("entityType", "==", queryOpts.entityType));
       }
 
       if (queryOpts?.status) {

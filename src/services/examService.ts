@@ -39,6 +39,7 @@ export interface Exam {
   instructorId?: string; // Instructor ID for the exam creator
   updatedAt?: string;
   className?: string;
+  classId?: string;
   examType?: "board" | "diagnostic";
   choicePoints?: { [choice: string]: number };
   isArchived?: boolean;
@@ -347,6 +348,7 @@ export async function getExamById(examId: string): Promise<Exam | null> {
       updatedAt:
         data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
       className: data.className || undefined,
+      classId: data.classId || undefined,
       examType: (data.examType as "board" | "diagnostic") || "board",
       choicePoints: data.choicePoints || {},
       isArchived: data.isArchived || false,

@@ -15,17 +15,21 @@ import {
   CheckCircle,
   Loader2,
   Pencil,
-  BookOpen,
-  Calendar,
+  RefreshCw,
 } from "lucide-react";
-import { getExamById, updateExam, Exam, canEditExam, EDIT_RESTRICTION_MESSAGE } from "@/services/examService";
+import {
+  getExamById,
+  updateExam,
+  Exam,
+  canEditExam,
+  EDIT_RESTRICTION_MESSAGE,
+} from "@/services/examService";
 import { AnswerKeyService } from "@/services/answerKeyService";
 import { ScanningService } from "@/services/scanningService";
 import { useAuth } from "@/contexts/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import {
   collection,
-  serverTimestamp,
   query,
   where,
   getDocs,
@@ -41,24 +45,12 @@ interface ExamDetailsProps {
   params: { id: string };
 }
 
-interface AnswerKeyStatus {
-  total: number;
-  completed: number;
-  hasAnswerKey: boolean;
-}
-
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
   const router = useRouter();
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scannedPaperCount, setScannedPaperCount] = useState(0);
-  const [answerKeyStatus, setAnswerKeyStatus] = useState<AnswerKeyStatus>({
-    total: 0,
-    completed: 0,
-    hasAnswerKey: false,
-  });
   const [hasTemplate, setHasTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
 
@@ -104,18 +96,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               params.id,
             );
             if (result.success && result.data) {
-              const answersCount = result.data.answers.length;
-              setAnswerKeyStatus({
-                total: examData.num_items,
-                completed: answersCount,
-                hasAnswerKey: true,
-              });
+              // Answer key exists
             } else {
-              setAnswerKeyStatus({
-                total: examData.num_items,
-                completed: 0,
-                hasAnswerKey: false,
-              });
+              // No answer key
             }
           } catch (error) {
             console.error("Error fetching answer key:", error);
@@ -126,9 +109,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             const scannedResult =
               await ScanningService.getScannedResultsByExamId(params.id);
             if (scannedResult.success && scannedResult.data) {
-              setScannedPaperCount(
-                scannedResult.data.filter((r) => !r.isNullId).length,
-              );
+              // Scanned results exist
             }
           } catch (error) {
             console.error("Error fetching scanned results:", error);
@@ -264,9 +245,6 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           : prev,
       );
 
-      // Update answer key status total to match new num_items
-      setAnswerKeyStatus((prev) => ({ ...prev, total: editForm.num_items }));
-
       // Log exam update
       if (user?.email) {
         AuditLogger.logActivity(
@@ -369,6 +347,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         examId: params.id,
         examName: exam.title,
         examCode: exam.examCode,
+        classId: exam.classId,
+        className: exam.className,
       });
 
       // Use the exam's stored exam code (unique identifier for this exam)
@@ -586,19 +566,27 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
       {/* Exam Details */}
       <Card className="mb-6">
         <CardContent className="p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Exam Details</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-4">
+            Exam Details
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Program</label>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Program
+                </label>
                 <p className="text-base text-foreground mt-1">{exam.title}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Course</label>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Course
+                </label>
                 <p className="text-base text-foreground mt-1">{exam.subject}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Created</label>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Created
+                </label>
                 <p className="text-base text-foreground mt-1">
                   {new Date(exam.created_at).toLocaleDateString()}
                 </p>
@@ -606,12 +594,20 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Number of Items</label>
-                <p className="text-base text-foreground mt-1">{exam.num_items}</p>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Number of Items
+                </label>
+                <p className="text-base text-foreground mt-1">
+                  {exam.num_items}
+                </p>
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Choices per Item</label>
-                <p className="text-base text-foreground mt-1">{exam.choices_per_item}</p>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Choices per Item
+                </label>
+                <p className="text-base text-foreground mt-1">
+                  {exam.choices_per_item}
+                </p>
               </div>
             </div>
           </div>

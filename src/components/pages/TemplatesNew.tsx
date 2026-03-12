@@ -52,6 +52,7 @@ import {
   InstructorSettingsService,
   InstructorSettings,
 } from "@/services/instructorSettingsService";
+import { AuditLogger } from "@/services/auditLogger";
 
 interface Template {
   id: string;
@@ -355,6 +356,19 @@ export default function Templates() {
         examCode: template.examCode, // Include exam code on template
       });
       toast.success(`✅ Downloaded ${template.name}`);
+
+      // Log this template generation to audit trail
+      if (user?.id && user?.email) {
+        AuditLogger.logTemplateGenerated(
+          user.id,
+          user.email,
+          template.name,
+          template.examName || template.name,
+          template.numQuestions,
+          template.className,
+          template.examCode,
+        ).catch(console.error);
+      }
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast.error("Failed to generate PDF");

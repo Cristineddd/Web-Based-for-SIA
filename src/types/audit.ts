@@ -30,7 +30,9 @@ export type ActivityType =
   | "mark_official"
   | "validation_status_change"
   | "validation_override"
-  | "validation_reset";
+  | "validation_reset"
+  // Template activity types
+  | "template_generated";
 
 /** Snapshot of grade field values — used for before/after diff tracking */
 export interface GradeSnapshot {
@@ -83,7 +85,7 @@ export interface AuditLogQuery {
   adminId?: string;
   activity?: ActivityType;
   entityType?: string;
-  status?: 'success' | 'failed' | 'pending';
+  status?: "success" | "failed" | "pending";
   startDate?: string;
   endDate?: string;
   limit?: number;
