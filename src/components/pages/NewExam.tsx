@@ -126,8 +126,7 @@ export default function NewExam() {
         ...prev,
         classId: classId,
         className: selectedClass.class_name,
-        // Auto-fill subject if empty
-        subject: prev.subject || selectedClass.course_subject,
+  // Subject/folder removed from UI. Keep existing value (if any) but it's no longer required.
       }));
       setErrors((prev) => ({ ...prev, classId: "" }));
     }
@@ -145,12 +144,6 @@ export default function NewExam() {
 
       if (!formData.classId) {
         newErrors.classId = "Class is required";
-      }
-
-      if (!formData.subject.trim()) {
-        newErrors.subject = "Subject is required";
-      } else if (formData.subject.length > 100) {
-        newErrors.subject = "Subject must be less than 100 characters";
       }
 
       if (!formData.date) {
@@ -220,7 +213,8 @@ export default function NewExam() {
         name: formData.title,
         totalQuestions: formData.num_items,
         date: formData.date,
-        folder: formData.subject,
+  // Folder/subject removed from UI: derive from selected class
+  folder: classes.find((c) => c.id === formData.classId)?.course_subject || "",
         choicesPerItem: formData.choices_per_item,
         classId: formData.classId,
         className: formData.className,
@@ -438,36 +432,7 @@ export default function NewExam() {
                   )}
                 </div>
 
-                {/* Subject */}
-                <div className="space-y-1">
-                  <Label htmlFor="subject" className="flex items-center gap-2">
-                    Subject *
-                    <span className="text-xs text-muted-foreground">(Auto-filled from class or enter custom)</span>
-                  </Label>
-                  <Input
-                    id="subject"
-                    placeholder="Enter subject name (e.g., Mathematics, Science, English)"
-                    value={formData.subject}
-                    onChange={(e) => handleChange("subject", e.target.value)}
-                    className={`transition-all ${
-                      errors.subject ? "border-red-500 focus:border-red-500 focus:ring-red-200" :
-                      formData.subject.trim().length >= 5 ? "border-green-500 focus:border-green-500 focus:ring-green-200" : ""
-                    }`}
-                  />
-                  {formData.subject.trim() && formData.subject.length < 5 && (
-                    <p className="text-xs text-amber-600 flex items-center gap-1">
-                      ⚠️ Need {5 - formData.subject.length} more characters
-                    </p>
-                  )}
-                  {formData.subject.trim().length >= 5 && !errors.subject && (
-                    <p className="text-xs text-green-600 flex items-center gap-1">
-                      ✅ Subject name looks good
-                    </p>
-                  )}
-                  {errors.subject && (
-                    <p className="text-sm text-red-600">{errors.subject}</p>
-                  )}
-                </div>
+                {/* Subject / Folder removed */}
 
                 {/* Date */}
                 <div className="space-y-1">
@@ -714,10 +679,7 @@ Examples:
                         <span className="text-gray-600">Class:</span>
                         <span className="font-medium text-gray-900">{formData.className || 'Not selected'}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Subject:</span>
-                        <span className="font-medium text-gray-900">{formData.subject || 'Not set'}</span>
-                      </div>
+                      {/* Subject / Folder removed */}
                       <div className="flex justify-between">
                         <span className="text-gray-600">Date:</span>
                         <span className="font-medium text-gray-900">

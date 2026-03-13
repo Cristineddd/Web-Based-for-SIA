@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { 
   ChevronLeft, 
-  FileText, 
+  FileText,
   Download, 
   Mail, 
   X, 
@@ -25,7 +25,6 @@ import {
   Users,
   Check,
   FileSpreadsheet,
-  Table2,
   Info,
   Search,
   Filter,
@@ -175,15 +174,15 @@ function SendResultsPanel({
     try {
       const payload = {
         className,
-        examTitle: examTitle || 'Exam',
-        passingThreshold,
+        examTitle,
         subject,
+        passingThreshold,
         instructorName,
         instructorEmail,
         students: students.map((s) => ({
           studentId: s.studentId,
           studentName: s.studentName,
-          email: emails[s.studentId] || `${s.studentId}@gordoncollege.edu.ph`,
+          email: emails[s.studentId] || s.email || '',
           score: s.score,
           totalQuestions: s.totalQuestions,
           percentage: s.percentage,
@@ -424,7 +423,7 @@ export default function Results() {
   );
 
   // Modal states
-  const [exportModalType, setExportModalType] = useState<'PDF' | 'Excel' | 'CSV' | null>(null);
+  const [exportModalType, setExportModalType] = useState<'PDF' | 'Excel' | null>(null);
   const [showSendPanel, setShowSendPanel] = useState(false);
 
   // ── Batch export state (SS4 2.5) ────────────────────────────────────────
@@ -1515,14 +1514,6 @@ export default function Results() {
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Excel
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setExportModalType('CSV')}
-              className="border-green-400 text-green-700 hover:bg-green-50"
-            >
-              <Table2 className="w-4 h-4 mr-2" />
-              CSV
             </Button>
           </div>
         </div>

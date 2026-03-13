@@ -6,15 +6,16 @@ export const metadata = {
 };
 
 interface ClassEditPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default function ClassEditPage({ params }: ClassEditPageProps) {
+export default async function ClassEditPage({ params }: ClassEditPageProps) {
+  const { id } = await params;
   return (
     <ProtectedLayout>
-      <ClassEdit classId={params.id} />
+      <ClassEdit classId={id} />
     </ProtectedLayout>
   );
 }

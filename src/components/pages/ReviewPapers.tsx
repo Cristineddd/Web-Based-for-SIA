@@ -186,11 +186,12 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
         case 'percentage':
           comparison = a.percentage - b.percentage;
           break;
-        case 'scannedAt':
+        case 'scannedAt': {
           const dateA = a.scannedAt ? new Date(a.scannedAt).getTime() : 0;
           const dateB = b.scannedAt ? new Date(b.scannedAt).getTime() : 0;
           comparison = dateA - dateB;
           break;
+        }
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });

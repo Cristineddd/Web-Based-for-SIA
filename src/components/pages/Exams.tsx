@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,9 +36,24 @@ import {
   type Exam,
   type ExamFormData,
 } from "@/services/examService";
+import { getClasses, type Class } from "@/services/classService";
 import { AnswerKeyService } from "@/services/answerKeyService";
 import { collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+
+function usePageVisibilityRefresh(onVisible: () => void) {
+  useEffect(() => {
+    const handler = () => {
+      if (!document.hidden) onVisible();
+    };
+    document.addEventListener("visibilitychange", handler);
+    window.addEventListener("focus", handler);
+    return () => {
+      document.removeEventListener("visibilitychange", handler);
+      window.removeEventListener("focus", handler);
+    };
+  }, [onVisible]);
+}
 
 interface ExamWithStatus extends Exam {
   answerKeyStatus?: {
@@ -55,12 +70,27 @@ export default function Exams() {
   const [exams, setExams] = useState<ExamWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [classById, setClassById] = useState<Record<string, Class>>({});
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [duplicateExamData, setDuplicateExamData] = useState<ExamFormData | null>(null);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [editForm, setEditForm] = useState({ title: "", subject: "", num_items: 0, choices_per_item: 4, examType: "board" as "board" | "diagnostic" });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const getCourseForExam = (exam: Exam): string => {
+    // examService's Exam type doesn't currently include classId, but Firestore docs do.
+    const classId = (exam as any).classId as string | undefined | null;
+    if (classId && classById[classId]?.course_subject) return classById[classId].course_subject;
+    // Legacy fallback
+    return exam.subject || "—";
+  };
+
+  const getClassNameForExam = (exam: Exam): string => {
+    const classId = (exam as any).classId as string | undefined | null;
+    if (classId && classById[classId]?.class_name) return classById[classId].class_name;
+    return exam.className || "—";
+  };
 
   useEffect(() => {
     const title = searchParams.get("title");
@@ -181,6 +211,30 @@ export default function Exams() {
   useEffect(() => {
     fetchExams();
   }, [user]);
+
+  const refreshClassesForCourseLookup = useCallback(async () => {
+    try {
+      if (!user?.id) {
+        setClassById({});
+        return;
+      }
+      const classes = await getClasses(user.id);
+      const map: Record<string, Class> = {};
+      for (const c of classes) map[c.id] = c;
+      setClassById(map);
+    } catch (error) {
+      console.error("Error fetching classes for exam course lookup:", error);
+      // Non-blocking; table will fall back to exam.subject.
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshClassesForCourseLookup();
+  }, [user]);
+
+  usePageVisibilityRefresh(() => {
+    refreshClassesForCourseLookup();
+  });
 
   const handleCreateExam = async (formData: ExamFormData, forceCreate: boolean = false) => {
     // Check for duplicates first (unless forceCreate is true - user clicked "Proceed Anyway")
@@ -344,8 +398,8 @@ export default function Exams() {
   const filteredExams = exams.filter(
     (exam) =>
       exam.title.toLowerCase().includes(search.toLowerCase()) ||
-      exam.subject.toLowerCase().includes(search.toLowerCase()) ||
-      (exam.className && exam.className.toLowerCase().includes(search.toLowerCase())) ||
+  getCourseForExam(exam).toLowerCase().includes(search.toLowerCase()) ||
+  getClassNameForExam(exam).toLowerCase().includes(search.toLowerCase()) ||
       exam.num_items.toString().includes(search),
   );
 
@@ -401,7 +455,7 @@ export default function Exams() {
           <TableHeader>
             <TableRow className="bg-table-header hover:bg-table-header">
               <TableHead>Title</TableHead>
-              <TableHead className="hidden sm:table-cell">Subject</TableHead>
+              <TableHead className="hidden sm:table-cell">Course</TableHead>
               <TableHead className="hidden lg:table-cell">Class</TableHead>
               <TableHead className="text-center">Items</TableHead>
               <TableHead className="text-center">Actions</TableHead>
@@ -446,10 +500,10 @@ export default function Exams() {
                 >
                   <TableCell className="font-medium">{exam.title}</TableCell>
                   <TableCell className="text-muted-foreground hidden sm:table-cell">
-                    {exam.subject}
+                    {getCourseForExam(exam)}
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden lg:table-cell">
-                    {exam.className || "—"}
+                    {getClassNameForExam(exam)}
                   </TableCell>
                   <TableCell className="text-center">
                     {exam.num_items}
@@ -515,14 +569,7 @@ export default function Exams() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Subject / Folder <span className="text-destructive">*</span></label>
-                <input
-                  type="text"
-                  value={editForm.subject}
-                  onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Subject"
-                />
+                {/* Subject / Folder removed */}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">Number of Items <span className="text-destructive">*</span></label>

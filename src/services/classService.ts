@@ -27,6 +27,7 @@ export interface Class {
   id: string;
   class_name: string;
   course_subject: string;
+  section_block?: string;
   year?: string; // Optional year field
   room?: string;
   semester?: string;
@@ -40,6 +41,26 @@ export interface Class {
 }
 
 const CLASSES_COLLECTION = 'classes';
+
+function stripUndefinedDeep(value: any): any {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (Array.isArray(value)) {
+    // Keep array shape, but strip undefined items and strip undefined fields inside objects.
+    return value
+      .map((v) => stripUndefinedDeep(v))
+      .filter((v) => v !== undefined);
+  }
+  if (typeof value === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      const cleaned = stripUndefinedDeep(v);
+      if (cleaned !== undefined) out[k] = cleaned;
+    }
+    return out;
+  }
+  return value;
+}
 
 /**
  * Create a new class in Firestore
@@ -59,13 +80,15 @@ export async function createClass(
       console.warn('[WARNING] WARNING: instructorId is undefined or null!');
     }
     
-    const newClassData = {
+    // Firestore rejects `undefined` anywhere in the payload. Normalize + strip it.
+    // Also: this codebase uses both `created_at` (string) and `createdAt` (Timestamp).
+    const newClassData = stripUndefinedDeep({
       ...classData,
       createdBy: userId, // Keep userId for backward compatibility
-      ...(instructorId && { instructorId: instructorId }), // Only include if not undefined
+      instructorId: instructorId || undefined,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
+    });
 
     console.log('[SEND] Sending to Firestore:', newClassData);
     const docRef = await addDoc(collection(db, CLASSES_COLLECTION), newClassData);
@@ -76,7 +99,7 @@ export async function createClass(
       id: docRef.id,
       ...classData,
       createdBy: userId,
-      ...(instructorId && { instructorId: instructorId }), // Include instructorId in return value
+  ...(instructorId && { instructorId: instructorId }), // Include instructorId in return value
       updatedAt: new Date().toISOString(),
     };
 
@@ -147,6 +170,7 @@ export async function getClasses(userId?: string): Promise<Class[]> {
         id: doc.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
+  section_block: data.section_block,
         year: data.year,
         room: data.room,
         students: data.students || [],
@@ -187,6 +211,7 @@ export async function getClassById(classId: string): Promise<Class | null> {
         id: docSnap.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
+  section_block: data.section_block,
         year: data.year,
         room: data.room,
         students: data.students || [],

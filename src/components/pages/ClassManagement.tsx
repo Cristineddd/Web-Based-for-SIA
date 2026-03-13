@@ -21,6 +21,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -342,17 +352,22 @@ export default function ClassManagement() {
           const workbook = XLSX.read(data, { type: "array" });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          // Preserve empty cells so we can detect blanks correctly.
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1,
+            defval: '',
+            blankrows: false,
+          }) as any[];
 
           // Skip header row and create raw student data
-          const rawStudents = jsonData
+          const rawStudents = (jsonData as any[])
             .slice(1) // Skip header
-            .filter((row: any) => row.length >= 3) // Ensure basic validation
+            .filter((row: any) => row && row.length >= 3) // Ensure expected columns exist
             .map((row: any) => ({
-              student_id: String(row[0] || ""),
-              first_name: String(row[1] || ""),
-              last_name: String(row[2] || ""),
-              email: row[3] ? String(row[3]) : undefined,
+              student_id: String(row?.[0] ?? '').trim(),
+              first_name: String(row?.[1] ?? '').trim(),
+              last_name: String(row?.[2] ?? '').trim(),
+              email: String(row?.[3] ?? '').trim(),
             }));
 
           if (rawStudents.length === 0) {
@@ -360,16 +375,40 @@ export default function ClassManagement() {
             return;
           }
 
-          // Validate all student IDs
+          // Validate all required fields + student IDs
           const validStudents: Student[] = [];
           const invalidStudents: Array<{student: Student, errors: string[]}> = [];
 
           for (const student of rawStudents) {
+            const requiredErrors: string[] = [];
+            if (!student.student_id) requiredErrors.push('Student ID is required');
+            if (!student.first_name) requiredErrors.push('First Name is required');
+            if (!student.last_name) requiredErrors.push('Last Name is required');
+
+            if (requiredErrors.length > 0) {
+              invalidStudents.push({
+                // Ensure we never store `undefined` in state
+                student: {
+                  student_id: student.student_id,
+                  first_name: student.first_name,
+                  last_name: student.last_name,
+                  ...(student.email ? { email: student.email } : {}),
+                },
+                errors: requiredErrors,
+              });
+              continue;
+            }
+
             const validation = StudentIDValidationService.validateStudentIdFormat(student.student_id);
             
             if (!validation.isValid) {
               invalidStudents.push({
-                student,
+                student: {
+                  student_id: student.student_id,
+                  first_name: student.first_name,
+                  last_name: student.last_name,
+                  ...(student.email ? { email: student.email } : {}),
+                },
                 errors: [validation.error || 'Invalid Student ID format']
               });
               
@@ -388,7 +427,12 @@ export default function ClassManagement() {
                 );
               }
             } else {
-              validStudents.push(student);
+              validStudents.push({
+                student_id: student.student_id,
+                first_name: student.first_name,
+                last_name: student.last_name,
+                ...(student.email ? { email: student.email } : {}),
+              });
             }
           }
 
@@ -426,6 +470,26 @@ export default function ClassManagement() {
               toast.warning(`All ${validStudents.length} student(s) already exist in this class. Nothing to import.`);
             }
             setShowUploadSummary(true);
+            return;
+          }
+
+          // Hard block: if *any* required blanks exist, don't allow import preview.
+          // (User requirement: no blank cells allowed in required fields.)
+          const blankRequiredCount = invalidStudents.filter((x) =>
+            x.errors.some((e) =>
+              e === 'Student ID is required' ||
+              e === 'First Name is required' ||
+              e === 'Last Name is required'
+            )
+          ).length;
+
+          if (blankRequiredCount > 0) {
+            toast.error(
+              `Upload blocked: ${blankRequiredCount} row(s) have blank required fields (Student ID / First Name / Last Name). Fix the file then re-upload.`
+            );
+            setShowUploadSummary(true);
+            setImportPreview([]);
+            setShowImportDialog(false);
             return;
           }
 
@@ -499,6 +563,18 @@ export default function ClassManagement() {
   };
 
   const confirmImport = () => {
+    // Safety net: never import students with blanks in required fields.
+    const hasBlankRequired = importPreview.some(
+      (s) => !s.student_id?.trim() || !s.first_name?.trim() || !s.last_name?.trim()
+    );
+
+    if (hasBlankRequired) {
+      toast.error(
+        'Import blocked: One or more rows have blank required fields (Student ID / First Name / Last Name).'
+      );
+      return;
+    }
+
     // Final duplicate check before adding
     const existingIds = new Set(students.map((s) => s.student_id));
     const newOnly = importPreview.filter((s) => !existingIds.has(s.student_id));
@@ -576,31 +652,6 @@ export default function ClassManagement() {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Classes</h1>
         </div>
         <div className="flex flex-wrap gap-4">
-          <Button
-            onClick={downloadTemplate}
-            variant="outline"
-            className="gap-2 flex-shrink-0 border-primary/20 hover:bg-transparent hover:text-current"
-          >
-            <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Download Template</span>
-            <span className="sm:hidden">Template</span>
-          </Button>
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            variant="outline"
-            className="gap-2 flex-shrink-0 border-primary/20 hover:bg-transparent hover:text-current"
-          >
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Import Excel</span>
-            <span className="sm:hidden">Import</span>
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
           <Button
             onClick={() => setShowAddDialog(true)}
             className="gradient-primary gap-2"
@@ -735,9 +786,7 @@ export default function ClassManagement() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm('Are you sure you want to archive this class? It will be moved to the archive and can be restored later.')) {
-                          handleArchive(classItem.id);
-                        }
+                        setArchiveId(classItem.id);
                       }}
                       className="p-1 h-auto text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                     >
@@ -767,6 +816,33 @@ export default function ClassManagement() {
           ))}
         </div>
       )}
+
+      {/* Archive Confirmation Dialog */}
+      <AlertDialog open={!!archiveId} onOpenChange={(open) => {
+        if (!open) setArchiveId(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this class?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This class will be moved to the archive. You can restore it later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setArchiveId(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!archiveId) return;
+                await handleArchive(archiveId);
+              }}
+            >
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Add Class Dialog */}
       <Dialog open={showAddDialog} onOpenChange={(open) => {
@@ -1026,29 +1102,6 @@ export default function ClassManagement() {
             </TabsContent>
 
             <TabsContent value="students" className="space-y-4 mt-4">
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importing}
-                  className="w-full sm:w-auto"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {importing ? "Importing..." : "Import CSV/Excel"}
-                </Button>
-                <Button variant="outline" onClick={downloadTemplate} className="w-full sm:w-auto">
-                  <Download className="w-4 h-4 mr-2" />
-                  Download Template
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </div>
-
               <div className="bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-6 space-y-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
