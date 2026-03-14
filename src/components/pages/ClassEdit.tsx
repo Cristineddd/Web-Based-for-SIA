@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Save, Users, BookOpen, Hash, Download, Upload, Plus, X } from 'lucide-react';
+import { Save, Users, BookOpen, Hash, Download, Upload, Plus, X, Search, ArrowUpDown } from 'lucide-react';
 import { getClassById, updateClass, Class, Student as BaseStudent } from '@/services/classService';
 import { toast } from 'sonner';
 import { BackButton } from '@/components/ui/BackButton';
@@ -54,6 +54,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     email: '',
   });
   const [showAddStudent, setShowAddStudent] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'student_id' | 'first_name' | 'last_name' | 'email'>('student_id');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     if (!classId) {
@@ -86,11 +89,11 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       toast.error('Program name is required');
       return;
     }
-    if (classData.class_name.trim().length < 4) {
-      toast.error('Program name must be at least 4 characters long');
+    if (classData.class_name.trim().length < 3) {
+      toast.error('Program name must be at least 3 characters long');
       return;
     }
-    if (!/^[a-zA-Z\s]+$/.test(classData.class_name.trim())) {
+    if (!/^[a-zA-ZñÑ\s]+$/.test(classData.class_name.trim())) {
       toast.error('Program name can only contain letters and spaces');
       return;
     }
@@ -100,11 +103,11 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       toast.error('Course subject is required');
       return;
     }
-    if (classData.course_subject.trim().length < 5) {
-      toast.error('Course subject must be at least 5 characters long');
+    if (classData.course_subject.trim().length < 4) {
+      toast.error('Course subject must be at least 4 characters long');
       return;
     }
-    if (!/^[a-zA-Z\s]+$/.test(classData.course_subject.trim())) {
+    if (!/^[a-zA-ZñÑ\s]+$/.test(classData.course_subject.trim())) {
       toast.error('Course subject can only contain letters and spaces');
       return;
     }
@@ -136,13 +139,13 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       }
 
       // First name validation
-      if (!student.first_name || !/^[a-zA-Z\s]+$/.test(student.first_name) || student.first_name.length < 4) {
+      if (!student.first_name || !/^[a-zA-ZñÑ\s]+$/.test(student.first_name) || student.first_name.length < 4) {
         toast.error(`Student ${i + 1}: First name must be at least 4 characters and contain only letters`);
         return;
       }
 
       // Last name validation
-      if (!student.last_name || !/^[a-zA-Z\s]+$/.test(student.last_name) || student.last_name.length < 4) {
+      if (!student.last_name || !/^[a-zA-ZñÑ\s]+$/.test(student.last_name) || student.last_name.length < 4) {
         toast.error(`Student ${i + 1}: Last name must be at least 4 characters and contain only letters`);
         return;
       }
@@ -319,11 +322,11 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
             invalidRows.push(`Row ${i + 2}: Invalid Student ID`);
             return;
           }
-          if (!s.first_name || !/^[a-zA-Z\s]+$/.test(s.first_name) || s.first_name.length < 4) {
+          if (!s.first_name || !/^[a-zA-ZñÑ\s]+$/.test(s.first_name) || s.first_name.length < 4) {
             invalidRows.push(`Row ${i + 2}: Invalid First Name`);
             return;
           }
-          if (!s.last_name || !/^[a-zA-Z\s]+$/.test(s.last_name) || s.last_name.length < 4) {
+          if (!s.last_name || !/^[a-zA-ZñÑ\s]+$/.test(s.last_name) || s.last_name.length < 4) {
             invalidRows.push(`Row ${i + 2}: Invalid Last Name`);
             return;
           }
@@ -390,12 +393,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       return;
     }
 
-    if (!newStudent.first_name || newStudent.first_name.length < 4 || !/^[a-zA-Z\s]+$/.test(newStudent.first_name)) {
+    if (!newStudent.first_name || newStudent.first_name.length < 4 || !/^[a-zA-ZñÑ\s]+$/.test(newStudent.first_name)) {
       toast.error('First name must be at least 4 characters and contain only letters');
       return;
     }
 
-    if (!newStudent.last_name || newStudent.last_name.length < 4 || !/^[a-zA-Z\s]+$/.test(newStudent.last_name)) {
+    if (!newStudent.last_name || newStudent.last_name.length < 4 || !/^[a-zA-ZñÑ\s]+$/.test(newStudent.last_name)) {
       toast.error('Last name must be at least 4 characters and contain only letters');
       return;
     }
@@ -434,6 +437,36 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     setClassData({ ...classData, students: updatedStudents });
     toast.success('Student removed from roster');
   };
+
+  const handleSort = (field: 'student_id' | 'first_name' | 'last_name' | 'email') => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const filteredAndSortedStudents = classData
+    ? classData.students
+        .filter((student) => {
+          if (!studentSearch.trim()) return true;
+          const query = studentSearch.toLowerCase();
+          return (
+            student.student_id.toLowerCase().includes(query) ||
+            student.first_name.toLowerCase().includes(query) ||
+            student.last_name.toLowerCase().includes(query) ||
+            (student.email || '').toLowerCase().includes(query)
+          );
+        })
+        .sort((a, b) => {
+          const aVal = (sortBy === 'email' ? a[sortBy] || '' : a[sortBy]).toLowerCase();
+          const bVal = (sortBy === 'email' ? b[sortBy] || '' : b[sortBy]).toLowerCase();
+          if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+          if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+          return 0;
+        })
+    : [];
 
   if (loading) {
     return (
@@ -517,15 +550,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   placeholder="Enter program name"
                   className={
                     !classData.class_name.trim() || 
-                    !/^[a-zA-Z\s]+$/.test(classData.class_name.trim()) || 
-                    classData.class_name.trim().length < 4 
+                    !/^[a-zA-ZñÑ\s]+$/.test(classData.class_name.trim()) || 
+                    classData.class_name.trim().length < 3 
                       ? 'border-red-300 focus:border-red-500' 
                       : 'border-green-300 focus:border-green-500'
                   }
                 />
                 <p className="text-xs text-gray-600">
-                  Letters only, minimum 4 characters
-                  {classData.class_name.trim() && ` (${classData.class_name.trim().length}/4)`}
+                  Letters only, minimum 3 characters
+                  {classData.class_name.trim() && ` (${classData.class_name.trim().length}/3)`}
                 </p>
               </div>
               <div className="space-y-2">
@@ -537,15 +570,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   placeholder="Enter course or subject"
                   className={
                     !classData.course_subject.trim() || 
-                    !/^[a-zA-Z\s]+$/.test(classData.course_subject.trim()) || 
-                    classData.course_subject.trim().length < 5 
+                    !/^[a-zA-ZñÑ\s]+$/.test(classData.course_subject.trim()) || 
+                    classData.course_subject.trim().length < 4 
                       ? 'border-red-300 focus:border-red-500' 
                       : 'border-green-300 focus:border-green-500'
                   }
                 />
                 <p className="text-xs text-gray-600">
-                  Letters only, minimum 5 characters
-                  {classData.course_subject.trim() && ` (${classData.course_subject.trim().length}/5)`}
+                  Letters only, minimum 4 characters
+                  {classData.course_subject.trim() && ` (${classData.course_subject.trim().length}/4)`}
                 </p>
               </div>
             </div>
@@ -618,20 +651,63 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       {/* Students List */}
       <Card className="mt-4">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Students ({classData.students.length})
-            </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAddStudent(true)}
-              className="flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Student
-            </Button>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Students ({classData.students.length})
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAddStudent(true)}
+                className="flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Student
+              </Button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by ID, name, or email..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select
+                value={`${sortBy}-${sortOrder}`}
+                onValueChange={(value) => {
+                  const [field, order] = value.split('-') as ['student_id' | 'first_name' | 'last_name' | 'email', 'asc' | 'desc'];
+                  setSortBy(field);
+                  setSortOrder(order);
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-[220px]">
+                  <div className="flex items-center gap-2">
+                    <ArrowUpDown className="w-4 h-4" />
+                    <SelectValue placeholder="Sort by" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student_id-asc">Student ID (→)</SelectItem>
+                  <SelectItem value="student_id-desc">Student ID (←)</SelectItem>
+                  <SelectItem value="first_name-asc">First Name (A→Z)</SelectItem>
+                  <SelectItem value="first_name-desc">First Name (Z→A)</SelectItem>
+                  <SelectItem value="last_name-asc">Last Name (A→Z)</SelectItem>
+                  <SelectItem value="last_name-desc">Last Name (Z→A)</SelectItem>
+                  <SelectItem value="email-asc">Email (→)</SelectItem>
+                  <SelectItem value="email-desc">Email (←)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {studentSearch.trim() && (
+              <p className="text-sm text-muted-foreground">
+                Showing {filteredAndSortedStudents.length} of {classData.students.length} students
+              </p>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -639,16 +715,36 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[120px]">Student ID</TableHead>
-                  <TableHead className="min-w-[150px]">First Name</TableHead>
-                  <TableHead className="min-w-[150px]">Last Name</TableHead>
-                  <TableHead className="min-w-[200px]">Email</TableHead>
+                  <TableHead className="min-w-[120px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('student_id')}>
+                    <div className="flex items-center gap-1">
+                      Student ID
+                      {sortBy === 'student_id' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </TableHead>
+                  <TableHead className="min-w-[150px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('first_name')}>
+                    <div className="flex items-center gap-1">
+                      First Name
+                      {sortBy === 'first_name' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </TableHead>
+                  <TableHead className="min-w-[150px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('last_name')}>
+                    <div className="flex items-center gap-1">
+                      Last Name
+                      {sortBy === 'last_name' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </TableHead>
+                  <TableHead className="min-w-[200px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('email')}>
+                    <div className="flex items-center gap-1">
+                      Email
+                      {sortBy === 'email' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </TableHead>
                   <TableHead className="min-w-[80px]">Year</TableHead>
                   <TableHead className="w-16">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {classData.students.map((student) => (
+                {filteredAndSortedStudents.map((student) => (
                   <TableRow key={student.student_id}>
                     <TableCell>
                       <Input

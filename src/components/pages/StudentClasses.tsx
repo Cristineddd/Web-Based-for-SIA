@@ -83,7 +83,6 @@ export default function StudentClasses() {
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [roomWarning, setRoomWarning] = useState(false);
   const [classNameWarning, setClassNameWarning] = useState(false);
-  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
   const [currentTab, setCurrentTab] = useState('basic');
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
@@ -1097,12 +1096,6 @@ export default function StudentClasses() {
                       {newClass.class_name.trim() && ` (${newClass.class_name.trim().length}/5)`}
                     </p>
                   )}
-                  {classNameWarning && (
-                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Class Name must be at least 5 characters long</span>
-                    </div>
-                  )}
                 </div>
                 <div className="space-y-3">
                   <Label htmlFor="course_subject" className="text-sm font-medium text-gray-700">Course *</Label>
@@ -1113,13 +1106,6 @@ export default function StudentClasses() {
                       const value = e.target.value;
                       setNewClass({ ...newClass, course_subject: value });
                       
-                      // Show warning if length exceeds 0 but is less than 5
-                      if (value.trim().length > 0 && value.trim().length < 5) {
-                        setCourseSubjectWarning(true);
-                        setTimeout(() => setCourseSubjectWarning(false), 2000);
-                      } else {
-                        setCourseSubjectWarning(false);
-                      }
                     }}
                     placeholder="e.g., Introduction to Programming"
                     className={!newClass.course_subject.trim() || newClass.course_subject.trim().length < 5 ? 'border-red-300 focus:border-red-500' : 'border-green-300 focus:border-green-500'}
@@ -1131,12 +1117,6 @@ export default function StudentClasses() {
                       Required field, minimum 5 characters
                       {newClass.course_subject.trim() && ` (${newClass.course_subject.trim().length}/5)`}
                     </p>
-                  )}
-                  {courseSubjectWarning && (
-                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Course/Subject must be at least 5 characters long</span>
-                    </div>
                   )}
                 </div>
                 <div className="space-y-3">
