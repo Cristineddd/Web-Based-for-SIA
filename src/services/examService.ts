@@ -455,12 +455,9 @@ export async function getArchivedExams(userId: string): Promise<Exam[]> {
 export async function deleteExam(examId: string): Promise<void> {
   try {
     const docRef = doc(db, "exams", examId);
-    // Instead of deleting the document, set isArchived to false and mark as deleted
-    await updateDoc(docRef, {
-      isArchived: false,
-      deletedAt: new Date().toISOString(),
-      status: 'deleted'
-    });
+  // Permanently delete the exam document.
+  // NOTE: This does not automatically delete related docs (templates/answer keys/results).
+  await deleteDoc(docRef);
   } catch (error) {
     console.error("Error deleting exam:", error);
     throw new Error("Failed to delete exam");

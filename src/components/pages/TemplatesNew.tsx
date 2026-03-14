@@ -775,7 +775,11 @@ export default function Templates() {
 
                   {/* Header */}
                   <div className="flex items-center justify-center gap-1 mb-0.5">
-                    <div className="w-[10px] h-[10px] bg-green-700 rounded-full flex items-center justify-center text-white text-[5px] font-bold">G</div>
+                    <img
+                      src="/gclogo.png"
+                      alt="Gordon College logo"
+                      className="w-[10px] h-[10px] object-contain"
+                    />
                     <span className="text-[7px] font-bold">Gordon College</span>
                   </div>
                   

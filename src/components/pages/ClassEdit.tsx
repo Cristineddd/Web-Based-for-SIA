@@ -18,6 +18,7 @@ import { getClassById, updateClass, Class, Student as BaseStudent } from '@/serv
 import { toast } from 'sonner';
 import { BackButton } from '@/components/ui/BackButton';
 import { exportStudentRosterToExcel } from '@/services/excelExportService';
+import * as XLSX from 'xlsx';
 import {
   Table,
   TableBody,
@@ -209,17 +210,165 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+    // Reset input early so re-selecting the same file triggers onChange
+    event.target.value = '';
+
+    if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
       toast.error('Please select an Excel file (.xlsx or .xls)');
       return;
     }
 
-    // You can implement Excel parsing logic here
-    // For now, we'll show a placeholder message
-    toast.success(`File "${file.name}" selected. Import functionality can be implemented based on your Excel format.`);
-    
-    // Reset the file input
-    event.target.value = '';
+    if (!classData) {
+      toast.error('Class data not loaded yet. Please wait and try again.');
+      return;
+    }
+
+    const normalizeHeader = (h: unknown) =>
+      String(h ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .replace(/[()]/g, '')
+        .replace(/[^a-z0-9 ]/g, '');
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = reader.result;
+        if (!(data instanceof ArrayBuffer)) {
+          toast.error('Failed to read file');
+          return;
+        }
+
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheetName = wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+
+        // Parse as array-of-arrays to avoid header quirks
+        const aoa = XLSX.utils.sheet_to_json(ws, {
+          header: 1,
+          defval: '',
+          blankrows: false,
+        }) as unknown[][];
+
+        if (aoa.length < 2) {
+          toast.error('No student rows detected. Please check the template format.');
+          return;
+        }
+
+        const headerRow = (aoa[0] || []).map(normalizeHeader);
+
+        const aliasesStudentId = new Set(['student id', 'studentid', 'id']);
+        const aliasesFirst = new Set(['first name', 'firstname', 'first']);
+        const aliasesLast = new Set(['last name', 'lastname', 'last']);
+        const aliasesEmail = new Set(['email', 'email optional', 'email optional ', 'e mail', 'e mail optional']);
+
+        const findCol = (aliases: Set<string>) => headerRow.findIndex((h) => aliases.has(h));
+
+        const colStudentId = findCol(aliasesStudentId);
+        const colFirst = findCol(aliasesFirst);
+        const colLast = findCol(aliasesLast);
+        const colEmail = findCol(aliasesEmail);
+
+        let parsed: Student[];
+        if (colStudentId === -1 || colFirst === -1 || colLast === -1) {
+          // Fallback: assume A-D (Student ID, First Name, Last Name, Email)
+          parsed = aoa
+            .slice(1)
+            .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
+            .map((row) => {
+              const student_id = String(row[0] ?? '').trim();
+              const first_name = String(row[1] ?? '').trim();
+              const last_name = String(row[2] ?? '').trim();
+              const email = String(row[3] ?? '').trim();
+              return {
+                student_id,
+                first_name,
+                last_name,
+                ...(email ? { email } : {}),
+              } as Student;
+            });
+        } else {
+          parsed = aoa
+            .slice(1)
+            .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
+            .map((row) => {
+              const student_id = String(row[colStudentId] ?? '').trim();
+              const first_name = String(row[colFirst] ?? '').trim();
+              const last_name = String(row[colLast] ?? '').trim();
+              const email = colEmail >= 0 ? String(row[colEmail] ?? '').trim() : '';
+              return {
+                student_id,
+                first_name,
+                last_name,
+                ...(email ? { email } : {}),
+              } as Student;
+            });
+        }
+
+        if (parsed.length === 0) {
+          toast.error('No student rows detected. Please check the template format.');
+          return;
+        }
+
+        // Validation (block blanks)
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const invalidRows: string[] = [];
+        parsed.forEach((s, i) => {
+          if (!s.student_id || !/^\d{9}$/.test(s.student_id) || !s.student_id.startsWith('20')) {
+            invalidRows.push(`Row ${i + 2}: Invalid Student ID`);
+            return;
+          }
+          if (!s.first_name || !/^[a-zA-Z\s]+$/.test(s.first_name) || s.first_name.length < 4) {
+            invalidRows.push(`Row ${i + 2}: Invalid First Name`);
+            return;
+          }
+          if (!s.last_name || !/^[a-zA-Z\s]+$/.test(s.last_name) || s.last_name.length < 4) {
+            invalidRows.push(`Row ${i + 2}: Invalid Last Name`);
+            return;
+          }
+          if (s.email && s.email.trim() && !emailRegex.test(s.email.trim())) {
+            invalidRows.push(`Row ${i + 2}: Invalid Email`);
+          }
+        });
+
+        if (invalidRows.length > 0) {
+          toast.error(`Import blocked. Fix these issues:\n${invalidRows.slice(0, 5).join('\n')}${invalidRows.length > 5 ? `\n...and ${invalidRows.length - 5} more` : ''}`);
+          return;
+        }
+
+        // Duplicate checks
+        const seen = new Set<string>();
+        const dupInFile = new Set<string>();
+        parsed.forEach((s) => {
+          if (seen.has(s.student_id)) dupInFile.add(s.student_id);
+          seen.add(s.student_id);
+        });
+        if (dupInFile.size > 0) {
+          toast.error(`Duplicate Student ID(s) in file: ${Array.from(dupInFile).join(', ')}`);
+          return;
+        }
+
+        const existingIds = new Set(classData.students.map((s) => s.student_id));
+        const conflicts = parsed.filter((s) => existingIds.has(s.student_id));
+        if (conflicts.length > 0) {
+          toast.error(`These Student ID(s) already exist in this class: ${Array.from(new Set(conflicts.map((c) => c.student_id))).join(', ')}`);
+          return;
+        }
+
+        setClassData({
+          ...classData,
+          students: [...classData.students, ...parsed],
+        });
+
+        toast.success(`Imported ${parsed.length} student(s). Click “Save Changes” to finalize.`);
+      } catch (err) {
+        console.error('Error importing students:', err);
+        toast.error('Failed to import students. Please check the file and try again.');
+      }
+    };
+    reader.onerror = () => toast.error('Failed to read file');
+    reader.readAsArrayBuffer(file);
   };
 
   const updateStudentField = (studentId: string, field: keyof Student, value: string) => {

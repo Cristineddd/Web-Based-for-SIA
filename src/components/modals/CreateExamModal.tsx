@@ -19,7 +19,7 @@ interface ExamFormData {
   name: string;
   totalQuestions: number;
   date: string;
-  folder: string;
+  folder: string; // derived from class; not editable in UI
   className: string;
   classId?: string;
   choicesPerItem?: number;
@@ -157,10 +157,7 @@ export function CreateExamModal({
       toast.error("Please select a date");
       return;
     }
-    if (!formData.folder.trim()) {
-      toast.error("Please enter a subject/folder name");
-      return;
-    }
+  // Folder/subject is derived from the selected class; no user input required.
 
     try {
       const selected = new Date(formData.date + "T00:00:00");
@@ -418,6 +415,7 @@ export function CreateExamModal({
                       onClick={() => {
                         handleInputChange("className", classItem.class_name);
                         handleInputChange("classId", classItem.id);
+                        handleInputChange("folder", classItem.course_subject || "General");
                       }}
                       className={`w-full text-left p-3 rounded-md border-2 transition-all ${
                         formData.classId === classItem.id
@@ -549,8 +547,6 @@ export function CreateExamModal({
                     <span className="font-medium">{new Date(formData.date).toLocaleDateString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Folder:</span>
-                    <span className="font-medium">{formData.folder}</span>
                   </div>
                 </div>
               </div>
@@ -570,18 +566,7 @@ export function CreateExamModal({
                   />
                 </label>
 
-                <label className="block">
-                  <span className="text-sm font-semibold text-foreground mb-2 block">
-                    Folder / Subject *
-                  </span>
-                  <input
-                    type="text"
-                    value={formData.folder}
-                    onChange={(e) => handleInputChange("folder", e.target.value)}
-                    placeholder="e.g., Mathematics, Science, English"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  />
-                </label>
+                {/* Folder / Subject removed */}
               </div>
             </div>
           )}
