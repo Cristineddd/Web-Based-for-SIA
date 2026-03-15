@@ -384,7 +384,7 @@ export default function ExamScoresTable({
       {!loading && data.length > 0 && (
         <div className="space-y-3">
           {/* Stats cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {/* Total */}
             <Card className="p-4 border">
               <div className="flex items-center gap-2 mb-1">
@@ -422,15 +422,6 @@ export default function ExamScoresTable({
               </div>
             </Card>
 
-            {/* Average */}
-            <Card className="p-4 border">
-              <div className="flex items-center gap-2 mb-1">
-                <BarChart3 className="w-4 h-4 text-blue-500" />
-                <span className="text-xs font-medium text-muted-foreground">Average</span>
-              </div>
-              <p className="text-2xl font-bold text-[#1a472a]">{stats.avgPercentage}%</p>
-            </Card>
-
             {/* Highest */}
             <Card className="p-4 border">
               <div className="flex items-center gap-2 mb-1">
@@ -440,27 +431,23 @@ export default function ExamScoresTable({
               <p className="text-2xl font-bold text-[#1a472a]">{stats.highestPercentage}%</p>
             </Card>
 
-            {/* Lowest — only meaningful with 2+ students */}
-            {stats.total >= 2 && (
+            {/* Lowest */}
             <Card className="p-4 border">
               <div className="flex items-center gap-2 mb-1">
                 <TrendingDown className="w-4 h-4 text-orange-500" />
                 <span className="text-xs font-medium text-muted-foreground">Lowest</span>
               </div>
-              <p className="text-2xl font-bold text-[#1a472a]">{stats.lowestPercentage}%</p>
+              <p className="text-2xl font-bold text-[#1a472a]">{stats.total >= 2 ? `${stats.lowestPercentage}%` : '—'}</p>
             </Card>
-            )}
 
-            {/* Median — only meaningful with 2+ students */}
-            {stats.total >= 2 && (
+            {/* Median */}
             <Card className="p-4 border">
               <div className="flex items-center gap-2 mb-1">
                 <BarChart3 className="w-4 h-4 text-violet-500" />
                 <span className="text-xs font-medium text-muted-foreground">Median</span>
               </div>
-              <p className="text-2xl font-bold text-[#1a472a]">{stats.medianPercentage}%</p>
+              <p className="text-2xl font-bold text-[#1a472a]">{stats.total >= 2 ? `${stats.medianPercentage}%` : '—'}</p>
             </Card>
-            )}
           </div>
 
           {/* Pass/fail visual bar + threshold config toggle */}

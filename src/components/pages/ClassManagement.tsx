@@ -33,6 +33,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Search,
@@ -71,8 +78,6 @@ export default function ClassManagement() {
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [roomWarning, setRoomWarning] = useState(false);
-  const [classNameWarning, setClassNameWarning] = useState(false);
-  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
   const [uploadSummary, setUploadSummary] = useState<{
     total: number;
     successful: number;
@@ -147,14 +152,20 @@ export default function ClassManagement() {
     }
 
     // Validate Class Name minimum length
-    if (newClass.class_name.trim().length < 5) {
-      toast.error("Class Name must be at least 5 characters long");
+    if (newClass.class_name.trim().length < 3) {
+      toast.error("Class Name must be at least 3 characters long");
       return;
     }
 
     // Validate Course/Subject minimum length
-    if (newClass.course_subject.trim().length < 5) {
-      toast.error("Course/Subject must be at least 5 characters long");
+    if (newClass.course_subject.trim().length < 4) {
+      toast.error("Course/Subject must be at least 4 characters long");
+      return;
+    }
+
+    // Validate Year is selected
+    if (!newClass.year || newClass.year.trim() === '') {
+      toast.error("Year level is required");
       return;
     }
 
@@ -900,25 +911,17 @@ export default function ClassManagement() {
                       onChange={(e) => {
                         const value = e.target.value;
                         setNewClass({ ...newClass, class_name: value });
-                        
-                        // Show warning if length exceeds 0 but is less than 5
-                        if (value.trim().length > 0 && value.trim().length < 5) {
-                          setClassNameWarning(true);
-                          setTimeout(() => setClassNameWarning(false), 2000);
-                        } else {
-                          setClassNameWarning(false);
-                        }
                       }}
                       placeholder="Enter program name"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.class_name.trim() && newClass.class_name.trim().length >= 5
-                          ? 'border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5' 
-                          : newClass.class_name.trim() && newClass.class_name.trim().length < 5
+                        newClass.class_name.trim() && newClass.class_name.trim().length >= 3
+                          ? 'border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5'
+                          : newClass.class_name.trim() && newClass.class_name.trim().length < 3
                           ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
                           : 'border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10'
                       }`}
                     />
-                    {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && (
+                    {newClass.class_name.trim() && newClass.class_name.trim().length >= 3 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">&#x2713;</span>
@@ -926,23 +929,20 @@ export default function ClassManagement() {
                       </div>
                     )}
                   </div>
-                  {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && (
+                  {newClass.class_name.trim() && newClass.class_name.trim().length >= 3 && (
                     <div className="flex items-center gap-2 text-xs text-primary">
                       <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                       <span>Valid class name</span>
                     </div>
                   )}
-                  {newClass.class_name.trim() && newClass.class_name.trim().length < 5 && (
+                  {newClass.class_name.trim() && newClass.class_name.trim().length < 3 && (
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                      <span>{newClass.class_name.trim().length}/5 characters minimum</span>
+                      <span>Letters only, {newClass.class_name.trim().length}/3 characters minimum</span>
                     </div>
                   )}
-                  {classNameWarning && (
-                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Class Name must be at least 5 characters long</span>
-                    </div>
+                  {!newClass.class_name.trim() && (
+                    <div className="text-xs text-gray-400">Letters only, minimum 3 characters</div>
                   )}
                 </div>
                 <div className="space-y-3">
@@ -959,25 +959,17 @@ export default function ClassManagement() {
                           ...newClass,
                           course_subject: value,
                         });
-                        
-                        // Show warning if length exceeds 0 but is less than 5
-                        if (value.trim().length > 0 && value.trim().length < 5) {
-                          setCourseSubjectWarning(true);
-                          setTimeout(() => setCourseSubjectWarning(false), 2000);
-                        } else {
-                          setCourseSubjectWarning(false);
-                        }
                       }}
                       placeholder="Enter course subject"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5
-                          ? 'border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5' 
-                          : newClass.course_subject.trim() && newClass.course_subject.trim().length < 5
+                        newClass.course_subject.trim() && newClass.course_subject.trim().length >= 4
+                          ? 'border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5'
+                          : newClass.course_subject.trim() && newClass.course_subject.trim().length < 4
                           ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
                           : 'border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10'
                       }`}
                     />
-                    {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 && (
+                    {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 4 && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">&#x2713;</span>
@@ -985,55 +977,55 @@ export default function ClassManagement() {
                       </div>
                     )}
                   </div>
-                  {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 && (
+                  {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 4 && (
                     <div className="flex items-center gap-2 text-xs text-primary">
                       <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                       <span>Valid course subject</span>
                     </div>
                   )}
-                  {newClass.course_subject.trim() && newClass.course_subject.trim().length < 5 && (
+                  {newClass.course_subject.trim() && newClass.course_subject.trim().length < 4 && (
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                      <span>{newClass.course_subject.trim().length}/5 characters minimum</span>
+                      <span>Letters only, {newClass.course_subject.trim().length}/4 characters minimum</span>
                     </div>
                   )}
-                  {courseSubjectWarning && (
-                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Course/Subject must be at least 5 characters long</span>
-                    </div>
+                  {!newClass.course_subject.trim() && (
+                    <div className="text-xs text-gray-400">Letters only, minimum 4 characters</div>
                   )}
                 </div>
                 <div className="space-y-3">
                   <Label htmlFor="year" className="text-sm font-semibold text-gray-700">
-                    Year <span className="text-gray-400 text-xs">(Optional)</span>
+                    Year <span className="text-red-500">*</span>
                   </Label>
-                  <div className="relative">
-                    <Input
-                      id="year"
-                      value={newClass.year}
-                      onChange={(e) =>
-                        setNewClass({
-                          ...newClass,
-                          year: e.target.value,
-                        })
-                      }
-                      placeholder="e.g., 2024, First Year, Senior"
-                      className="transition-all duration-200 border-2 border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-lg px-4 py-3"
-                    />
-                    {newClass.year.trim() && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">&#x2713;</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <Select
+                    value={newClass.year || ''}
+                    onValueChange={(value) =>
+                      setNewClass({
+                        ...newClass,
+                        year: value,
+                      })
+                    }
+                  >
+                    <SelectTrigger className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
+                      newClass.year ? 'border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5' : 'border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10'
+                    }`}>
+                      <SelectValue placeholder="Select year level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1st Year</SelectItem>
+                      <SelectItem value="2">2nd Year</SelectItem>
+                      <SelectItem value="3">3rd Year</SelectItem>
+                      <SelectItem value="4">4th Year</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {newClass.year.trim() && (
                     <div className="flex items-center gap-2 text-xs text-primary">
                       <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                      <span>Year specified</span>
+                      <span>Year level selected</span>
                     </div>
+                  )}
+                  {!newClass.year.trim() && (
+                    <div className="text-xs text-gray-400">Select a year level</div>
                   )}
                 </div>
                 <div className="space-y-3">
@@ -1102,6 +1094,33 @@ export default function ClassManagement() {
             </TabsContent>
 
             <TabsContent value="students" className="space-y-4 mt-4">
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {importing ? 'Importing...' : 'Import CSV/Excel'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={downloadTemplate} 
+                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Template
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </div>
+
               <div className="bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-6 space-y-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">

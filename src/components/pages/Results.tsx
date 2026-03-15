@@ -32,8 +32,16 @@ import {
   Archive,
   Loader2,
   ArrowLeft,
+  MapPin,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { getClasses, Class } from '@/services/classService';
 import { getExams, Exam } from '@/services/examService';
 import { 
@@ -48,16 +56,19 @@ import { db } from '@/lib/firebase';
 import ExamScoresTable from '@/components/pages/ExamScoresTable';
 import ExportFilterPanel, { ExportDataRow, ExportFormat } from '@/components/pages/ExportFilterPanel';
 import { exportClassResultsToExcel } from '@/services/excelExportService';
-import { generateClassResultsPdf, generateClassSummaryPdf, ExportMetadata } from '@/services/pdfReportService';
+import { generateClassResultsPdf, ExportMetadata } from '@/services/pdfReportService';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { batchExportExams, BatchExportFormat, BatchExportProgress } from '@/services/batchExportService';
 import { ReportHistoryService } from '@/services/reportHistoryService';
+import { AnswerKeyService } from '@/services/answerKeyService';
+import { AnswerChoice } from '@/types/scanning';
 
 // Types for our component
 interface ClassResult {
   classId: string;
   className: string;
+  courseSubject: string;
   schedule: string;
   totalStudents: number;
   scannedCount: number;
@@ -79,6 +90,13 @@ interface StudentResult {
   grade: string;
   date: string;
   email?: string;
+}
+
+interface AnswerDetail {
+  questionNumber: number;
+  studentAnswer: string;
+  correctAnswer: string;
+  status: 'correct' | 'incorrect' | 'unanswered';
 }
 
 // Calculate letter grade from percentage
@@ -425,6 +443,9 @@ export default function Results() {
   // Modal states
   const [exportModalType, setExportModalType] = useState<'PDF' | 'Excel' | null>(null);
   const [showSendPanel, setShowSendPanel] = useState(false);
+  const [viewingStudent, setViewingStudent] = useState<StudentResult | null>(null);
+  const [answerDetails, setAnswerDetails] = useState<AnswerDetail[]>([]);
+  const [loadingAnswerDetails, setLoadingAnswerDetails] = useState(false);
 
   // ── Batch export state (SS4 2.5) ────────────────────────────────────────
   const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set());
@@ -671,7 +692,8 @@ export default function Results() {
           return {
             classId: cls.id,
             className: cls.class_name,
-            schedule: cls.room || 'No schedule set',
+            courseSubject: cls.course_subject || '',
+            schedule: cls.room || 'No room set',
             totalStudents: cls.students?.length || 0,
             scannedCount: scannedCount,
             averageScore: averageScore
@@ -1195,21 +1217,9 @@ export default function Results() {
   if (selectedClass && !selectedExam) {
     return (
       <div className="page-container">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-          </div>
-        </div>
-
-        {/* Classes Header */}
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-foreground">Classes</h2>
-        </div>
-
-        {/* Class Info Bar */}
-        <div className="flex items-center gap-4">
-          <Button 
+        {/* Header with back button integrated */}
+        <div className="flex items-center gap-3 mb-6">
+          <Button
             onClick={() => {
               setSelectedClass(null);
               setClassExamsList([]);
@@ -1217,14 +1227,22 @@ export default function Results() {
             }}
             variant="ghost"
             size="icon"
-            className="hover:bg-muted"
+            className="hover:bg-muted shrink-0"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-[#1a472a]">{selectedClass.className}</h2>
-            <p className="text-gray-600 text-sm">
-              {selectedClass.totalStudents} students • {selectedClass.schedule}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground leading-tight truncate">
+              {selectedClass.className}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {selectedClass.totalStudents} students
+              {selectedClass.courseSubject && (
+                <span> • {selectedClass.courseSubject}</span>
+              )}
+              {selectedClass.schedule && selectedClass.schedule !== 'No room set' && (
+                <span> • Room {selectedClass.schedule}</span>
+              )}
             </p>
           </div>
         </div>
@@ -1555,9 +1573,64 @@ export default function Results() {
           examTitle={selectedExam.title}
           passingThreshold={passingThreshold}
           onThresholdChange={handleThresholdChange}
-          onViewStudent={(row) => {
-            // placeholder — can be wired to a detail view later
-            console.log('View student:', row.studentId);
+          onViewStudent={async (row) => {
+            setViewingStudent({
+              studentId: row.studentId,
+              studentName: row.studentName,
+              score: row.score,
+              totalQuestions: row.totalQuestions,
+              percentage: row.percentage,
+              grade: row.grade,
+              date: row.date,
+              email: row.email,
+            });
+            // Fetch per-question answer details
+            setLoadingAnswerDetails(true);
+            setAnswerDetails([]);
+            try {
+              // Fetch student's scanned result
+              const scannedQ = query(
+                collection(db, 'scannedResults'),
+                where('examId', '==', selectedExam!.id),
+                where('studentId', '==', row.studentId)
+              );
+              const scannedSnap = await getDocs(scannedQ);
+              
+              // Fetch answer key
+              const akResult = await AnswerKeyService.getAnswerKeyByExamId(selectedExam!.id);
+              
+              if (!scannedSnap.empty && akResult.success && akResult.data) {
+                const scannedData = scannedSnap.docs[0].data();
+                const studentAnswers: AnswerChoice[] = scannedData.answers || [];
+                const correctAnswers: AnswerChoice[] = akResult.data.answers || [];
+                const totalQ = Math.max(studentAnswers.length, correctAnswers.length);
+                
+                const details: AnswerDetail[] = [];
+                for (let i = 0; i < totalQ; i++) {
+                  const sAnswer = (studentAnswers[i] || '').toString().trim().toUpperCase();
+                  const cAnswer = (correctAnswers[i] || '').toString().trim().toUpperCase();
+                  let status: 'correct' | 'incorrect' | 'unanswered' = 'unanswered';
+                  if (!sAnswer || sAnswer === '' || sAnswer === '-') {
+                    status = 'unanswered';
+                  } else if (sAnswer === cAnswer) {
+                    status = 'correct';
+                  } else {
+                    status = 'incorrect';
+                  }
+                  details.push({
+                    questionNumber: i + 1,
+                    studentAnswer: sAnswer || '-',
+                    correctAnswer: cAnswer || '-',
+                    status,
+                  });
+                }
+                setAnswerDetails(details);
+              }
+            } catch (err) {
+              console.error('Error fetching answer details:', err);
+            } finally {
+              setLoadingAnswerDetails(false);
+            }
           }}
         />
 
@@ -1600,6 +1673,155 @@ export default function Results() {
           instructorName={user?.displayName || undefined}
           instructorEmail={user?.email || undefined}
         />
+
+        {/* Student Detail Dialog */}
+        <Dialog open={!!viewingStudent} onOpenChange={(open) => { if (!open) { setViewingStudent(null); setAnswerDetails([]); } }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-[#1a472a]">Student Result Details</DialogTitle>
+              <DialogDescription>
+                {selectedExam?.title} — {selectedClass?.className}
+              </DialogDescription>
+            </DialogHeader>
+            {viewingStudent && (
+              <div className="space-y-5 pt-2">
+                {/* Student Info */}
+                <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg border">
+                  <div className="w-12 h-12 rounded-full bg-[#1a472a] flex items-center justify-center text-white font-bold text-lg">
+                    {viewingStudent.studentName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-lg text-foreground">{viewingStudent.studentName}</p>
+                    <p className="text-sm text-muted-foreground font-mono">{viewingStudent.studentId}</p>
+                    {viewingStudent.email && (
+                      <p className="text-sm text-muted-foreground">{viewingStudent.email}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-[#1a472a]">{viewingStudent.score}/{viewingStudent.totalQuestions}</p>
+                    <Badge variant="outline" className={`${getGradeColorClass(viewingStudent.grade)}`}>
+                      {viewingStudent.grade} — {viewingStudent.percentage}%
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Score Summary Bar */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="p-3 rounded-lg border bg-white text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Score</p>
+                    <p className="text-lg font-bold text-[#1a472a]">
+                      {viewingStudent.score}/{viewingStudent.totalQuestions}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg border bg-white text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Percentage</p>
+                    <p className="text-lg font-bold text-[#1a472a]">{viewingStudent.percentage}%</p>
+                  </div>
+                  <div className="p-3 rounded-lg border bg-white text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Grade</p>
+                    <Badge variant="outline" className={`text-sm px-2 py-0.5 ${getGradeColorClass(viewingStudent.grade)}`}>
+                      {viewingStudent.grade}
+                    </Badge>
+                  </div>
+                  <div className="p-3 rounded-lg border bg-white text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Status</p>
+                    {viewingStudent.percentage >= passingThreshold ? (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-sm px-2 py-0.5">
+                        Pass
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-sm px-2 py-0.5">
+                        Fail
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Answer Breakdown */}
+                {loadingAnswerDetails ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#1a472a] mr-2" />
+                    <span className="text-muted-foreground">Loading answer details...</span>
+                  </div>
+                ) : answerDetails.length > 0 ? (
+                  <div className="space-y-3">
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="font-medium text-foreground">Answer Breakdown</span>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-sm bg-green-500" />
+                        <span className="text-muted-foreground">Correct</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-sm bg-red-500" />
+                        <span className="text-muted-foreground">Incorrect</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-sm bg-gray-400" />
+                        <span className="text-muted-foreground">Unanswered</span>
+                      </div>
+                    </div>
+
+                    {/* Answer Grid */}
+                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                      {answerDetails.map((detail) => (
+                        <div key={detail.questionNumber} className="flex flex-col items-center">
+                          <span className="text-[10px] text-muted-foreground mb-1">Q{detail.questionNumber}</span>
+                          <div
+                            className={`w-9 h-9 rounded-md flex items-center justify-center text-white font-bold text-sm ${
+                              detail.status === 'correct'
+                                ? 'bg-green-500'
+                                : detail.status === 'incorrect'
+                                ? 'bg-red-500'
+                                : 'bg-gray-400'
+                            }`}
+                          >
+                            {detail.studentAnswer}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground mt-0.5">
+                            {detail.correctAnswer}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Summary Counts */}
+                    <div className="flex items-center justify-center gap-6 pt-3 border-t">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-sm bg-green-500" />
+                        <span className="text-sm font-medium">
+                          Correct: {answerDetails.filter(d => d.status === 'correct').length}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-sm bg-red-500" />
+                        <span className="text-sm font-medium">
+                          Incorrect: {answerDetails.filter(d => d.status === 'incorrect').length}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-sm bg-gray-400" />
+                        <span className="text-sm font-medium">
+                          Unanswered: {answerDetails.filter(d => d.status === 'unanswered').length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    No answer breakdown available for this student.
+                  </div>
+                )}
+
+                {/* Date */}
+                <div className="flex items-center justify-between text-sm pt-2 border-t">
+                  <span className="text-muted-foreground">Date Scanned</span>
+                  <span className="font-medium">{viewingStudent.date}</span>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -1608,46 +1830,8 @@ export default function Results() {
   return (
     <div className="page-container">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-        </div>
-        {classResults.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-red-300 text-red-600 hover:bg-red-50"
-            onClick={async () => {
-              const meta: ExportMetadata = {
-                instructorName: user?.displayName || undefined,
-              };
-              await generateClassSummaryPdf(
-                classResults.map((c) => ({
-                  className: c.className,
-                  schedule: c.schedule,
-                  totalStudents: c.totalStudents,
-                  scannedCount: c.scannedCount,
-                  averageScore: c.averageScore,
-                })),
-                undefined,
-                meta,
-              );
-              // Log to report history
-              if (user?.instructorId) {
-                ReportHistoryService.logReport({
-                  instructorId: user.instructorId,
-                  reportType: 'class-summary',
-                  format: 'PDF',
-                  title: 'Class Summary Report',
-                  studentCount: classResults.reduce((sum, c) => sum + c.totalStudents, 0),
-                }).catch(() => {});
-              }
-            }}
-          >
-            <FileText className="w-4 h-4 mr-1.5" />
-            PDF Summary
-          </Button>
-        )}
+      <div className="mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
       </div>
 
       {/* Class Search & Filter Bar */}
@@ -1803,8 +1987,12 @@ export default function Results() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="text-base font-bold text-[#1a472a] truncate">{classResult.className}</h3>
-                      <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5">
-                        📅 {classResult.schedule}
+                      {classResult.courseSubject && (
+                        <p className="text-sm text-gray-600 truncate">{classResult.courseSubject}</p>
+                      )}
+                      <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3 shrink-0" />
+                        {classResult.schedule}
                       </p>
                     </div>
                   </div>

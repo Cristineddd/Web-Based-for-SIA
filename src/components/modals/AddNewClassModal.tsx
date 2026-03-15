@@ -225,14 +225,6 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                 onChange={(e) => {
                   const value = e.target.value;
                   handleInputChange('course_subject', value);
-                  
-                  // Show warning if length exceeds 0 but is less than 5
-                  if (value.trim().length > 0 && value.trim().length < 5) {
-                    setCourseSubjectWarning(true);
-                    setTimeout(() => setCourseSubjectWarning(false), 2000);
-                  } else {
-                    setCourseSubjectWarning(false);
-                  }
                 }}
                 disabled={loading}
                 className={`w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
@@ -257,12 +249,7 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                 <span>Valid course subject</span>
               </div>
             )}
-            {courseSubjectWarning && (
-              <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                <span className="text-red-500">⚠</span>
-                <span>Course Subject must be at least 5 characters long</span>
-              </div>
-            )}
+
           </div>
 
           {/* Year */}

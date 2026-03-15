@@ -79,15 +79,14 @@ export default function Exams() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const getCourseForExam = (exam: Exam): string => {
-    // examService's Exam type doesn't currently include classId, but Firestore docs do.
-    const classId = (exam as any).classId as string | undefined | null;
+    const classId = exam.classId;
     if (classId && classById[classId]?.course_subject) return classById[classId].course_subject;
     // Legacy fallback
     return exam.subject || "—";
   };
 
   const getClassNameForExam = (exam: Exam): string => {
-    const classId = (exam as any).classId as string | undefined | null;
+    const classId = exam.classId;
     if (classId && classById[classId]?.class_name) return classById[classId].class_name;
     return exam.className || "—";
   };

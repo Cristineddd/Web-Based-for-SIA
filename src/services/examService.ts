@@ -39,6 +39,7 @@ export interface Exam {
   instructorId?: string; // Instructor ID for the exam creator
   updatedAt?: string;
   className?: string;
+  classId?: string; // Class ID linking exam to a class
   examType?: 'board' | 'diagnostic';
   choicePoints?: { [choice: string]: number };
   isArchived?: boolean;
@@ -120,6 +121,7 @@ export async function createExam(
       ...(instructorId && { instructorId: instructorId }), // Include instructorId in return value
       updatedAt: new Date().toISOString(),
       className: examData.className || undefined,
+      classId: examData.classId || undefined,
       examType: examData.examType || 'board',
       choicePoints: examData.choicePoints,
       examCode: examCode, // Include examCode in return value
@@ -262,6 +264,7 @@ export async function getExams(userId?: string): Promise<Exam[]> {
           updatedAt:
             data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
           className: data.className || undefined,
+          classId: data.classId || undefined,
           isArchived: data.isArchived,
           examCode: examCode,
         });
@@ -331,6 +334,7 @@ export async function getExamById(examId: string): Promise<Exam | null> {
       updatedAt:
         data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
       className: data.className || undefined,
+      classId: data.classId || undefined,
       examType: (data.examType as 'board' | 'diagnostic') || 'board',
       choicePoints: data.choicePoints || {},
       isArchived: data.isArchived || false,
@@ -428,6 +432,7 @@ export async function getArchivedExams(userId: string): Promise<Exam[]> {
         updatedAt:
           data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
         className: data.className || undefined,
+        classId: data.classId || undefined,
         isArchived: data.isArchived,
         archivedAt:
           data.archivedAt?.toDate?.().toISOString() || new Date().toISOString(),
