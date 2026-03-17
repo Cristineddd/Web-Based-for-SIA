@@ -1,25 +1,25 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { useDebounce } from '@/hooks/useDebounce';
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { 
-  ChevronLeft, 
-  FileText, 
-  Download, 
-  Mail, 
-  X, 
+} from "@/components/ui/select";
+import {
+  ChevronLeft,
+  FileText,
+  Download,
+  Mail,
+  X,
   ChevronRight,
   Folder,
   Users,
@@ -32,27 +32,38 @@ import {
   RotateCcw,
   Archive,
   Loader2,
-} from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { getClasses, Class } from '@/services/classService';
-import { getExams, Exam } from '@/services/examService';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { getClasses, Class } from "@/services/classService";
+import { getExams, Exam } from "@/services/examService";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
   onSnapshot,
-  Timestamp 
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import ExamScoresTable from '@/components/pages/ExamScoresTable';
-import ExportFilterPanel, { ExportDataRow, ExportFormat } from '@/components/pages/ExportFilterPanel';
-import { exportClassResultsToExcel } from '@/services/excelExportService';
-import { generateClassResultsPdf, generateClassSummaryPdf, ExportMetadata } from '@/services/pdfReportService';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
-import { batchExportExams, BatchExportFormat, BatchExportProgress } from '@/services/batchExportService';
-import { ReportHistoryService } from '@/services/reportHistoryService';
+  Timestamp,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import ExamScoresTable from "@/components/pages/ExamScoresTable";
+import ExportFilterPanel, {
+  ExportDataRow,
+  ExportFormat,
+} from "@/components/pages/ExportFilterPanel";
+import { exportClassResultsToExcel } from "@/services/excelExportService";
+import {
+  generateClassResultsPdf,
+  generateClassSummaryPdf,
+  ExportMetadata,
+} from "@/services/pdfReportService";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import {
+  batchExportExams,
+  BatchExportFormat,
+  BatchExportProgress,
+} from "@/services/batchExportService";
+import { ReportHistoryService } from "@/services/reportHistoryService";
 
 // Types for our component
 interface ClassResult {
@@ -83,31 +94,31 @@ interface StudentResult {
 
 // Calculate letter grade from percentage
 function calculateLetterGrade(percentage: number): string {
-  if (percentage >= 90) return 'A';
-  if (percentage >= 85) return 'A';
-  if (percentage >= 80) return 'B+';
-  if (percentage >= 75) return 'B';
-  if (percentage >= 70) return 'C';
-  if (percentage >= 65) return 'D';
-  return 'F';
+  if (percentage >= 90) return "A";
+  if (percentage >= 85) return "A";
+  if (percentage >= 80) return "B+";
+  if (percentage >= 75) return "B";
+  if (percentage >= 70) return "C";
+  if (percentage >= 65) return "D";
+  return "F";
 }
 
 // Get grade color class
 function getGradeColorClass(grade: string): string {
   switch (grade) {
-    case 'A':
-      return 'bg-green-100 text-green-700';
-    case 'B+':
-    case 'B':
-      return 'bg-lime-100 text-lime-700';
-    case 'C':
-      return 'bg-yellow-100 text-yellow-700';
-    case 'D':
-      return 'bg-orange-100 text-orange-700';
-    case 'F':
-      return 'bg-red-100 text-red-700';
+    case "A":
+      return "bg-green-100 text-green-700";
+    case "B+":
+    case "B":
+      return "bg-lime-100 text-lime-700";
+    case "C":
+      return "bg-yellow-100 text-yellow-700";
+    case "D":
+      return "bg-orange-100 text-orange-700";
+    case "F":
+      return "bg-red-100 text-red-700";
     default:
-      return 'bg-gray-100 text-gray-700';
+      return "bg-gray-100 text-gray-700";
   }
 }
 
@@ -145,14 +156,21 @@ function SendResultsPanel({
 }: SendResultsPanelProps) {
   const [emails, setEmails] = useState<{ [studentId: string]: string }>({});
   const [isSending, setIsSending] = useState(false);
-  const [sendProgress, setSendProgress] = useState<{ sent: number; failed: number; total: number } | null>(null);
-  const [deliveryResults, setDeliveryResults] = useState<DeliveryResult[] | null>(null);
+  const [sendProgress, setSendProgress] = useState<{
+    sent: number;
+    failed: number;
+    total: number;
+  } | null>(null);
+  const [deliveryResults, setDeliveryResults] = useState<
+    DeliveryResult[] | null
+  >(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const defaultEmails: { [studentId: string]: string } = {};
-    students.forEach(student => {
-      defaultEmails[student.studentId] = student.email || `${student.studentId}@gordoncollege.edu.ph`;
+    students.forEach((student) => {
+      defaultEmails[student.studentId] =
+        student.email || `${student.studentId}@gordoncollege.edu.ph`;
     });
     setEmails(defaultEmails);
   }, [students]);
@@ -174,7 +192,7 @@ function SendResultsPanel({
     try {
       const payload = {
         className,
-        examTitle: examTitle || 'Exam',
+        examTitle: examTitle || "Exam",
         passingThreshold,
         subject,
         instructorName,
@@ -191,29 +209,35 @@ function SendResultsPanel({
         })),
       };
 
-      const res = await fetch('/api/send-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/send-results", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setErrorMessage(data.error || 'Failed to send emails.');
+        setErrorMessage(data.error || "Failed to send emails.");
         setIsSending(false);
         return;
       }
 
-      setSendProgress({ sent: data.sent, failed: data.failed, total: data.total });
+      setSendProgress({
+        sent: data.sent,
+        failed: data.failed,
+        total: data.total,
+      });
       setDeliveryResults(data.results || []);
       setIsSending(false);
 
       if (data.failed === 0) {
-        setTimeout(() => { onSend(); }, 3000);
+        setTimeout(() => {
+          onSend();
+        }, 3000);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Network error';
+      const msg = err instanceof Error ? err.message : "Network error";
       setErrorMessage(msg);
       setIsSending(false);
     }
@@ -233,7 +257,9 @@ function SendResultsPanel({
           <Mail className="w-5 h-5" />
           <div>
             <h2 className="font-semibold">Send Results via Email</h2>
-            <p className="text-sm text-green-200">{className} — {examTitle || 'Exam'}</p>
+            <p className="text-sm text-green-200">
+              {className} — {examTitle || "Exam"}
+            </p>
           </div>
         </div>
         <button onClick={onClose} className="text-white hover:text-green-200">
@@ -260,9 +286,12 @@ function SendResultsPanel({
                   <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
                     <Check className="w-8 h-8 text-green-600" />
                   </div>
-                  <h3 className="text-xl font-semibold text-white">All Emails Sent!</h3>
+                  <h3 className="text-xl font-semibold text-white">
+                    All Emails Sent!
+                  </h3>
                   <p className="text-green-200 mt-1">
-                    Results delivered to {sentCount} student{sentCount !== 1 ? 's' : ''}
+                    Results delivered to {sentCount} student
+                    {sentCount !== 1 ? "s" : ""}
                   </p>
                 </>
               ) : (
@@ -270,7 +299,9 @@ function SendResultsPanel({
                   <div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
                     <Info className="w-8 h-8 text-yellow-600" />
                   </div>
-                  <h3 className="text-xl font-semibold text-white">Delivery Complete</h3>
+                  <h3 className="text-xl font-semibold text-white">
+                    Delivery Complete
+                  </h3>
                   <p className="text-green-200 mt-1">
                     {sentCount} sent &bull; {failedCount} failed
                   </p>
@@ -281,16 +312,26 @@ function SendResultsPanel({
             {/* Per-student results */}
             {deliveryResults && deliveryResults.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs text-green-300 font-medium">Delivery Details</p>
+                <p className="text-xs text-green-300 font-medium">
+                  Delivery Details
+                </p>
                 {deliveryResults.map((r, i) => (
-                  <div key={i} className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2">
-                    <span className="text-sm text-white break-all mr-2">{r.to}</span>
+                  <div
+                    key={i}
+                    className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2"
+                  >
+                    <span className="text-sm text-white truncate mr-2">
+                      {r.to}
+                    </span>
                     {r.success ? (
                       <span className="text-xs text-green-300 flex items-center gap-1">
                         <Check className="w-3 h-3" /> Sent
                       </span>
                     ) : (
-                      <span className="text-xs text-red-300 flex items-center gap-1" title={r.error || ''}>
+                      <span
+                        className="text-xs text-red-300 flex items-center gap-1"
+                        title={r.error || ""}
+                      >
                         <X className="w-3 h-3" /> Failed
                       </span>
                     )}
@@ -312,7 +353,8 @@ function SendResultsPanel({
             <div className="bg-blue-900/30 rounded-lg p-3 mb-4 flex items-start gap-2">
               <Info className="w-4 h-4 text-blue-300 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-blue-100">
-                Each student will receive a personalized email with their individual exam score and grade.
+                Each student will receive a personalized email with their
+                individual exam score and grade.
               </p>
             </div>
 
@@ -321,10 +363,15 @@ function SendResultsPanel({
               <div className="bg-white/10 rounded-lg p-4 mb-4">
                 <div className="flex items-center gap-3 mb-2">
                   <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  <p className="text-sm text-white font-medium">Sending emails to students...</p>
+                  <p className="text-sm text-white font-medium">
+                    Sending emails to students...
+                  </p>
                 </div>
                 <Progress
-                  value={((sentCount + failedCount) / (sendProgress.total || 1)) * 100}
+                  value={
+                    ((sentCount + failedCount) / (sendProgress.total || 1)) *
+                    100
+                  }
                   className="h-2"
                 />
                 <p className="text-xs text-green-200 mt-2">
@@ -334,24 +381,35 @@ function SendResultsPanel({
             )}
 
             <div className="space-y-3">
-              {students.map(student => (
+              {students.map((student) => (
                 <div
                   key={student.studentId}
                   className="bg-white rounded-lg p-3"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <p className="font-medium text-gray-900">{student.studentName}</p>
-                      <p className="text-xs text-gray-500">{student.studentId}</p>
+                      <p className="font-medium text-gray-900">
+                        {student.studentName}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {student.studentId}
+                      </p>
                     </div>
-                    <span className={`px-2 py-1 rounded text-sm font-semibold ${getGradeColorClass(student.grade)}`}>
+                    <span
+                      className={`px-2 py-1 rounded text-sm font-semibold ${getGradeColorClass(student.grade)}`}
+                    >
                       {student.score}/{student.totalQuestions}
                     </span>
                   </div>
                   <input
                     type="email"
-                    value={emails[student.studentId] || ''}
-                    onChange={(e) => setEmails(prev => ({ ...prev, [student.studentId]: e.target.value }))}
+                    value={emails[student.studentId] || ""}
+                    onChange={(e) =>
+                      setEmails((prev) => ({
+                        ...prev,
+                        [student.studentId]: e.target.value,
+                      }))
+                    }
                     placeholder="Enter student email address"
                     disabled={isSending}
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 disabled:opacity-50"
@@ -415,21 +473,23 @@ export default function Results() {
   const [passingThreshold, setPassingThreshold] = useState(60);
 
   // Update threshold when instructor changes it inline
-  const handleThresholdChange = useCallback(
-    (newThreshold: number) => {
-      setPassingThreshold(newThreshold);
-    },
-    []
-  );
+  const handleThresholdChange = useCallback((newThreshold: number) => {
+    setPassingThreshold(newThreshold);
+  }, []);
 
   // Modal states
-  const [exportModalType, setExportModalType] = useState<'PDF' | 'Excel' | 'CSV' | null>(null);
+  const [exportModalType, setExportModalType] = useState<
+    "PDF" | "Excel" | "CSV" | null
+  >(null);
   const [showSendPanel, setShowSendPanel] = useState(false);
 
   // ── Batch export state (SS4 2.5) ────────────────────────────────────────
-  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set());
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [batchExporting, setBatchExporting] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<BatchExportProgress | null>(null);
+  const [batchProgress, setBatchProgress] =
+    useState<BatchExportProgress | null>(null);
   const [batchFormatPicker, setBatchFormatPicker] = useState(false);
 
   const toggleExamSelection = useCallback((examId: string) => {
@@ -453,79 +513,106 @@ export default function Results() {
     });
   }, [classExamsList]);
 
-  const handleBatchExport = useCallback(async (format: BatchExportFormat) => {
-    if (!selectedClass || selectedExamIds.size === 0) return;
-    const fullClass = classes.find((c) => c.id === selectedClass.classId);
-    if (!fullClass) return;
+  const handleBatchExport = useCallback(
+    async (format: BatchExportFormat) => {
+      if (!selectedClass || selectedExamIds.size === 0) return;
+      const fullClass = classes.find((c) => c.id === selectedClass.classId);
+      if (!fullClass) return;
 
-    const selectedExams = classExamsList.filter((e) => selectedExamIds.has(e.id));
-    if (selectedExams.length === 0) return;
+      const selectedExams = classExamsList.filter((e) =>
+        selectedExamIds.has(e.id),
+      );
+      if (selectedExams.length === 0) return;
 
-    setBatchExporting(true);
-    setBatchFormatPicker(false);
-    setBatchProgress({ total: selectedExams.length, completed: 0, currentExamTitle: '', step: 'Starting...', percent: 0 });
-
-    try {
-      await batchExportExams({
-        classId: selectedClass.classId,
-        className: selectedClass.className,
-        students: fullClass.students || [],
-        exams: selectedExams,
-        format,
-        passingThreshold,
-        metadata: {
-          instructorName: user?.displayName || undefined,
-          section: selectedClass.schedule || undefined,
-        },
-        onProgress: (p) => setBatchProgress({ ...p }),
+      setBatchExporting(true);
+      setBatchFormatPicker(false);
+      setBatchProgress({
+        total: selectedExams.length,
+        completed: 0,
+        currentExamTitle: "",
+        step: "Starting...",
+        percent: 0,
       });
-      // Log to report history
-      if (user?.instructorId) {
-        ReportHistoryService.logReport({
-          instructorId: user.instructorId,
-          reportType: 'batch-export',
-          format: 'Batch',
-          title: `Batch Export — ${selectedClass.className} (${selectedExams.length} exams)`,
+
+      try {
+        await batchExportExams({
+          classId: selectedClass.classId,
           className: selectedClass.className,
-          studentCount: fullClass.students?.length || 0,
-          description: `${format.toUpperCase()} batch export of ${selectedExams.length} exams`,
-        }).catch(() => {});
+          students: fullClass.students || [],
+          exams: selectedExams,
+          format,
+          passingThreshold,
+          metadata: {
+            instructorName: user?.displayName || undefined,
+            section: selectedClass.schedule || undefined,
+          },
+          onProgress: (p) => setBatchProgress({ ...p }),
+        });
+        // Log to report history
+        if (user?.instructorId) {
+          ReportHistoryService.logReport({
+            instructorId: user.instructorId,
+            reportType: "batch-export",
+            format: "Batch",
+            title: `Batch Export — ${selectedClass.className} (${selectedExams.length} exams)`,
+            className: selectedClass.className,
+            studentCount: fullClass.students?.length || 0,
+            description: `${format.toUpperCase()} batch export of ${selectedExams.length} exams`,
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.error("Batch export failed:", err);
+      } finally {
+        setBatchExporting(false);
+        // Keep progress visible briefly so the user sees "Done!"
+        setTimeout(() => setBatchProgress(null), 1500);
       }
-    } catch (err) {
-      console.error('Batch export failed:', err);
-    } finally {
-      setBatchExporting(false);
-      // Keep progress visible briefly so the user sees "Done!"
-      setTimeout(() => setBatchProgress(null), 1500);
-    }
-  }, [selectedClass, selectedExamIds, classExamsList, classes, passingThreshold, user?.displayName]);
+    },
+    [
+      selectedClass,
+      selectedExamIds,
+      classExamsList,
+      classes,
+      passingThreshold,
+      user?.displayName,
+    ],
+  );
 
   // ── Filter state ────────────────────────────────────────────────────────
   // Class list filters
-  const [classSearch, setClassSearch] = useState(searchParams.get('cs') || '');
-  const [classMinAvg, setClassMinAvg] = useState(searchParams.get('cmin') || '');
-  const [classMaxAvg, setClassMaxAvg] = useState(searchParams.get('cmax') || '');
+  const [classSearch, setClassSearch] = useState(searchParams.get("cs") || "");
+  const [classMinAvg, setClassMinAvg] = useState(
+    searchParams.get("cmin") || "",
+  );
+  const [classMaxAvg, setClassMaxAvg] = useState(
+    searchParams.get("cmax") || "",
+  );
 
   // Exam list filters
-  const [examSearch, setExamSearch] = useState(searchParams.get('es') || '');
-  const [subjectFilter, setSubjectFilter] = useState(searchParams.get('subj') || 'all');
+  const [examSearch, setExamSearch] = useState(searchParams.get("es") || "");
+  const [subjectFilter, setSubjectFilter] = useState(
+    searchParams.get("subj") || "all",
+  );
 
   // Show/hide filter panels
   const [showClassFilters, setShowClassFilters] = useState(false);
 
   // ── URL state sync helper ───────────────────────────────────────────────
-  const updateURL = useCallback((params: Record<string, string | null>) => {
-    const current = new URLSearchParams(searchParams.toString());
-    Object.entries(params).forEach(([key, value]) => {
-      if (value && value !== 'all') {
-        current.set(key, value);
-      } else {
-        current.delete(key);
-      }
-    });
-    const qs = current.toString();
-    router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
-  }, [searchParams, router, pathname]);
+  const updateURL = useCallback(
+    (params: Record<string, string | null>) => {
+      const current = new URLSearchParams(searchParams.toString());
+      Object.entries(params).forEach(([key, value]) => {
+        if (value && value !== "all") {
+          current.set(key, value);
+        } else {
+          current.delete(key);
+        }
+      });
+      const qs = current.toString();
+      router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
+    },
+    [searchParams, router, pathname],
+  );
 
   // ── Filtered class results ──────────────────────────────────────────────
   const debouncedClassSearch = useDebounce(classSearch, 200);
@@ -533,25 +620,28 @@ export default function Results() {
     let results = classResults;
     if (debouncedClassSearch.trim()) {
       const q = debouncedClassSearch.toLowerCase();
-      results = results.filter(r =>
-        r.className.toLowerCase().includes(q) ||
-        r.schedule.toLowerCase().includes(q)
+      results = results.filter(
+        (r) =>
+          r.className.toLowerCase().includes(q) ||
+          r.schedule.toLowerCase().includes(q),
       );
     }
-    if (classMinAvg !== '') {
+    if (classMinAvg !== "") {
       const min = Number(classMinAvg);
-      if (!isNaN(min)) results = results.filter(r => r.averageScore >= min);
+      if (!isNaN(min)) results = results.filter((r) => r.averageScore >= min);
     }
-    if (classMaxAvg !== '') {
+    if (classMaxAvg !== "") {
       const max = Number(classMaxAvg);
-      if (!isNaN(max)) results = results.filter(r => r.averageScore <= max);
+      if (!isNaN(max)) results = results.filter((r) => r.averageScore <= max);
     }
     return results;
   }, [classResults, debouncedClassSearch, classMinAvg, classMaxAvg]);
 
   // ── Unique subjects for exam filter ───────────────────────────────────
   const availableSubjects = useMemo(() => {
-    const subjects = new Set(classExamsList.map(e => e.subject).filter(Boolean));
+    const subjects = new Set(
+      classExamsList.map((e) => e.subject).filter(Boolean),
+    );
     return Array.from(subjects).sort();
   }, [classExamsList]);
 
@@ -561,13 +651,14 @@ export default function Results() {
     let list = classExamsList;
     if (debouncedExamSearch.trim()) {
       const q = debouncedExamSearch.toLowerCase();
-      list = list.filter(e =>
-        e.title.toLowerCase().includes(q) ||
-        (e.subject && e.subject.toLowerCase().includes(q))
+      list = list.filter(
+        (e) =>
+          e.title.toLowerCase().includes(q) ||
+          (e.subject && e.subject.toLowerCase().includes(q)),
       );
     }
-    if (subjectFilter !== 'all') {
-      list = list.filter(e => e.subject === subjectFilter);
+    if (subjectFilter !== "all") {
+      list = list.filter((e) => e.subject === subjectFilter);
     }
     return list;
   }, [classExamsList, examSearch, subjectFilter]);
@@ -576,35 +667,35 @@ export default function Results() {
   const classFilterCount = useMemo(() => {
     let n = 0;
     if (classSearch.trim()) n++;
-    if (classMinAvg !== '') n++;
-    if (classMaxAvg !== '') n++;
+    if (classMinAvg !== "") n++;
+    if (classMaxAvg !== "") n++;
     return n;
   }, [classSearch, classMinAvg, classMaxAvg]);
 
   const examFilterCount = useMemo(() => {
     let n = 0;
     if (examSearch.trim()) n++;
-    if (subjectFilter !== 'all') n++;
+    if (subjectFilter !== "all") n++;
     return n;
   }, [examSearch, subjectFilter]);
 
   const clearClassFilters = useCallback(() => {
-    setClassSearch('');
-    setClassMinAvg('');
-    setClassMaxAvg('');
+    setClassSearch("");
+    setClassMinAvg("");
+    setClassMaxAvg("");
     updateURL({ cs: null, cmin: null, cmax: null });
   }, [updateURL]);
 
   const clearExamFilters = useCallback(() => {
-    setExamSearch('');
-    setSubjectFilter('all');
+    setExamSearch("");
+    setSubjectFilter("all");
     updateURL({ es: null, subj: null });
   }, [updateURL]);
 
   // Fetch classes and exams
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
-    
+
     setLoading(true);
     try {
       // Fetch classes for this user
@@ -619,8 +710,11 @@ export default function Results() {
       const results: ClassResult[] = await Promise.all(
         userClasses.map(async (cls) => {
           // Find exams for this class
-          const classExams = userExams.filter(e => e.className === cls.class_name || (e as any).classId === cls.id);
-          const examIds = classExams.map(e => e.id);
+          const classExams = userExams.filter(
+            (e) =>
+              e.className === cls.class_name || (e as any).classId === cls.id,
+          );
+          const examIds = classExams.map((e) => e.id);
 
           let scannedCount = 0;
           let totalScore = 0;
@@ -630,12 +724,12 @@ export default function Results() {
           if (examIds.length > 0) {
             try {
               const scannedResultsQuery = query(
-                collection(db, 'scannedResults'),
-                where('examId', 'in', examIds.slice(0, 10)) // Firestore limit
+                collection(db, "scannedResults"),
+                where("examId", "in", examIds.slice(0, 10)), // Firestore limit
               );
               const scannedSnapshot = await getDocs(scannedResultsQuery);
-              
-              scannedSnapshot.forEach(doc => {
+
+              scannedSnapshot.forEach((doc) => {
                 const data = doc.data();
                 if (!data.isNullId) {
                   scannedCount++;
@@ -644,44 +738,47 @@ export default function Results() {
                 }
               });
             } catch (err) {
-              console.error('Error fetching scanned results:', err);
+              console.error("Error fetching scanned results:", err);
             }
           }
 
           // Also check studentGrades collection
           try {
             const gradesQuery = query(
-              collection(db, 'studentGrades'),
-              where('class_id', '==', cls.id)
+              collection(db, "studentGrades"),
+              where("class_id", "==", cls.id),
             );
             const gradesSnapshot = await getDocs(gradesQuery);
-            
-            gradesSnapshot.forEach(doc => {
+
+            gradesSnapshot.forEach((doc) => {
               const data = doc.data();
               scannedCount++;
               totalScore += data.score || 0;
               totalMaxScore += data.max_score || 0;
             });
           } catch (err) {
-            console.error('Error fetching grades:', err);
+            console.error("Error fetching grades:", err);
           }
 
-          const averageScore = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
+          const averageScore =
+            totalMaxScore > 0
+              ? Math.round((totalScore / totalMaxScore) * 100)
+              : 0;
 
           return {
             classId: cls.id,
             className: cls.class_name,
-            schedule: cls.room || 'No schedule set',
+            schedule: cls.room || "No schedule set",
             totalStudents: cls.students?.length || 0,
             scannedCount: scannedCount,
-            averageScore: averageScore
+            averageScore: averageScore,
           };
-        })
+        }),
       );
 
       setClassResults(results);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
@@ -714,27 +811,31 @@ export default function Results() {
 
       const recalculate = () => {
         const combinedScore = gradesData.totalScore + scannedData.totalScore;
-        const combinedMax = gradesData.totalMaxScore + scannedData.totalMaxScore;
+        const combinedMax =
+          gradesData.totalMaxScore + scannedData.totalMaxScore;
         const combinedCount = gradesData.count + scannedData.count;
-        const newAverage = combinedMax > 0 ? Math.round((combinedScore / combinedMax) * 100) : 0;
+        const newAverage =
+          combinedMax > 0 ? Math.round((combinedScore / combinedMax) * 100) : 0;
 
         setClassResults((prev) =>
           prev.map((r) =>
             r.classId === cr.classId
               ? { ...r, averageScore: newAverage, scannedCount: combinedCount }
-              : r
-          )
+              : r,
+          ),
         );
       };
 
       // 1. Listen to studentGrades for this class
       const gradesQ = query(
-        collection(db, 'studentGrades'),
-        where('class_id', '==', cr.classId)
+        collection(db, "studentGrades"),
+        where("class_id", "==", cr.classId),
       );
       unsubscribes.push(
         onSnapshot(gradesQ, (snapshot) => {
-          let totalScore = 0, totalMaxScore = 0, count = 0;
+          let totalScore = 0,
+            totalMaxScore = 0,
+            count = 0;
           snapshot.forEach((doc) => {
             const d = doc.data();
             count++;
@@ -743,12 +844,13 @@ export default function Results() {
           });
           gradesData = { totalScore, totalMaxScore, count };
           recalculate();
-        })
+        }),
       );
 
       // 2. Listen to scannedResults for exams belonging to this class
       const classExams = exams.filter(
-        (e) => e.className === cr.className || (e as any).classId === cr.classId
+        (e) =>
+          e.className === cr.className || (e as any).classId === cr.classId,
       );
       const examIds = classExams.map((e) => e.id);
 
@@ -760,16 +862,21 @@ export default function Results() {
         }
 
         // Per-chunk accumulators that merge into scannedData
-        const chunkData: Record<number, { totalScore: number; totalMaxScore: number; count: number }> = {};
+        const chunkData: Record<
+          number,
+          { totalScore: number; totalMaxScore: number; count: number }
+        > = {};
 
         chunks.forEach((chunk, idx) => {
           const scannedQ = query(
-            collection(db, 'scannedResults'),
-            where('examId', 'in', chunk)
+            collection(db, "scannedResults"),
+            where("examId", "in", chunk),
           );
           unsubscribes.push(
             onSnapshot(scannedQ, (snapshot) => {
-              let totalScore = 0, totalMaxScore = 0, count = 0;
+              let totalScore = 0,
+                totalMaxScore = 0,
+                count = 0;
               snapshot.forEach((doc) => {
                 const d = doc.data();
                 if (!d.isNullId) {
@@ -789,7 +896,7 @@ export default function Results() {
               });
               scannedData = merged;
               recalculate();
-            })
+            }),
           );
         });
       }
@@ -800,210 +907,234 @@ export default function Results() {
     };
     // Re-subscribe when the set of class IDs or exams changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classResults.map((c) => c.classId).join(','), exams.map((e) => e.id).join(',')]);
+  }, [
+    classResults.map((c) => c.classId).join(","),
+    exams.map((e) => e.id).join(","),
+  ]);
 
   // Handle clicking a class — show exams for that class
-  const handleClassClick = useCallback(async (classResult: ClassResult) => {
-    // Clean up previous listeners
-    examStatsUnsubs.current.forEach((u) => u());
-    examStatsUnsubs.current = [];
-    if (studentResultsUnsub.current) {
-      studentResultsUnsub.current();
-      studentResultsUnsub.current = null;
-    }
+  const handleClassClick = useCallback(
+    async (classResult: ClassResult) => {
+      // Clean up previous listeners
+      examStatsUnsubs.current.forEach((u) => u());
+      examStatsUnsubs.current = [];
+      if (studentResultsUnsub.current) {
+        studentResultsUnsub.current();
+        studentResultsUnsub.current = null;
+      }
 
-    setSelectedClass(classResult);
-    setSelectedExam(null);
-    setStudentResults([]);
-    setSelectedExamIds(new Set());
-    setExamStats({});
+      setSelectedClass(classResult);
+      setSelectedExam(null);
+      setStudentResults([]);
+      setSelectedExamIds(new Set());
+      setExamStats({});
 
-    // Find exams linked to this class
-    const classExams = exams.filter(e => 
-      e.className === classResult.className || (e as any).classId === classResult.classId
-    );
-    setClassExamsList(classExams);
-
-    // Set up real-time listeners for each exam's scannedResults
-    classExams.forEach((exam) => {
-      const scannedQ = query(
-        collection(db, 'scannedResults'),
-        where('examId', '==', exam.id)
+      // Find exams linked to this class
+      const classExams = exams.filter(
+        (e) =>
+          e.className === classResult.className ||
+          (e as any).classId === classResult.classId,
       );
+      setClassExamsList(classExams);
 
-      const unsub = onSnapshot(scannedQ, (snapshot) => {
-        let scannedCount = 0;
-        let totalScore = 0;
-        let totalMaxScore = 0;
+      // Set up real-time listeners for each exam's scannedResults
+      classExams.forEach((exam) => {
+        const scannedQ = query(
+          collection(db, "scannedResults"),
+          where("examId", "==", exam.id),
+        );
 
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          if (!data.isNullId) {
-            scannedCount++;
-            totalScore += data.score || 0;
-            totalMaxScore += data.totalQuestions || 0;
-          }
+        const unsub = onSnapshot(scannedQ, (snapshot) => {
+          let scannedCount = 0;
+          let totalScore = 0;
+          let totalMaxScore = 0;
+
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            if (!data.isNullId) {
+              scannedCount++;
+              totalScore += data.score || 0;
+              totalMaxScore += data.totalQuestions || 0;
+            }
+          });
+
+          const averageScore =
+            totalMaxScore > 0
+              ? Math.round((totalScore / totalMaxScore) * 100)
+              : 0;
+
+          setExamStats((prev) => ({
+            ...prev,
+            [exam.id]: { examId: exam.id, scannedCount, averageScore },
+          }));
         });
 
-        const averageScore = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
-
-        setExamStats((prev) => ({
-          ...prev,
-          [exam.id]: { examId: exam.id, scannedCount, averageScore },
-        }));
+        examStatsUnsubs.current.push(unsub);
       });
-
-      examStatsUnsubs.current.push(unsub);
-    });
-  }, [exams]);
+    },
+    [exams],
+  );
 
   // Fetch student results for a selected exam within a class (real-time)
-  const fetchStudentResults = useCallback((classResult: ClassResult, exam: Exam) => {
-    // Clean up previous student results listener
-    if (studentResultsUnsub.current) {
-      studentResultsUnsub.current();
-      studentResultsUnsub.current = null;
-    }
+  const fetchStudentResults = useCallback(
+    (classResult: ClassResult, exam: Exam) => {
+      // Clean up previous student results listener
+      if (studentResultsUnsub.current) {
+        studentResultsUnsub.current();
+        studentResultsUnsub.current = null;
+      }
 
-    setLoadingStudents(true);
-    setSelectedExam(exam);
-    
-    // Find the full class data
-    const fullClass = classes.find(c => c.id === classResult.classId);
-    setSelectedClassData(fullClass || null);
+      setLoadingStudents(true);
+      setSelectedExam(exam);
 
-    const students = fullClass?.students || [];
+      // Find the full class data
+      const fullClass = classes.find((c) => c.id === classResult.classId);
+      setSelectedClassData(fullClass || null);
 
-    // Helper to build StudentResult from scanned/graded data
-    const buildResults = (
-      scannedDocs: { id: string; data: Record<string, any> }[],
-      gradeDocs: { id: string; data: Record<string, any> }[]
-    ): StudentResult[] => {
-      const results: StudentResult[] = [];
-      const processedStudentIds = new Set<string>();
+      const students = fullClass?.students || [];
 
-      // Process scannedResults first
-      for (const doc of scannedDocs) {
-        const data = doc.data;
-        if (!data.isNullId && !processedStudentIds.has(data.studentId)) {
-          processedStudentIds.add(data.studentId);
-          const student = students.find(s => s.student_id === data.studentId);
-          const percentage = data.totalQuestions > 0 
-            ? Math.round((data.score / data.totalQuestions) * 100) 
-            : 0;
+      // Helper to build StudentResult from scanned/graded data
+      const buildResults = (
+        scannedDocs: { id: string; data: Record<string, any> }[],
+        gradeDocs: { id: string; data: Record<string, any> }[],
+      ): StudentResult[] => {
+        const results: StudentResult[] = [];
+        const processedStudentIds = new Set<string>();
 
-          let scannedDate = '';
-          if (data.scannedAt) {
-            const timestamp = data.scannedAt as Timestamp;
-            const date = timestamp?.toDate?.() || new Date(data.scannedAt);
-            scannedDate = date.toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'short', 
-              day: 'numeric' 
+        // Process scannedResults first
+        for (const doc of scannedDocs) {
+          const data = doc.data;
+          if (!data.isNullId && !processedStudentIds.has(data.studentId)) {
+            processedStudentIds.add(data.studentId);
+            const student = students.find(
+              (s) => s.student_id === data.studentId,
+            );
+            const percentage =
+              data.totalQuestions > 0
+                ? Math.round((data.score / data.totalQuestions) * 100)
+                : 0;
+
+            let scannedDate = "";
+            if (data.scannedAt) {
+              const timestamp = data.scannedAt as Timestamp;
+              const date = timestamp?.toDate?.() || new Date(data.scannedAt);
+              scannedDate = date.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              });
+            }
+
+            results.push({
+              studentId: data.studentId,
+              studentName: student
+                ? `${student.last_name}, ${student.first_name}`
+                : data.studentId,
+              score: data.score || 0,
+              totalQuestions: data.totalQuestions || 0,
+              percentage,
+              grade: calculateLetterGrade(percentage),
+              date: scannedDate || "N/A",
+              email: student?.email,
             });
           }
-
-          results.push({
-            studentId: data.studentId,
-            studentName: student 
-              ? `${student.last_name}, ${student.first_name}`
-              : data.studentId,
-            score: data.score || 0,
-            totalQuestions: data.totalQuestions || 0,
-            percentage,
-            grade: calculateLetterGrade(percentage),
-            date: scannedDate || 'N/A',
-            email: student?.email
-          });
         }
-      }
 
-      // Then process studentGrades
-      for (const doc of gradeDocs) {
-        const data = doc.data;
-        if (!processedStudentIds.has(data.student_id)) {
-          processedStudentIds.add(data.student_id);
-          const student = students.find(s => s.student_id === data.student_id);
-          const percentage = data.percentage || (data.max_score > 0 
-            ? Math.round((data.score / data.max_score) * 100) 
-            : 0);
+        // Then process studentGrades
+        for (const doc of gradeDocs) {
+          const data = doc.data;
+          if (!processedStudentIds.has(data.student_id)) {
+            processedStudentIds.add(data.student_id);
+            const student = students.find(
+              (s) => s.student_id === data.student_id,
+            );
+            const percentage =
+              data.percentage ||
+              (data.max_score > 0
+                ? Math.round((data.score / data.max_score) * 100)
+                : 0);
 
-          let gradedDate = '';
-          if (data.graded_at) {
-            const timestamp = data.graded_at as Timestamp;
-            const date = timestamp?.toDate?.() || new Date(data.graded_at);
-            gradedDate = date.toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'short', 
-              day: 'numeric' 
+            let gradedDate = "";
+            if (data.graded_at) {
+              const timestamp = data.graded_at as Timestamp;
+              const date = timestamp?.toDate?.() || new Date(data.graded_at);
+              gradedDate = date.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              });
+            }
+
+            results.push({
+              studentId: data.student_id,
+              studentName: student
+                ? `${student.last_name}, ${student.first_name}`
+                : data.student_id,
+              score: data.score || 0,
+              totalQuestions: data.max_score || 0,
+              percentage,
+              grade: data.letter_grade || calculateLetterGrade(percentage),
+              date: gradedDate || "N/A",
+              email: student?.email,
             });
           }
-
-          results.push({
-            studentId: data.student_id,
-            studentName: student 
-              ? `${student.last_name}, ${student.first_name}`
-              : data.student_id,
-            score: data.score || 0,
-            totalQuestions: data.max_score || 0,
-            percentage,
-            grade: data.letter_grade || calculateLetterGrade(percentage),
-            date: gradedDate || 'N/A',
-            email: student?.email
-          });
         }
-      }
 
-      results.sort((a, b) => a.studentName.localeCompare(b.studentName));
-      return results;
-    };
+        results.sort((a, b) => a.studentName.localeCompare(b.studentName));
+        return results;
+      };
 
-    // Accumulators for both data sources
-    let scannedDocs: { id: string; data: Record<string, any> }[] = [];
-    let gradeDocs: { id: string; data: Record<string, any> }[] = [];
-    let scannedReady = false;
-    let gradesReady = false;
+      // Accumulators for both data sources
+      let scannedDocs: { id: string; data: Record<string, any> }[] = [];
+      let gradeDocs: { id: string; data: Record<string, any> }[] = [];
+      let scannedReady = false;
+      let gradesReady = false;
 
-    const recalculate = () => {
-      if (scannedReady && gradesReady) {
-        setStudentResults(buildResults(scannedDocs, gradeDocs));
-        setLoadingStudents(false);
-      }
-    };
+      const recalculate = () => {
+        if (scannedReady && gradesReady) {
+          setStudentResults(buildResults(scannedDocs, gradeDocs));
+          setLoadingStudents(false);
+        }
+      };
 
-    const unsubs: (() => void)[] = [];
+      const unsubs: (() => void)[] = [];
 
-    // Listen to scannedResults for this exam
-    const scannedQ = query(
-      collection(db, 'scannedResults'),
-      where('examId', '==', exam.id)
-    );
-    unsubs.push(
-      onSnapshot(scannedQ, (snapshot) => {
-        scannedDocs = snapshot.docs.map(d => ({ id: d.id, data: d.data() }));
-        scannedReady = true;
-        recalculate();
-      })
-    );
+      // Listen to scannedResults for this exam
+      const scannedQ = query(
+        collection(db, "scannedResults"),
+        where("examId", "==", exam.id),
+      );
+      unsubs.push(
+        onSnapshot(scannedQ, (snapshot) => {
+          scannedDocs = snapshot.docs.map((d) => ({
+            id: d.id,
+            data: d.data(),
+          }));
+          scannedReady = true;
+          recalculate();
+        }),
+      );
 
-    // Listen to studentGrades for this class
-    const gradesQ = query(
-      collection(db, 'studentGrades'),
-      where('class_id', '==', classResult.classId)
-    );
-    unsubs.push(
-      onSnapshot(gradesQ, (snapshot) => {
-        gradeDocs = snapshot.docs.map(d => ({ id: d.id, data: d.data() }));
-        gradesReady = true;
-        recalculate();
-      })
-    );
+      // Listen to studentGrades for this class
+      const gradesQ = query(
+        collection(db, "studentGrades"),
+        where("class_id", "==", classResult.classId),
+      );
+      unsubs.push(
+        onSnapshot(gradesQ, (snapshot) => {
+          gradeDocs = snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
+          gradesReady = true;
+          recalculate();
+        }),
+      );
 
-    // Store cleanup
-    studentResultsUnsub.current = () => {
-      unsubs.forEach(u => u());
-    };
-  }, [classes]);
+      // Store cleanup
+      studentResultsUnsub.current = () => {
+        unsubs.forEach((u) => u());
+      };
+    },
+    [classes],
+  );
 
   // ── Filtered export handler (SS4 3.1) ──────────────────────────────────
   // Receives only the filtered rows from ExportFilterPanel and exports them.
@@ -1033,10 +1164,10 @@ export default function Results() {
       }));
 
       switch (format) {
-        case 'PDF':
+        case "PDF":
           await generateClassResultsPdf(
             selectedClass.className,
-            selectedExam?.title || 'Exam',
+            selectedExam?.title || "Exam",
             rows,
             passingThreshold,
             meta,
@@ -1045,18 +1176,21 @@ export default function Results() {
           if (user?.instructorId) {
             ReportHistoryService.logReport({
               instructorId: user.instructorId,
-              reportType: 'class-results',
-              format: 'PDF',
-              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              reportType: "class-results",
+              format: "PDF",
+              title: `${selectedClass.className} — ${selectedExam?.title || "Exam"}`,
               className: selectedClass.className,
               examTitle: selectedExam?.title,
               studentCount: filteredRows.length,
-              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+              filtersApplied:
+                filteredRows.length !== rows.length
+                  ? `Filtered to ${filteredRows.length} students`
+                  : undefined,
             }).catch(() => {});
           }
           break;
 
-        case 'Excel':
+        case "Excel":
           exportClassResultsToExcel(
             selectedClass.className,
             rows,
@@ -1067,18 +1201,21 @@ export default function Results() {
           if (user?.instructorId) {
             ReportHistoryService.logReport({
               instructorId: user.instructorId,
-              reportType: 'class-results',
-              format: 'Excel',
-              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              reportType: "class-results",
+              format: "Excel",
+              title: `${selectedClass.className} — ${selectedExam?.title || "Exam"}`,
               className: selectedClass.className,
               examTitle: selectedExam?.title,
               studentCount: filteredRows.length,
-              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+              filtersApplied:
+                filteredRows.length !== rows.length
+                  ? `Filtered to ${filteredRows.length} students`
+                  : undefined,
             }).catch(() => {});
           }
           break;
 
-        case 'CSV': {
+        case "CSV": {
           const percentages = filteredRows.map((r) => r.percentage);
           const avg = Math.round(
             percentages.reduce((a, b) => a + b, 0) / percentages.length,
@@ -1088,14 +1225,14 @@ export default function Results() {
           ).length;
 
           const headers = [
-            '#',
-            'Student ID',
-            'Student Name',
-            'Score',
-            'Total',
-            'Percentage',
-            'Grade',
-            'Date',
+            "#",
+            "Student ID",
+            "Student Name",
+            "Score",
+            "Total",
+            "Percentage",
+            "Grade",
+            "Date",
           ];
           const csvRows = filteredRows.map((result, index) => [
             index + 1,
@@ -1118,9 +1255,7 @@ export default function Results() {
           if (selectedExam?.num_items)
             metaLines.push(`No. of Items,${selectedExam.num_items}`);
           if (selectedExam?.choices_per_item)
-            metaLines.push(
-              `Choices per Item,${selectedExam.choices_per_item}`,
-            );
+            metaLines.push(`Choices per Item,${selectedExam.choices_per_item}`);
           if (selectedExam?.examCode)
             metaLines.push(`Exam Code,${selectedExam.examCode}`);
           if (selectedExam?.created_at)
@@ -1128,27 +1263,24 @@ export default function Results() {
 
           const statsBlk = [
             [],
-            ['Statistics Summary'],
-            ['Class Average', `${avg}%`],
-            ['Highest Score', `${Math.max(...percentages)}%`],
-            ['Lowest Score', `${Math.min(...percentages)}%`],
+            ["Statistics Summary"],
+            ["Class Average", `${avg}%`],
+            ["Highest Score", `${Math.max(...percentages)}%`],
+            ["Lowest Score", `${Math.min(...percentages)}%`],
             [`Passed (\u2265${passingThreshold}%)`, passCount],
-            [
-              `Failed (<${passingThreshold}%)`,
-              percentages.length - passCount,
-            ],
+            [`Failed (<${passingThreshold}%)`, percentages.length - passCount],
           ];
 
           const csvContent = [
             ...metaLines,
-            '',
-            headers.join(','),
-            ...csvRows.map((r) => r.join(',')),
-            ...statsBlk.map((r) => r.join(',')),
-          ].join('\n');
-          const blob = new Blob([csvContent], { type: 'text/csv' });
+            "",
+            headers.join(","),
+            ...csvRows.map((r) => r.join(",")),
+            ...statsBlk.map((r) => r.join(",")),
+          ].join("\n");
+          const blob = new Blob([csvContent], { type: "text/csv" });
           const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
+          const a = document.createElement("a");
           a.href = url;
           a.download = `${selectedClass.className}_results.csv`;
           a.click();
@@ -1157,15 +1289,18 @@ export default function Results() {
           if (user?.instructorId) {
             ReportHistoryService.logReport({
               instructorId: user.instructorId,
-              reportType: 'class-results',
-              format: 'CSV',
-              title: `${selectedClass.className} — ${selectedExam?.title || 'Exam'}`,
+              reportType: "class-results",
+              format: "CSV",
+              title: `${selectedClass.className} — ${selectedExam?.title || "Exam"}`,
               className: selectedClass.className,
               examTitle: selectedExam?.title,
               studentCount: filteredRows.length,
               fileSizeBytes: blob.size,
               fileName: `${selectedClass.className}_results.csv`,
-              filtersApplied: filteredRows.length !== rows.length ? `Filtered to ${filteredRows.length} students` : undefined,
+              filtersApplied:
+                filteredRows.length !== rows.length
+                  ? `Filtered to ${filteredRows.length} students`
+                  : undefined,
             }).catch(() => {});
           }
           break;
@@ -1182,8 +1317,12 @@ export default function Results() {
     return (
       <div className="page-container">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            Results & Analytics
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            View and export grading results by class
+          </p>
         </div>
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-4 border-[#1a472a] border-t-transparent rounded-full animate-spin" />
@@ -1199,14 +1338,18 @@ export default function Results() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-            <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+              Results & Analytics
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              View and export grading results by class
+            </p>
           </div>
         </div>
 
         {/* Class Info Bar */}
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => {
               setSelectedClass(null);
               setClassExamsList([]);
@@ -1217,7 +1360,9 @@ export default function Results() {
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-[#1a472a]">{selectedClass.className}</h2>
+            <h2 className="text-xl font-bold text-[#1a472a]">
+              {selectedClass.className}
+            </h2>
             <p className="text-gray-600 text-sm">
               {selectedClass.totalStudents} students • {selectedClass.schedule}
             </p>
@@ -1229,14 +1374,17 @@ export default function Results() {
           <div className="flex items-center justify-between bg-gray-50 border rounded-lg px-4 py-3">
             <div className="flex items-center gap-3">
               <Checkbox
-                checked={classExamsList.length > 0 && classExamsList.every((e) => selectedExamIds.has(e.id))}
+                checked={
+                  classExamsList.length > 0 &&
+                  classExamsList.every((e) => selectedExamIds.has(e.id))
+                }
                 onCheckedChange={toggleAllExams}
                 aria-label="Select all exams"
               />
               <span className="text-sm text-gray-700">
                 {selectedExamIds.size > 0
-                  ? `${selectedExamIds.size} exam${selectedExamIds.size > 1 ? 's' : ''} selected`
-                  : 'Select exams for batch export'}
+                  ? `${selectedExamIds.size} exam${selectedExamIds.size > 1 ? "s" : ""} selected`
+                  : "Select exams for batch export"}
               </span>
             </div>
             <div className="flex items-center gap-2 relative">
@@ -1258,28 +1406,29 @@ export default function Results() {
                     disabled={batchExporting}
                   >
                     <Archive className="w-4 h-4 mr-2" />
-                    Export {selectedExamIds.size} Exam{selectedExamIds.size > 1 ? 's' : ''} as ZIP
+                    Export {selectedExamIds.size} Exam
+                    {selectedExamIds.size > 1 ? "s" : ""} as ZIP
                   </Button>
                   {/* Format picker dropdown */}
                   {batchFormatPicker && (
                     <div className="absolute right-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[180px]">
                       <button
                         className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => handleBatchExport('pdf')}
+                        onClick={() => handleBatchExport("pdf")}
                       >
                         <FileText className="w-4 h-4 text-red-500" />
                         PDF Reports
                       </button>
                       <button
                         className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => handleBatchExport('excel')}
+                        onClick={() => handleBatchExport("excel")}
                       >
                         <FileSpreadsheet className="w-4 h-4 text-green-600" />
                         Excel Spreadsheets
                       </button>
                       <button
                         className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => handleBatchExport('both')}
+                        onClick={() => handleBatchExport("both")}
                       >
                         <Download className="w-4 h-4 text-blue-600" />
                         Both (PDF + Excel)
@@ -1312,7 +1461,9 @@ export default function Results() {
                 </div>
               </div>
               <Progress value={batchProgress.percent} className="h-3" />
-              <p className="text-sm text-gray-600 break-words">{batchProgress.step}</p>
+              <p className="text-sm text-gray-600 truncate">
+                {batchProgress.step}
+              </p>
               {batchProgress.percent >= 100 && (
                 <p className="text-sm text-green-600 font-medium">
                   Download complete!
@@ -1345,7 +1496,7 @@ export default function Results() {
                   value={subjectFilter}
                   onValueChange={(v) => {
                     setSubjectFilter(v);
-                    updateURL({ subj: v === 'all' ? null : v });
+                    updateURL({ subj: v === "all" ? null : v });
                   }}
                 >
                   <SelectTrigger className="w-[180px]">
@@ -1354,7 +1505,9 @@ export default function Results() {
                   <SelectContent>
                     <SelectItem value="all">All Subjects</SelectItem>
                     {availableSubjects.map((subj) => (
-                      <SelectItem key={subj} value={subj}>{subj}</SelectItem>
+                      <SelectItem key={subj} value={subj}>
+                        {subj}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1376,7 +1529,8 @@ export default function Results() {
             {/* Result count */}
             {examFilterCount > 0 && (
               <p className="text-sm text-muted-foreground">
-                Showing {filteredExamsList.length} of {classExamsList.length} exams
+                Showing {filteredExamsList.length} of {classExamsList.length}{" "}
+                exams
               </p>
             )}
           </div>
@@ -1386,15 +1540,27 @@ export default function Results() {
         {classExamsList.length === 0 ? (
           <Card className="p-12 border text-center">
             <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-semibold text-gray-700">No Exams Found</h3>
-            <p className="text-gray-500 mt-2">No exams are linked to this class yet.</p>
+            <h3 className="text-lg font-semibold text-gray-700">
+              No Exams Found
+            </h3>
+            <p className="text-gray-500 mt-2">
+              No exams are linked to this class yet.
+            </p>
           </Card>
         ) : filteredExamsList.length === 0 ? (
           <Card className="p-12 border text-center">
             <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-semibold text-gray-700">No Matching Exams</h3>
-            <p className="text-gray-500 mt-2">Try adjusting your search or subject filter.</p>
-            <Button variant="outline" className="mt-4" onClick={clearExamFilters}>
+            <h3 className="text-lg font-semibold text-gray-700">
+              No Matching Exams
+            </h3>
+            <p className="text-gray-500 mt-2">
+              Try adjusting your search or subject filter.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={clearExamFilters}
+            >
               <RotateCcw className="w-4 h-4 mr-2" />
               Clear Filters
             </Button>
@@ -1406,25 +1572,27 @@ export default function Results() {
               const scanned = stats?.scannedCount || 0;
               const avg = stats?.averageScore || 0;
               const total = selectedClass.totalStudents;
-              const progressPercent = total > 0 ? Math.round((scanned / total) * 100) : 0;
+              const progressPercent =
+                total > 0 ? Math.round((scanned / total) * 100) : 0;
               const isSelected = selectedExamIds.has(exam.id);
 
               return (
                 <Card
                   key={exam.id}
-                  className={`p-5 border hover:shadow-md transition-shadow cursor-pointer ${
-                    isSelected ? 'border-[#1a472a] bg-green-50/30 ring-1 ring-[#1a472a]/20' : 'hover:border-[#1a472a]/30'
+                  className={`p-5 border-2 transition-all cursor-pointer group ${
+                    isSelected
+                      ? "border-[#1a472a] bg-[#1a472a]/5 shadow-sm"
+                      : "border-slate-100 hover:border-[#1a472a]/30 hover:shadow-md"
                   }`}
                   onClick={() => fetchStudentResults(selectedClass, exam)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      {/* Checkbox for multi-select */}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-1">
                       <div
                         onClick={(e) => {
                           e.stopPropagation();
                         }}
-                        className="flex items-center"
+                        className="flex items-center mt-1"
                       >
                         <Checkbox
                           checked={isSelected}
@@ -1432,46 +1600,54 @@ export default function Results() {
                           aria-label={`Select ${exam.title}`}
                         />
                       </div>
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-blue-600" />
+                      <div className="w-12 h-12 bg-[#1a472a]/10 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-[#1a472a]/20 transition-colors">
+                        <FileText className="w-6 h-6 text-[#1a472a]" />
                       </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-[#1a472a]">{exam.title}</h3>
-                        <p className="text-sm text-gray-600">
-                          {exam.num_items} items • {exam.choices_per_item} choices • {exam.subject}
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg font-bold text-[#1a472a] truncate">
+                          {exam.title}
+                        </h3>
+                        <p className="text-sm text-gray-500 font-medium">
+                          {exam.subject || "General"} • {exam.num_items} items
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-4">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Scanned</p>
-                      <p className="text-lg font-bold text-[#1a472a]">
-                        {scanned} / {total}
-                      </p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Average Score</p>
-                      <p className="text-lg font-bold text-[#1a472a]">
-                        {avg}%
-                      </p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Completion</p>
-                      <p className="text-lg font-bold text-[#1a472a]">
-                        {progressPercent}%
-                      </p>
+                    <div className="flex items-center gap-6">
+                      <div className="hidden md:flex flex-col items-end">
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
+                          Completion
+                        </p>
+                        <p className="text-lg font-bold text-[#1a472a] leading-none mb-1">
+                          {progressPercent}%
+                        </p>
+                        <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#1a472a] rounded-full transition-all duration-300"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-[#1a472a] transition-colors" />
                     </div>
                   </div>
 
-                  <div className="mt-3">
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-[#1a472a] rounded-full transition-all duration-300"
-                        style={{ width: `${progressPercent}%` }}
-                      />
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1">
+                        Scanned
+                      </p>
+                      <p className="text-lg font-bold text-[#1a472a]">
+                        {scanned}{" "}
+                        <span className="text-xs font-normal text-gray-400">
+                          / {total}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1">
+                        Average Score
+                      </p>
+                      <p className="text-lg font-bold text-[#1a472a]">{avg}%</p>
                     </div>
                   </div>
                 </Card>
@@ -1487,34 +1663,44 @@ export default function Results() {
   if (selectedClass && selectedExam) {
     return (
       <div className="page-container">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        {/* Header with Export Buttons aligned to the right */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-            <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#1a472a]">
+              Results & Analytics
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              View and export grading results by class
+            </p>
           </div>
+
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground text-sm">Export as:</span>
+            <span className="text-sm font-medium text-gray-600 mr-2">
+              Export as:
+            </span>
             <Button
               variant="outline"
-              onClick={() => setExportModalType('PDF')}
-              className="border-red-300 text-red-600 hover:bg-red-50"
+              size="sm"
+              onClick={() => setExportModalType("PDF")}
+              className="border-red-200 text-red-600 hover:bg-red-50"
             >
               <FileText className="w-4 h-4 mr-2" />
               PDF
             </Button>
             <Button
               variant="outline"
-              onClick={() => setExportModalType('Excel')}
-              className="border-green-300 text-green-600 hover:bg-green-50"
+              size="sm"
+              onClick={() => setExportModalType("Excel")}
+              className="border-green-200 text-green-600 hover:bg-green-50"
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Excel
             </Button>
             <Button
               variant="outline"
-              onClick={() => setExportModalType('CSV')}
-              className="border-green-400 text-green-700 hover:bg-green-50"
+              size="sm"
+              onClick={() => setExportModalType("CSV")}
+              className="border-green-200 text-green-600 hover:bg-green-50"
             >
               <Table2 className="w-4 h-4 mr-2" />
               CSV
@@ -1522,32 +1708,39 @@ export default function Results() {
           </div>
         </div>
 
-        {/* Class / Exam Info Bar */}
-        <div className="flex items-center justify-between">
+        {/* Quiet Class / Exam Info & Actions Bar (No Card Background) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-1">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => {
                 setSelectedExam(null);
                 setStudentResults([]);
               }}
-              className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors"
+              className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors shrink-0 shadow-sm"
+              title="Back to class exams"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div>
-              <h2 className="text-xl font-bold text-[#1a472a]">{selectedExam.title}</h2>
-              <p className="text-gray-600 text-sm">
-                {selectedClass.className} • {selectedExam.num_items} items • {selectedExam.subject}
+              <h2 className="text-xl font-bold text-[#1a472a] leading-tight mb-1">
+                {selectedExam.title}
+              </h2>
+              <p className="text-sm text-gray-600 font-medium">
+                {selectedClass.className} • {selectedExam.num_items} items •{" "}
+                {selectedExam.subject || "General"}
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => setShowSendPanel(true)}
-            className="bg-[#1a472a] hover:bg-[#2d6b47] text-white"
-          >
-            <Mail className="w-4 h-4 mr-2" />
-            Send Results
-          </Button>
+
+          <div className="flex items-center">
+            <Button
+              onClick={() => setShowSendPanel(true)}
+              className="bg-[#1a472a] hover:bg-[#2d6b47] text-white shadow-sm px-6"
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              Send Results
+            </Button>
+          </div>
         </div>
 
         {/* Sortable Results Table with Pagination */}
@@ -1559,7 +1752,7 @@ export default function Results() {
           onThresholdChange={handleThresholdChange}
           onViewStudent={(row) => {
             // placeholder — can be wired to a detail view later
-            console.log('View student:', row.studentId);
+            console.log("View student:", row.studentId);
           }}
         />
 
@@ -1587,8 +1780,8 @@ export default function Results() {
             if (user?.instructorId) {
               ReportHistoryService.logReport({
                 instructorId: user.instructorId,
-                reportType: 'email-delivery',
-                format: 'Email',
+                reportType: "email-delivery",
+                format: "Email",
                 title: `Email Delivery — ${selectedClass.className}`,
                 className: selectedClass.className,
                 examTitle: selectedExam?.title,
@@ -1612,8 +1805,12 @@ export default function Results() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-1">View and export grading results by class</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            Results & Analytics
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            View and export grading results by class
+          </p>
         </div>
         {classResults.length > 0 && (
           <Button
@@ -1639,10 +1836,13 @@ export default function Results() {
               if (user?.instructorId) {
                 ReportHistoryService.logReport({
                   instructorId: user.instructorId,
-                  reportType: 'class-summary',
-                  format: 'PDF',
-                  title: 'Class Summary Report',
-                  studentCount: classResults.reduce((sum, c) => sum + c.totalStudents, 0),
+                  reportType: "class-summary",
+                  format: "PDF",
+                  title: "Class Summary Report",
+                  studentCount: classResults.reduce(
+                    (sum, c) => sum + c.totalStudents,
+                    0,
+                  ),
                 }).catch(() => {});
               }
             }}
@@ -1672,10 +1872,14 @@ export default function Results() {
             </div>
             {/* Filters toggle */}
             <Button
-              variant={showClassFilters ? 'default' : 'outline'}
+              variant={showClassFilters ? "default" : "outline"}
               size="sm"
               onClick={() => setShowClassFilters(!showClassFilters)}
-              className={showClassFilters ? 'bg-[#1a472a] hover:bg-[#2d6b47] text-white' : ''}
+              className={
+                showClassFilters
+                  ? "bg-[#1a472a] hover:bg-[#2d6b47] text-white"
+                  : ""
+              }
             >
               <Filter className="h-4 w-4 mr-1.5" />
               Filters
@@ -1691,7 +1895,9 @@ export default function Results() {
           {showClassFilters && (
             <Card className="p-4 border">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-[#1a472a]">Filter by Average Score</h4>
+                <h4 className="text-sm font-semibold text-[#1a472a]">
+                  Filter by Average Score
+                </h4>
                 {classFilterCount > 0 && (
                   <Button
                     variant="ghost"
@@ -1706,7 +1912,9 @@ export default function Results() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Min Average %</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Min Average %
+                  </label>
                   <Input
                     type="number"
                     min={0}
@@ -1721,7 +1929,9 @@ export default function Results() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Max Average %</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Max Average %
+                  </label>
                   <Input
                     type="number"
                     min={0}
@@ -1742,19 +1952,43 @@ export default function Results() {
                   {classSearch.trim() && (
                     <Badge variant="secondary" className="gap-1 text-xs">
                       Search: &ldquo;{classSearch}&rdquo;
-                      <button onClick={() => { setClassSearch(''); updateURL({ cs: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                      <button
+                        onClick={() => {
+                          setClassSearch("");
+                          updateURL({ cs: null });
+                        }}
+                        className="ml-0.5 hover:text-red-600"
+                      >
+                        ×
+                      </button>
                     </Badge>
                   )}
-                  {classMinAvg !== '' && (
+                  {classMinAvg !== "" && (
                     <Badge variant="secondary" className="gap-1 text-xs">
                       Min: {classMinAvg}%
-                      <button onClick={() => { setClassMinAvg(''); updateURL({ cmin: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                      <button
+                        onClick={() => {
+                          setClassMinAvg("");
+                          updateURL({ cmin: null });
+                        }}
+                        className="ml-0.5 hover:text-red-600"
+                      >
+                        ×
+                      </button>
                     </Badge>
                   )}
-                  {classMaxAvg !== '' && (
+                  {classMaxAvg !== "" && (
                     <Badge variant="secondary" className="gap-1 text-xs">
                       Max: {classMaxAvg}%
-                      <button onClick={() => { setClassMaxAvg(''); updateURL({ cmax: null }); }} className="ml-0.5 hover:text-red-600">×</button>
+                      <button
+                        onClick={() => {
+                          setClassMaxAvg("");
+                          updateURL({ cmax: null });
+                        }}
+                        className="ml-0.5 hover:text-red-600"
+                      >
+                        ×
+                      </button>
                     </Badge>
                   )}
                 </div>
@@ -1765,7 +1999,8 @@ export default function Results() {
           {/* Result count */}
           {classFilterCount > 0 && (
             <p className="text-sm text-muted-foreground">
-              Showing {filteredClassResults.length} of {classResults.length} classes
+              Showing {filteredClassResults.length} of {classResults.length}{" "}
+              classes
             </p>
           )}
         </div>
@@ -1775,15 +2010,27 @@ export default function Results() {
       {classResults.length === 0 ? (
         <Card className="p-12 border text-center">
           <Folder className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-semibold text-gray-700">No Classes Found</h3>
-          <p className="text-gray-500 mt-2">Create a class and add students to start grading exams.</p>
+          <h3 className="text-lg font-semibold text-gray-700">
+            No Classes Found
+          </h3>
+          <p className="text-gray-500 mt-2">
+            Create a class and add students to start grading exams.
+          </p>
         </Card>
       ) : filteredClassResults.length === 0 ? (
         <Card className="p-12 border text-center">
           <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-semibold text-gray-700">No Matching Classes</h3>
-          <p className="text-gray-500 mt-2">Try adjusting your search or filters.</p>
-          <Button variant="outline" className="mt-4" onClick={clearClassFilters}>
+          <h3 className="text-lg font-semibold text-gray-700">
+            No Matching Classes
+          </h3>
+          <p className="text-gray-500 mt-2">
+            Try adjusting your search or filters.
+          </p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={clearClassFilters}
+          >
             <RotateCcw className="w-4 h-4 mr-2" />
             Clear Filters
           </Button>
@@ -1794,40 +2041,65 @@ export default function Results() {
             return (
               <Card
                 key={classResult.classId}
-                className="p-6 border hover:shadow-md transition-shadow cursor-pointer"
+                className="p-6 border-2 border-slate-100 hover:border-[#1a472a]/30 hover:shadow-lg transition-all cursor-pointer group bg-gradient-to-br from-white to-slate-50/30"
                 onClick={() => handleClassClick(classResult)}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                      <Folder className="w-6 h-6 text-amber-600" />
+                    <div className="w-14 h-14 bg-[#1a472a]/10 rounded-2xl flex items-center justify-center text-[#1a472a] group-hover:bg-[#1a472a]/20 transition-colors">
+                      <Folder className="w-7 h-7" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-[#1a472a]">{classResult.className}</h3>
-                      <p className="text-sm text-gray-600 flex items-center gap-1">
-                        📅 {classResult.schedule}
+                      <h3 className="text-xl font-bold text-[#1a472a] mb-1 group-hover:text-[#2d6b47]">
+                        {classResult.className}
+                      </h3>
+                      <p className="text-sm text-gray-500 font-medium flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                        {classResult.schedule}
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                  <div className="flex items-center gap-4">
+                    <div className="hidden sm:flex flex-col items-end">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
+                        Class Average
+                      </p>
+                      <p className="text-2xl font-black text-[#1a472a] leading-tight">
+                        {classResult.scannedCount > 0
+                          ? `${classResult.averageScore}%`
+                          : "—"}
+                      </p>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-[#1a472a] group-hover:text-white transition-all">
+                      <ChevronRight className="w-6 h-6" />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Total Students</p>
-                    <p className="text-lg font-bold text-[#1a472a] flex items-center gap-1">
-                      <Users className="w-4 h-4" />
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                  <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm group-hover:shadow-md transition-all">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="w-4 h-4 text-emerald-600" />
+                      <p className="text-[10px] uppercase tracking-wider font-extrabold text-gray-400">
+                        Students
+                      </p>
+                    </div>
+                    <p className="text-2xl font-bold text-[#1a472a]">
                       {classResult.totalStudents}
                     </p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Class Average</p>
-                    <p className="text-lg font-bold text-[#1a472a]">
-                      {classResult.scannedCount > 0 ? `${classResult.averageScore}%` : '—'}
+                  <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm group-hover:shadow-md transition-all">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-amber-600" />
+                      <p className="text-[10px] uppercase tracking-wider font-extrabold text-gray-400">
+                        Scanned
+                      </p>
+                    </div>
+                    <p className="text-2xl font-bold text-[#1a472a]">
+                      {classResult.scannedCount}
                     </p>
                   </div>
                 </div>
-
               </Card>
             );
           })}

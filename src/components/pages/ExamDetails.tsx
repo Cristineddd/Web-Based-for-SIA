@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -14,8 +15,7 @@ import {
   CheckCircle,
   Loader2,
   Pencil,
-  BookOpen,
-  Calendar,
+  RefreshCw,
 } from "lucide-react";
 import {
   getExamById,
@@ -30,7 +30,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import {
   collection,
-  serverTimestamp,
   query,
   where,
   getDocs,
@@ -46,24 +45,12 @@ interface ExamDetailsProps {
   params: { id: string };
 }
 
-interface AnswerKeyStatus {
-  total: number;
-  completed: number;
-  hasAnswerKey: boolean;
-}
-
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
   const router = useRouter();
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scannedPaperCount, setScannedPaperCount] = useState(0);
-  const [answerKeyStatus, setAnswerKeyStatus] = useState<AnswerKeyStatus>({
-    total: 0,
-    completed: 0,
-    hasAnswerKey: false,
-  });
   const [hasTemplate, setHasTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
 
@@ -109,18 +96,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               params.id,
             );
             if (result.success && result.data) {
-              const answersCount = result.data.answers.length;
-              setAnswerKeyStatus({
-                total: examData.num_items,
-                completed: answersCount,
-                hasAnswerKey: true,
-              });
+              // Answer key exists
             } else {
-              setAnswerKeyStatus({
-                total: examData.num_items,
-                completed: 0,
-                hasAnswerKey: false,
-              });
+              // No answer key
             }
           } catch (error) {
             console.error("Error fetching answer key:", error);
@@ -131,9 +109,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             const scannedResult =
               await ScanningService.getScannedResultsByExamId(params.id);
             if (scannedResult.success && scannedResult.data) {
-              setScannedPaperCount(
-                scannedResult.data.filter((r) => !r.isNullId).length,
-              );
+              // Scanned results exist
             }
           } catch (error) {
             console.error("Error fetching scanned results:", error);
@@ -269,9 +245,6 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           : prev,
       );
 
-      // Update answer key status total to match new num_items
-      setAnswerKeyStatus((prev) => ({ ...prev, total: editForm.num_items }));
-
       // Log exam update
       if (user?.email) {
         AuditLogger.logActivity(
@@ -374,6 +347,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         examId: params.id,
         examName: exam.title,
         examCode: exam.examCode,
+        classId: exam.classId,
+        className: exam.className,
       });
 
       // Use the exam's stored exam code (unique identifier for this exam)

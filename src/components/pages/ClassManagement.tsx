@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,6 +85,7 @@ export default function ClassManagement() {
     invalidEntries: Array<{ student: Student; errors: string[] }>;
   } | null>(null);
   const [showUploadSummary, setShowUploadSummary] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [newClass, setNewClass] = useState({
     class_name: "",
@@ -101,11 +102,7 @@ export default function ClassManagement() {
     email: "",
   });
 
-  useEffect(() => {
-    fetchClasses();
-  }, []);
-
-  const fetchClasses = async () => {
+  const fetchClasses = useCallback(async () => {
     try {
       setLoading(true);
       const userId = user?.id;
@@ -117,7 +114,11 @@ export default function ClassManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchClasses();
+  }, [fetchClasses]);
 
   const handleCloseAddDialog = () => {
     setShowAddDialog(false);
@@ -349,12 +350,14 @@ export default function ClassManagement() {
       return;
     }
 
-    // Check for duplicate student name (first name + last name combination)
+    // Check for duplicate student name (first name + last name combination) - Case Insensitive
     if (
       students.some(
         (s) =>
-          s.first_name === newStudent.first_name &&
-          s.last_name === newStudent.last_name,
+          s.first_name.trim().toLowerCase() ===
+            newStudent.first_name.trim().toLowerCase() &&
+          s.last_name.trim().toLowerCase() ===
+            newStudent.last_name.trim().toLowerCase(),
       )
     ) {
       toast.error(
@@ -390,6 +393,49 @@ export default function ClassManagement() {
         );
       }
       return;
+    }
+
+    // Check for duplicate email (if provided)
+    if (newStudent.email && newStudent.email.trim()) {
+      const normalizedEmail = newStudent.email.trim().toLowerCase();
+      if (
+        students.some((s) => s.email?.trim().toLowerCase() === normalizedEmail)
+      ) {
+        toast.error(
+          `Email "${newStudent.email}" is already used by another student in this class`,
+        );
+
+        // Log duplicate email attempt
+        if (user?.id) {
+          await InvalidRecordLogger.logInvalidRecord(
+            "grade",
+            {
+              student_id: newStudent.student_id,
+              first_name: newStudent.first_name,
+              last_name: newStudent.last_name,
+              email: newStudent.email,
+            },
+            [
+              {
+                field: "email",
+                message: "Duplicate email in class",
+                value: newStudent.email,
+              },
+            ],
+            user.id,
+            {
+              entity_id: newStudent.student_id,
+              user_email: user.email,
+              metadata: {
+                action: "manual_add_student",
+                context: "class_management",
+                reason: "duplicate_email",
+              },
+            },
+          );
+        }
+        return;
+      }
     }
 
     const student: Student = {
@@ -492,22 +538,61 @@ export default function ClassManagement() {
             }
           }
 
-          // Check for duplicates against current class roster
+          // Check for duplicates against current class roster (ID, Name, or Email)
           const existingIds = new Set(students.map((s) => s.student_id));
-          const duplicates = validStudents.filter((s) =>
-            existingIds.has(s.student_id),
+          const existingNames = new Set(
+            students.map(
+              (s) =>
+                `${s.first_name.trim().toLowerCase()}|${s.last_name.trim().toLowerCase()}`,
+            ),
           );
-          const newStudents = validStudents.filter(
-            (s) => !existingIds.has(s.student_id),
+          const existingEmails = new Set(
+            students
+              .filter((s) => s.email)
+              .map((s) => s.email!.trim().toLowerCase()),
           );
+
+          const duplicates: Student[] = [];
+          const newStudents: Student[] = [];
+
+          for (const s of validStudents) {
+            const idMatch = existingIds.has(s.student_id);
+            const nameMatch = existingNames.has(
+              `${s.first_name.trim().toLowerCase()}|${s.last_name.trim().toLowerCase()}`,
+            );
+            const emailMatch =
+              s.email && existingEmails.has(s.email.trim().toLowerCase());
+
+            if (idMatch || nameMatch || emailMatch) {
+              duplicates.push(s);
+            } else {
+              newStudents.push(s);
+            }
+          }
 
           // Also check for duplicates within the file itself
           const seenIds = new Set<string>();
+          const seenNames = new Set<string>();
+          const seenEmails = new Set<string>();
           const uniqueNewStudents: Student[] = [];
+
           for (const s of newStudents) {
-            if (!seenIds.has(s.student_id)) {
+            const sNameKey = `${s.first_name.trim().toLowerCase()}|${s.last_name.trim().toLowerCase()}`;
+            const sEmailKey = s.email?.trim().toLowerCase();
+
+            const isDuplicateInFile =
+              seenIds.has(s.student_id) ||
+              seenNames.has(sNameKey) ||
+              (sEmailKey && seenEmails.has(sEmailKey));
+
+            if (!isDuplicateInFile) {
               seenIds.add(s.student_id);
+              seenNames.add(sNameKey);
+              if (sEmailKey) seenEmails.add(sEmailKey);
               uniqueNewStudents.push(s);
+            } else {
+              // Track internal file duplicates as duplicates in summary
+              duplicates.push(s);
             }
           }
 
@@ -692,8 +777,13 @@ export default function ClassManagement() {
       (c) =>
         c.class_name.toLowerCase().includes(search.toLowerCase()) ||
         c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
-        c.year?.toLowerCase().includes(search.toLowerCase()),
-    );
+        c.section_block.toLowerCase().includes(search.toLowerCase()),
+    )
+    .sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
 
   return (
     <div className="page-container">
@@ -849,8 +939,8 @@ export default function ClassManagement() {
                         {classItem.class_name}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {classItem.course_subject}
-                        {classItem.year ? ` • ${classItem.year}` : ""}
+                        {classItem.course_subject} &bull;{" "}
+                        {classItem.section_block}
                       </p>
                     </div>
                   </div>
@@ -888,18 +978,9 @@ export default function ClassManagement() {
                         ? new Date(classItem.created_at).toLocaleDateString(
                             "en-US",
                             {
-                              month: "short",
+                              month: "long",
                               day: "numeric",
                               year: "numeric",
-                            },
-                          ) +
-                          " &bull; " +
-                          new Date(classItem.created_at).toLocaleTimeString(
-                            "en-US",
-                            {
-                              hour: "numeric",
-                              minute: "2-digit",
-                              hour12: true,
                             },
                           )
                         : "---"}
@@ -995,17 +1076,17 @@ export default function ClassManagement() {
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
                         newClass.class_name.trim() &&
                         newClass.class_name.trim().length >= 5
-                          ? "border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5"
+                          ? "border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30"
                           : newClass.class_name.trim() &&
                               newClass.class_name.trim().length < 5
                             ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30"
-                            : "border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
+                            : "border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100"
                       }`}
                     />
                     {newClass.class_name.trim() &&
                       newClass.class_name.trim().length >= 5 && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                          <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                             <span className="text-white text-xs font-bold">
                               &#x2713;
                             </span>
@@ -1015,8 +1096,8 @@ export default function ClassManagement() {
                   </div>
                   {newClass.class_name.trim() &&
                     newClass.class_name.trim().length >= 5 && (
-                      <div className="flex items-center gap-2 text-xs text-primary">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                      <div className="flex items-center gap-2 text-xs text-green-600">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                         <span>Valid class name</span>
                       </div>
                     )}
@@ -1073,17 +1154,17 @@ export default function ClassManagement() {
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
                         newClass.course_subject.trim() &&
                         newClass.course_subject.trim().length >= 5
-                          ? "border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5"
+                          ? "border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30"
                           : newClass.course_subject.trim() &&
                               newClass.course_subject.trim().length < 5
                             ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30"
-                            : "border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
+                            : "border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100"
                       }`}
                     />
                     {newClass.course_subject.trim() &&
                       newClass.course_subject.trim().length >= 5 && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                          <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                             <span className="text-white text-xs font-bold">
                               &#x2713;
                             </span>
@@ -1093,8 +1174,8 @@ export default function ClassManagement() {
                   </div>
                   {newClass.course_subject.trim() &&
                     newClass.course_subject.trim().length >= 5 && (
-                      <div className="flex items-center gap-2 text-xs text-primary">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                      <div className="flex items-center gap-2 text-xs text-green-600">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                         <span>Valid course subject</span>
                       </div>
                     )}
@@ -1135,12 +1216,24 @@ export default function ClassManagement() {
                           year: e.target.value,
                         })
                       }
-                      placeholder="e.g., 2024, First Year, Senior"
-                      className="transition-all duration-200 border-2 border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-lg px-4 py-3"
-                    />
-                    {newClass.year.trim() && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                      className={`w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 bg-background focus:outline-none focus:ring-4 ${
+                        newClass.section_block.trim()
+                          ? "border-green-400 focus:border-green-500 focus:ring-green-100 bg-green-50/30"
+                          : "border-gray-200 focus:border-green-400 focus:ring-green-100"
+                      }`}
+                    >
+                      <option value="">Select a block...</option>
+                      {Array.from({ length: 26 }, (_, i) =>
+                        String.fromCharCode(65 + i),
+                      ).map((letter) => (
+                        <option key={letter} value={letter}>
+                          {letter}
+                        </option>
+                      ))}
+                    </select>
+                    {newClass.section_block.trim() && (
+                      <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
+                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">
                             &#x2713;
                           </span>
@@ -1187,7 +1280,7 @@ export default function ClassManagement() {
                     />
                     {newClass.room.trim() && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">
                             &#x2713;
                           </span>
@@ -1282,7 +1375,7 @@ export default function ClassManagement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       Student ID
                       <span className="text-destructive">*</span>
                     </label>
@@ -1310,7 +1403,7 @@ export default function ClassManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       First Name
                       <span className="text-destructive">*</span>
                     </label>
@@ -1338,7 +1431,7 @@ export default function ClassManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
                       Last Name
                       <span className="text-destructive">*</span>
                     </label>
@@ -1681,8 +1774,8 @@ export default function ClassManagement() {
                               <div className="font-mono text-sm font-medium">
                                 {student.student_id}
                               </div>
-                              <div className="text-sm font-medium break-words">{`${student.first_name} ${student.last_name}`}</div>
-                              <div className="text-xs text-muted-foreground break-all">
+                              <div className="text-sm font-medium truncate">{`${student.first_name} ${student.last_name}`}</div>
+                              <div className="text-xs text-muted-foreground truncate">
                                 {student.email || "No email"}
                               </div>
                             </div>

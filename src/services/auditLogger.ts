@@ -273,6 +273,36 @@ export class AuditLogger {
   }
 
   /**
+   * Log template generated / downloaded activity
+   */
+  static async logTemplateGenerated(
+    adminId: string,
+    adminEmail: string,
+    templateName: string,
+    examName: string,
+    numQuestions: number,
+    className?: string,
+    examCode?: string,
+  ): Promise<AuditLog | null> {
+    return this.logActivity(
+      adminId,
+      adminEmail,
+      "template_generated",
+      `Generated template: "${templateName}" for exam "${examName}"`,
+      {
+        entityType: "template",
+        entityName: templateName,
+        metadata: {
+          examName,
+          numQuestions,
+          ...(className && { className }),
+          ...(examCode && { examCode }),
+        },
+      },
+    );
+  }
+
+  /**
    * Retrieve audit logs with filtering
    */
   static async getLogs(queryOpts?: AuditLogQuery): Promise<AuditLog[]> {

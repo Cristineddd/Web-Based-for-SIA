@@ -658,6 +658,7 @@ export default function Exams() {
         }}
         onCreateExam={handleCreateExam}
         fromTemplate={templateData}
+        existingExamTitles={exams.map((e) => e.title)}
       />
 
       {/* Edit Exam Dialog */}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, AlertTriangle } from "lucide-react";
 import { getClasses, type Class } from "@/services/classService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -22,6 +22,8 @@ interface CreateExamModalProps {
     classId?: string;
     className?: string;
   } | null;
+  /** Existing exam titles for duplicate detection at Step 1. */
+  existingExamTitles?: string[];
 }
 
 interface ExamFormData {
@@ -41,6 +43,7 @@ export function CreateExamModal({
   onClose,
   onCreateExam,
   fromTemplate,
+  existingExamTitles = [],
 }: CreateExamModalProps) {
   const { user } = useAuth();
   const router = useRouter();
@@ -61,6 +64,8 @@ export function CreateExamModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsPicked, setQuestionsPicked] = useState(false);
   const [examTypePicked, setExamTypePicked] = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
   // Pre-fill form when opening from a template reuse flow
   useEffect(() => {
@@ -99,6 +104,21 @@ export function CreateExamModal({
 
     fetchClassesData();
   }, [isOpen, user]);
+
+  // Recompute isDuplicate whenever the name changes
+  useEffect(() => {
+    const trimmed = formData.name.trim().toLowerCase();
+    if (!trimmed) {
+      setIsDuplicate(false);
+      return;
+    }
+    const found = existingExamTitles.some(
+      (t) => t.trim().toLowerCase() === trimmed,
+    );
+    setIsDuplicate(found);
+    // Reset confirmation if name changes
+    setConfirmDuplicate(false);
+  }, [formData.name, existingExamTitles]);
 
   const handleInputChange = (
     field: keyof ExamFormData,
@@ -258,7 +278,7 @@ export function CreateExamModal({
                         : "focus:ring-gray-200 border-gray-300"
                     }`}
                   />
-                  {formData.name.trim() && (
+                  {formData.name.trim() && !isDuplicate && (
                     <div className="flex items-center gap-1 text-sm text-green-600">
                       <span>Good exam name!</span>
                     </div>
@@ -268,6 +288,52 @@ export function CreateExamModal({
                       Try names like "Math Midterm", "Science Quiz 1", or "Final
                       Exam"
                     </p>
+                  )}
+
+                  {/* Duplicate warning banner */}
+                  {isDuplicate && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-800">
+                          Duplicate Exam Name Detected
+                        </p>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                          An exam named{" "}
+                          <strong>&quot;{formData.name.trim()}&quot;</strong>{" "}
+                          already exists. You may still proceed, but this could
+                          cause confusion during grading.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Inline duplicate confirmation */}
+                  {confirmDuplicate && (
+                    <div className="flex flex-col gap-2 p-3 bg-amber-100 border-2 border-amber-400 rounded-lg">
+                      <p className="text-sm font-semibold text-amber-900">
+                        Are you sure you want to continue with a duplicate name?
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDuplicate(false)}
+                          className="flex-1 px-3 py-1.5 border border-amber-500 rounded-md text-sm font-semibold text-amber-800 hover:bg-amber-50 transition-colors"
+                        >
+                          Go Back
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmDuplicate(false);
+                            setStep(2);
+                          }}
+                          className="flex-1 px-3 py-1.5 bg-amber-500 text-white rounded-md text-sm font-semibold hover:bg-amber-600 transition-colors"
+                        >
+                          Continue Anyway
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </label>
               </div>
@@ -632,6 +698,15 @@ export function CreateExamModal({
                 </div>
               </div>
             )}
+
+            <div className="flex gap-1 pt-4">
+              {[1, 2, 3, 4, 5, 6, 7].map((s) => (
+                <div
+                  key={s}
+                  className={`flex-1 h-1 rounded-full ${s <= step ? "bg-primary" : "bg-muted"}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
@@ -649,6 +724,11 @@ export function CreateExamModal({
               onClick={() => {
                 if (step === 1 && !formData.name.trim()) {
                   toast.error("Please enter an exam name to continue");
+                  return;
+                }
+                // Duplicate check on Step 1 — require confirmation before advancing
+                if (step === 1 && isDuplicate && !confirmDuplicate) {
+                  setConfirmDuplicate(true);
                   return;
                 }
                 if (step === 2 && !questionsPicked) {

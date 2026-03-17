@@ -16,7 +16,6 @@ import {
   Menu,
   X,
   AlertTriangle,
-  History,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebarContext } from "@/contexts/SidebarContext";
