@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { X, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   FileText,
@@ -18,6 +20,7 @@ import {
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
 import { toast } from "sonner";
 import { createExam, type ExamFormData } from "@/services/examService";
+import { getClasses, type Class } from "@/services/classService";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -58,6 +61,10 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [showClassPicker, setShowClassPicker] = useState(false);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [classSearch, setClassSearch] = useState("");
 
   // Use ref to prevent double fetching
   const hasFetched = useRef(false);
@@ -204,6 +211,25 @@ export default function Dashboard() {
 
     fetchStats();
   }, [user?.id]); // Only depend on user.id
+
+  const handleManageStudentsClick = async () => {
+    setClassSearch("");
+    setLoadingClasses(true);
+    try {
+      const fetched = await getClasses(user?.id);
+      setClasses(fetched.filter((c) => !c.isArchived));
+    } catch {
+      toast.error("Failed to load classes");
+    } finally {
+      setLoadingClasses(false);
+    }
+    setShowClassPicker(true);
+  };
+
+  const handleClassSelect = (classId: string) => {
+    setShowClassPicker(false);
+    router.push(`/classes/edit/${classId}`);
+  };
 
   const handleCreateExam = async (formData: ExamFormData) => {
     try {
@@ -355,7 +381,7 @@ export default function Dashboard() {
               Quick Actions
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6 pt-0">
+          <CardContent className="space-y-3 pt-0">
             <Button
               className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
               variant="outline"
@@ -365,17 +391,16 @@ export default function Dashboard() {
               Create New Exam
             </Button>
 
-            <Link href="/students">
-              <Button
-                className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-                variant="outline"
-              >
-                <Users className="w-4 h-4 text-[#B38B00]" />
-                Manage Students
-              </Button>
-            </Link>
+            <Button
+              className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
+              variant="outline"
+              onClick={handleManageStudentsClick}
+            >
+              <Users className="w-4 h-4 text-[#B38B00]" />
+              {loadingClasses ? "Loading classes…" : "Manage Students"}
+            </Button>
 
-            <Link href="/exams">
+            <Link href="/exams" className="block">
               <Button
                 className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
                 variant="outline"
@@ -385,7 +410,7 @@ export default function Dashboard() {
               </Button>
             </Link>
 
-            <Link href="/audit-logs">
+            <Link href="/audit-logs" className="block">
               <Button
                 className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
                 variant="outline"
@@ -476,6 +501,110 @@ export default function Dashboard() {
         onClose={() => setShowCreateModal(false)}
         onCreateExam={handleCreateExam}
       />
+
+      {/* Class Picker Modal */}
+      {showClassPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setShowClassPicker(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-[#166534]/5 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#166534]/10 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-[#166534]" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[#166534]">Manage Students</h2>
+                  <p className="text-xs text-gray-500">Select a class to open</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowClassPicker(false)}
+                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="px-6 py-3 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search classes…"
+                  value={classSearch}
+                  onChange={(e) => setClassSearch(e.target.value)}
+                  className="pl-9 h-9 text-sm border-gray-200 focus:border-[#166534] focus:ring-[#166534]/20"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Class list */}
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+              {loadingClasses ? (
+                <div className="flex items-center justify-center py-10 text-gray-400 text-sm">
+                  Loading classes…
+                </div>
+              ) : classes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2">
+                  <Users className="w-8 h-8 opacity-30" />
+                  <p className="text-sm">No classes found.</p>
+                </div>
+              ) : (() => {
+                const filtered = classes.filter((cls) => {
+                  const q = classSearch.toLowerCase();
+                  return (
+                    cls.class_name.toLowerCase().includes(q) ||
+                    (cls.course_subject || "").toLowerCase().includes(q) ||
+                    (cls.section_block || "").toLowerCase().includes(q)
+                  );
+                });
+                return filtered.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-gray-400">No classes match "{classSearch}"</div>
+                ) : (
+                  filtered.map((cls) => (
+                    <button
+                      key={cls.id}
+                      onClick={() => handleClassSelect(cls.id)}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-100 hover:border-[#166534] hover:bg-[#166534]/5 transition-all duration-150 group"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 group-hover:text-[#166534] truncate">
+                            {cls.class_name}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate mt-0.5">
+                            {[cls.course_subject, cls.section_block].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs bg-[#166534]/10 text-[#166534] px-2 py-0.5 rounded-full font-medium">
+                            {cls.students?.length ?? 0} students
+                          </span>
+                          <span className="text-gray-300 group-hover:text-[#B38B00] text-lg leading-none">›</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50">
+              <p className="text-xs text-gray-400 text-center">
+                {classes.length} class{classes.length !== 1 ? "es" : ""} available
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

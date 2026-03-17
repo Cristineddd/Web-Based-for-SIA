@@ -333,13 +333,17 @@ export class AuditLogger {
         constraints.push(where("timestamp", "<=", queryOpts.endDate));
       }
 
-      // Always order by timestamp descending
-      constraints.push(orderBy("timestamp", "desc"));
+      // Only add server-side orderBy when there are no other where constraints
+      // (avoids composite index requirement). Sorting is done client-side below.
+      const hasWhereConstraints = constraints.length > 0;
+      if (!hasWhereConstraints) {
+        constraints.push(orderBy("timestamp", "desc"));
+      }
 
       const q = query(collection(db, AUDIT_LOGS_COLLECTION), ...constraints);
       const snapshot = await getDocs(q);
 
-      return snapshot.docs.map((doc) => ({
+      const logs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         timestamp: doc.data().timestamp || new Date().toISOString(),
@@ -347,6 +351,19 @@ export class AuditLogger {
           doc.data().createdAt?.toDate?.().toISOString() ||
           new Date().toISOString(),
       })) as AuditLog[];
+
+      // Sort client-side so results are always newest-first regardless of filters
+      logs.sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      );
+
+      // Apply limit client-side after sorting
+      if (queryOpts?.limit && queryOpts.limit > 0) {
+        return logs.slice(0, queryOpts.limit);
+      }
+
+      return logs;
     } catch (error) {
       console.error("Error retrieving audit logs:", error);
       return [];
