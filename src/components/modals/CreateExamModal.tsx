@@ -74,10 +74,26 @@ export function CreateExamModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsPicked, setQuestionsPicked] = useState(false);
   const [examTypePicked, setExamTypePicked] = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
-  // Reset form when modal is closed
+  // Initialize or Reset form
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      if (fromTemplate) {
+        setFormData({
+          name: fromTemplate.name || "",
+          totalQuestions: fromTemplate.totalQuestions || 50,
+          date: getTodayDate(),
+          folder: "General",
+          className: fromTemplate.className || "",
+          classId: fromTemplate.classId || undefined,
+          choicesPerItem: fromTemplate.choicesPerItem || 5,
+          examType: "board",
+        });
+        if (fromTemplate.totalQuestions) setQuestionsPicked(true);
+      }
+    } else {
       setFormData({
         name: "",
         totalQuestions: 50,
@@ -92,7 +108,7 @@ export function CreateExamModal({
       setQuestionsPicked(false);
       setExamTypePicked(false);
     }
-  }, [isOpen]);
+  }, [isOpen, fromTemplate]);
 
   // Handle keyboard events
   useEffect(() => {
@@ -322,6 +338,19 @@ export function CreateExamModal({
                         Try names like "Math Midterm", "Science Quiz 1", or
                         "Final Exam"
                       </p>
+                    )}
+                    {isDuplicate && (
+                      <div className="flex items-start gap-2 p-3 mt-2 bg-amber-50 border border-amber-200 rounded-lg">
+                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                        <div className="text-sm text-amber-800">
+                          <p className="font-medium">Potential Duplicate</p>
+                          <p className="text-xs mt-1">
+                            An exam with this title already exists. You can still
+                            create it, but you may want to use a unique name.
+                            {confirmDuplicate ? " Click Continue again to proceed." : ""}
+                          </p>
+                        </div>
+                      </div>
                     )}
                   </label>
                 </div>

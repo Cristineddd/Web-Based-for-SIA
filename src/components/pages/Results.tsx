@@ -31,6 +31,7 @@ import {
   RotateCcw,
   Archive,
   Loader2,
+  Table2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getClasses, Class } from "@/services/classService";
@@ -63,6 +64,13 @@ import {
   BatchExportProgress,
 } from "@/services/batchExportService";
 import { ReportHistoryService } from "@/services/reportHistoryService";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 // Types for our component
 interface ClassResult {
@@ -200,10 +208,6 @@ function SendResultsPanel({
       const payload = {
         className,
         examTitle: examTitle || "Exam",
-        passingThreshold,
-=======
-        examTitle,
->>>>>>> 2e56edddc6693a434314edfb2f82da6ff804188e
         subject,
         passingThreshold,
         instructorName,
@@ -782,6 +786,7 @@ export default function Results() {
           return {
             classId: cls.id,
             className: cls.class_name,
+            courseSubject: cls.course_subject || "General",
             schedule: cls.room || "No schedule set",
             totalStudents: cls.students?.length || 0,
             scannedCount: scannedCount,
@@ -1349,7 +1354,6 @@ export default function Results() {
   if (selectedClass && !selectedExam) {
     return (
       <div className="page-container">
-<<<<<<< HEAD
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
@@ -1364,7 +1368,7 @@ export default function Results() {
 
         {/* Class Info Bar */}
         <div className="flex items-center gap-4">
-          <button
+          <Button
             onClick={() => {
               setSelectedClass(null);
               setClassExamsList([]);
@@ -1374,22 +1378,12 @@ export default function Results() {
             size="icon"
             className="hover:bg-muted shrink-0"
           >
-<<<<<<< HEAD
             <ChevronLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-[#1a472a]">
-              {selectedClass.className}
-            </h2>
-            <p className="text-gray-600 text-sm">
-              {selectedClass.totalStudents} students • {selectedClass.schedule}
-=======
-            <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground leading-tight truncate">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1a472a] leading-tight truncate">
               {selectedClass.className}
-            </h1>
+            </h2>
             <p className="text-sm text-muted-foreground mt-0.5">
               {selectedClass.totalStudents} students
               {selectedClass.courseSubject && (
@@ -1398,7 +1392,6 @@ export default function Results() {
               {selectedClass.schedule && selectedClass.schedule !== 'No room set' && (
                 <span> • Room {selectedClass.schedule}</span>
               )}
->>>>>>> 2e56edddc6693a434314edfb2f82da6ff804188e
             </p>
           </div>
         </div>
@@ -1730,7 +1723,6 @@ export default function Results() {
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Excel
             </Button>
-<<<<<<< HEAD
             <Button
               variant="outline"
               size="sm"
@@ -1740,8 +1732,6 @@ export default function Results() {
               <Table2 className="w-4 h-4 mr-2" />
               CSV
             </Button>
-=======
->>>>>>> 2e56edddc6693a434314edfb2f82da6ff804188e
           </div>
         </div>
 
@@ -1787,7 +1777,6 @@ export default function Results() {
           examTitle={selectedExam.title}
           passingThreshold={passingThreshold}
           onThresholdChange={handleThresholdChange}
-<<<<<<< HEAD
           onViewStudent={(row) => {
             // placeholder — can be wired to a detail view later
             console.log("View student:", row.studentId);
@@ -1990,7 +1979,6 @@ export default function Results() {
   return (
     <div className="page-container">
       {/* Header */}
-<<<<<<< HEAD
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
@@ -2039,10 +2027,6 @@ export default function Results() {
             PDF Summary
           </Button>
         )}
-=======
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results & Analytics</h1>
->>>>>>> 2e56edddc6693a434314edfb2f82da6ff804188e
       </div>
 
       {/* Class Search & Filter Bar */}
@@ -2062,7 +2046,6 @@ export default function Results() {
                 className="pl-9 h-9"
               />
             </div>
-<<<<<<< HEAD
             {/* Filters toggle */}
             <Button
               variant={showClassFilters ? "default" : "outline"}

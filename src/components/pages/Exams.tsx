@@ -54,6 +54,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { AuditLogger } from "@/services/auditLogger";
 
 function usePageVisibilityRefresh(onVisible: () => void) {
   useEffect(() => {
@@ -87,6 +88,7 @@ export default function Exams() {
   const [classById, setClassById] = useState<Record<string, Class>>({});
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [templateData, setTemplateData] = useState<any>(null);
   const [duplicateExamData, setDuplicateExamData] =
     useState<ExamFormData | null>(null);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
@@ -629,8 +631,9 @@ export default function Exams() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
                           onClick={(e) => e.stopPropagation()}
+                          title="View Exam"
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -641,8 +644,21 @@ export default function Exams() {
                         className="h-8 w-8 text-muted-foreground hover:text-primary"
                         onClick={(e) => {
                           e.stopPropagation();
+                          handleEditExam(exam);
+                        }}
+                        title="Edit Exam"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setArchiveId(exam.id);
                         }}
+                        title="Archive Exam"
                       >
                         <Archive className="w-4 h-4" />
                       </Button>

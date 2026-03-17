@@ -303,7 +303,7 @@ export default function NewExam() {
             </span>
           </div>
           <div className="flex items-center justify-between">
-            {steps.map((step, index) => (
+            {steps.map((step) => (
               <div key={step.number} className="flex items-center">
                 <div className="flex items-center">
                   <div
