@@ -36,6 +36,13 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { StudentIDService } from "@/services/studentIDService";
 import { useAuth } from "@/contexts/AuthContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { StudentIDService } from "@/services/studentIDService";
+import { useAuth } from "@/contexts/AuthContext";
+import type { Class, Student } from "@/services/classService";
 import {
   createClass,
   deleteClass,
@@ -60,28 +67,6 @@ import {
   Archive,
 } from "lucide-react";
 
-interface Student {
-  student_id: string;
-  first_name: string;
-  last_name: string;
-  email?: string;
-}
-
-interface Class {
-  id: string;
-  class_name: string;
-  course_subject: string;
-  section_block: string;
-  room: string;
-  students: Student[];
-  created_at: string;
-  schedule_day?: string;
-  schedule_time?: string;
-  semester?: string;
-  school_year?: string;
-  isArchived?: boolean;
-}
-
 export default function StudentClasses() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
@@ -105,7 +90,6 @@ export default function StudentClasses() {
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [roomWarning, setRoomWarning] = useState(false);
   const [classNameWarning, setClassNameWarning] = useState(false);
-  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
   const [currentTab, setCurrentTab] = useState("basic");
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
@@ -126,6 +110,17 @@ export default function StudentClasses() {
     first_name: "",
     last_name: "",
     email: "",
+  });
+
+  const cleanStudentForFirestore = (s: Student): Student => ({
+    student_id: (s.student_id || "").trim(),
+    first_name: (s.first_name || "").trim(),
+    last_name: (s.last_name || "").trim(),
+    // Firestore can't store `undefined`
+    ...(s.email && s.email.trim() ? { email: s.email.trim() } : {}),
+    ...(s.section ? { section: s.section } : {}),
+    ...(s.grade ? { grade: s.grade } : {}),
+    ...(s.validation_status ? { validation_status: s.validation_status } : {}),
   });
 
   useEffect(() => {
@@ -202,18 +197,23 @@ export default function StudentClasses() {
       return;
     }
 
-    // Validate all students have proper IDs
+    // Validate all students have required fields (no blanks) and proper IDs
     const invalidStudents = students.filter((student) => {
+      const missingRequired =
+        !student.student_id?.trim() ||
+        !student.first_name?.trim() ||
+        !student.last_name?.trim();
+      if (missingRequired) return true;
+
       return (
-        !student.student_id ||
-        !/^\d{9}$/.test(student.student_id) ||
-        !student.student_id.startsWith("20")
+        !/^\d{9}$/.test(student.student_id.trim()) ||
+        !student.student_id.trim().startsWith("20")
       );
     });
 
     if (invalidStudents.length > 0) {
       toast.error(
-        `${invalidStudents.length} student(s) have invalid Student IDs. Please fix before creating class.`,
+        `${invalidStudents.length} student(s) have missing/invalid required fields (Student ID / First Name / Last Name). Please fix before creating class.`,
       );
       return;
     }
@@ -228,15 +228,16 @@ export default function StudentClasses() {
         // UPDATE existing class
         const { updateClass } = await import("@/services/classService");
 
+        const cleanedStudents = students.map(cleanStudentForFirestore);
         await updateClass(editingClassId, {
           ...newClass,
-          students: students,
+          students: cleanedStudents,
         });
 
         // Update individual student records in the students collection
         if (students.length > 0) {
           try {
-            for (const student of students) {
+            for (const student of students.map(cleanStudentForFirestore)) {
               const studentDocRef = doc(db, "students", student.student_id);
               await setDoc(
                 studentDocRef,
@@ -265,7 +266,13 @@ export default function StudentClasses() {
         // Update the classes list in state
         setClasses(
           classes.map((c) =>
-            c.id === editingClassId ? { ...c, ...newClass, students } : c,
+            c.id === editingClassId
+              ? {
+                  ...c,
+                  ...newClass,
+                  students: students.map(cleanStudentForFirestore),
+                }
+              : c,
           ),
         );
 
@@ -283,9 +290,10 @@ export default function StudentClasses() {
           return;
         }
 
+        const cleanedStudents = students.map(cleanStudentForFirestore);
         const classToAdd: Omit<Class, "id"> = {
           ...newClass,
-          students: students,
+          students: cleanedStudents,
           created_at: new Date().toISOString(),
         };
 
@@ -314,7 +322,7 @@ export default function StudentClasses() {
         // CRITICAL: Also save individual student records to the students collection
         if (students.length > 0) {
           try {
-            for (const student of students) {
+            for (const student of cleanedStudents) {
               const studentDocRef = doc(db, "students", student.student_id);
               await setDoc(
                 studentDocRef,
@@ -671,64 +679,90 @@ export default function StudentClasses() {
           const workbook = XLSX.read(data, { type: "array" });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
-          const rows = XLSX.utils.sheet_to_json(worksheet) as Record<
-            string,
-            unknown
-          >[];
 
-          const parsedStudents = rows.map((row, idx) => ({
-            rowIndex: idx,
-            student_id: String(
-              row["student_id"] ||
-                row["Student ID"] ||
-                row["ID"] ||
-                row["id"] ||
-                "",
-            ).trim(),
-            first_name: String(
-              row["first_name"] || row["First Name"] || row["First"] || "",
-            ).trim(),
-            last_name: String(
-              row["last_name"] || row["Last Name"] || row["Last"] || "",
-            ).trim(),
-            email: String(row["email"] || row["Email"] || "").trim(),
-            year: String(
-              row["year"] || row["Year"] || row["Grade"] || "",
-            ).trim(),
-            section: String(
-              row["section"] ||
-                row["Section"] ||
-                row["Block"] ||
-                row["block"] ||
-                "",
-            ).trim(),
-          }));
+          // IMPORTANT: Use AOA parsing so blank cells don't disappear or shift columns.
+          const aoa = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1,
+            defval: "",
+            blankrows: false,
+          }) as unknown[][];
 
-          // Validate all records for required fields
-          const validationResult =
-            StudentFieldValidationService.validateBulkRecords(parsedStudents);
-
-          // Log bulk validation
-          if (user) {
-            const errorMap = new Map<number, string[]>();
-            validationResult.invalidRecords.forEach(({ record, errors }) => {
-              const rowIndex = record.rowIndex ?? 0;
-              errorMap.set(
-                rowIndex,
-                errors.map((e) => e.error),
-              );
-            });
-
-            await ValidationActionLogger.logBulkFieldValidation(
-              user.id,
-              user.email,
-              validationResult.summary.total,
-              validationResult.summary.valid,
-              validationResult.summary.invalid,
-              errorMap,
+          if (aoa.length < 2) {
+            toast.error(
+              "No student rows detected. Please check the template format.",
             );
+            setImporting(false);
+            return;
           }
 
+          const normalizeHeader = (h: unknown) =>
+            String(h ?? "")
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, " ")
+              .replace(/[()]/g, "")
+              .replace(/[^a-z0-9 ]/g, "");
+
+          const headers = (aoa[0] || []).map(normalizeHeader);
+          const findHeader = (aliases: string[]) =>
+            headers.findIndex((h) => aliases.includes(h));
+
+          const colStudentId = findHeader(["student id", "studentid", "id"]);
+          const colFirst = findHeader(["first name", "firstname", "first"]);
+          const colLast = findHeader(["last name", "lastname", "last"]);
+          const colEmail = findHeader([
+            "email",
+            "email optional",
+            "e mail",
+            "e mail optional",
+          ]);
+
+          const useFallback =
+            colStudentId === -1 || colFirst === -1 || colLast === -1;
+
+          const parsedStudents = aoa
+            .slice(1)
+            .map((row, idx) => {
+              const get = (i: number) => String((row?.[i] ?? "") as any).trim();
+              const student_id = useFallback ? get(0) : get(colStudentId);
+              const first_name = useFallback ? get(1) : get(colFirst);
+              const last_name = useFallback ? get(2) : get(colLast);
+              const email = useFallback
+                ? get(3)
+                : colEmail >= 0
+                  ? get(colEmail)
+                  : "";
+
+              return {
+                rowIndex: idx,
+                student_id,
+                first_name,
+                last_name,
+                email,
+                year: "",
+                section: "",
+              };
+            })
+            // ignore fully empty rows
+            .filter(
+              (r) => r.student_id || r.first_name || r.last_name || r.email,
+            );
+
+          // Reject blanks: Student ID, First Name, Last Name are required
+          const missingRequired = parsedStudents.filter(
+            (r) => !r.student_id || !r.first_name || !r.last_name,
+          );
+          if (missingRequired.length > 0) {
+            toast.error(
+              `Import failed: ${missingRequired.length} row(s) are missing required fields (Student ID / First Name / Last Name).`,
+            );
+            setImporting(false);
+            return;
+          }
+
+          // Keep existing validation logic (format checks, etc.)
+          const validationResult =
+            StudentFieldValidationService.validateBulkRecords(parsedStudents);
           if (validationResult.summary.invalid > 0) {
             toast.error(
               `${validationResult.summary.invalid} of ${validationResult.summary.total} records have validation errors`,
@@ -737,9 +771,7 @@ export default function StudentClasses() {
             return;
           }
 
-          const validStudents = validationResult.validRecords.filter(
-            (row) => row.first_name && row.last_name,
-          );
+          const validStudents = validationResult.validRecords;
 
           if (validStudents.length === 0) {
             toast.error("No valid student records found after validation.");
@@ -1288,14 +1320,6 @@ export default function StudentClasses() {
                           ` (${newClass.class_name.trim().length}/5)`}
                       </p>
                     )}
-                    {classNameWarning && (
-                      <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>
-                          Class Name must be at least 5 characters long
-                        </span>
-                      </div>
-                    )}
                   </div>
                   <div className="space-y-3">
                     <Label
@@ -1310,20 +1334,6 @@ export default function StudentClasses() {
                       onChange={(e) => {
                         const value = e.target.value;
                         setNewClass({ ...newClass, course_subject: value });
-
-                        // Show warning if length exceeds 0 but is less than 5
-                        if (
-                          value.trim().length > 0 &&
-                          value.trim().length < 5
-                        ) {
-                          setCourseSubjectWarning(true);
-                          setTimeout(
-                            () => setCourseSubjectWarning(false),
-                            2000,
-                          );
-                        } else {
-                          setCourseSubjectWarning(false);
-                        }
                       }}
                       placeholder="e.g., Introduction to Programming"
                       className={
@@ -1344,14 +1354,6 @@ export default function StudentClasses() {
                         {newClass.course_subject.trim() &&
                           ` (${newClass.course_subject.trim().length}/5)`}
                       </p>
-                    )}
-                    {courseSubjectWarning && (
-                      <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>
-                          Course/Subject must be at least 5 characters long
-                        </span>
-                      </div>
                     )}
                   </div>
                   <div className="space-y-3">
@@ -2096,8 +2098,8 @@ export default function StudentClasses() {
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
                 <div>
                   <p className="text-sm text-muted-foreground">Schedule</p>
-                  <p className="font-medium">{selectedClass.schedule_day}</p>
-                  <p className="text-sm">{selectedClass.schedule_time}</p>
+                  <p className="font-medium">-</p>
+                  <p className="text-sm">-</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Room</p>

@@ -23,7 +23,6 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Loader2,
   FileText,
   ChevronRight,
@@ -33,7 +32,7 @@ import {
 import { z } from "zod";
 import { createExam } from "@/services/examService";
 import { getClasses, type Class } from "@/services/classService";
-import { AuditLogger } from "@/services/auditLogger";
+import { Button as BackButton } from "@/components/ui/button";
 
 const examSchema = z.object({
   title: z
@@ -133,8 +132,7 @@ export default function NewExam() {
         ...prev,
         classId: classId,
         className: selectedClass.class_name,
-        // Auto-fill subject if empty
-        subject: prev.subject || selectedClass.course_subject,
+        // Subject/folder removed from UI. Keep existing value (if any) but it's no longer required.
       }));
       setErrors((prev) => ({ ...prev, classId: "" }));
     }
@@ -152,12 +150,6 @@ export default function NewExam() {
 
       if (!formData.classId) {
         newErrors.classId = "Class is required";
-      }
-
-      if (!formData.subject.trim()) {
-        newErrors.subject = "Subject is required";
-      } else if (formData.subject.length > 100) {
-        newErrors.subject = "Subject must be less than 100 characters";
       }
 
       if (!formData.date) {
@@ -228,7 +220,9 @@ export default function NewExam() {
         name: formData.title,
         totalQuestions: formData.num_items,
         date: formData.date,
-        folder: formData.subject,
+        // Folder/subject removed from UI: derive from selected class
+        folder:
+          classes.find((c) => c.id === formData.classId)?.course_subject || "",
         choicesPerItem: formData.choices_per_item,
         classId: formData.classId,
         className: formData.className,
@@ -275,18 +269,17 @@ export default function NewExam() {
   };
 
   return (
-    <div className="page-container max-w-4xl pb-4">
+    <div className="page-container max-w-xl pb-4">
       {/* Header */}
       <div className="mb-4">
-        <Button
-          variant="ghost"
+        <BackButton
+          variant="outline"
           onClick={() => router.push("/exams")}
           className="mb-4 -ml-2"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Exams
-        </Button>
-        <h1 className="text-3xl font-bold text-foreground">Create New Exam</h1>
+          ← Back to Exams
+        </BackButton>
+        <h1 className="text-2xl font-bold text-foreground">Create New Exam</h1>
         <div className="mt-2 space-y-1">
           <p className="text-muted-foreground">
             Step {currentStep} of {steps.length}: {steps[currentStep - 1].title}
@@ -314,11 +307,11 @@ export default function NewExam() {
               <div key={step.number} className="flex items-center">
                 <div className="flex items-center">
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all ${
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs transition-all ${
                       currentStep > step.number
                         ? "bg-green-500 text-white shadow-lg"
                         : currentStep === step.number
-                          ? "bg-blue-500 text-white shadow-lg ring-4 ring-blue-200"
+                          ? "bg-blue-500 text-white shadow-lg ring-2 ring-blue-200"
                           : "bg-gray-200 text-gray-500"
                     }`}
                   >
@@ -328,9 +321,9 @@ export default function NewExam() {
                       step.number
                     )}
                   </div>
-                  <div className="ml-3 hidden sm:block">
+                  <div className="ml-2 hidden sm:block">
                     <p
-                      className={`font-medium ${
+                      className={`text-xs font-medium ${
                         currentStep >= step.number
                           ? "text-blue-900"
                           : "text-gray-500"
@@ -338,16 +331,8 @@ export default function NewExam() {
                     >
                       {step.title}
                     </p>
-                    <p className="text-sm text-gray-600">{step.description}</p>
                   </div>
                 </div>
-                {index < steps.length - 1 && (
-                  <div
-                    className={`hidden sm:flex w-12 h-0.5 mx-4 ${
-                      currentStep > step.number ? "bg-green-400" : "bg-gray-300"
-                    }`}
-                  />
-                )}
               </div>
             ))}
           </div>
@@ -419,10 +404,10 @@ export default function NewExam() {
           )}
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-2">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {/* Step 1: Basic Information */}
             {currentStep === 1 && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
                   <h3 className="font-medium text-blue-900 mb-2">
                     📝 Step 1: Exam Name
@@ -506,7 +491,7 @@ export default function NewExam() {
                     <SelectContent>
                       {classes.map((cls) => (
                         <SelectItem key={cls.id} value={cls.id}>
-                          {cls.class_name} ({cls.section_block}) -{" "}
+                          {cls.class_name} ({cls.course_subject}) -{" "}
                           {cls.students.length} students
                         </SelectItem>
                       ))}
@@ -522,41 +507,7 @@ export default function NewExam() {
                   )}
                 </div>
 
-                {/* Subject */}
-                <div className="space-y-1">
-                  <Label htmlFor="subject" className="flex items-center gap-2">
-                    Subject *
-                    <span className="text-xs text-muted-foreground">
-                      (Auto-filled from class or enter custom)
-                    </span>
-                  </Label>
-                  <Input
-                    id="subject"
-                    placeholder="Enter subject name (e.g., Mathematics, Science, English)"
-                    value={formData.subject}
-                    onChange={(e) => handleChange("subject", e.target.value)}
-                    className={`transition-all ${
-                      errors.subject
-                        ? "border-red-500 focus:border-red-500 focus:ring-red-200"
-                        : formData.subject.trim().length >= 5
-                          ? "border-green-500 focus:border-green-500 focus:ring-green-200"
-                          : ""
-                    }`}
-                  />
-                  {formData.subject.trim() && formData.subject.length < 5 && (
-                    <p className="text-xs text-amber-600 flex items-center gap-1">
-                      ⚠️ Need {5 - formData.subject.length} more characters
-                    </p>
-                  )}
-                  {formData.subject.trim().length >= 5 && !errors.subject && (
-                    <p className="text-xs text-green-600 flex items-center gap-1">
-                      ✅ Subject name looks good
-                    </p>
-                  )}
-                  {errors.subject && (
-                    <p className="text-sm text-red-600">{errors.subject}</p>
-                  )}
-                </div>
+                {/* Subject / Folder removed */}
 
                 {/* Date */}
                 <div className="space-y-1">
@@ -623,26 +574,26 @@ export default function NewExam() {
                     📝 Choose a preset or enter a custom number of questions for
                     your exam.
                   </p>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-2">
                     {[20, 50, 100].map((num) => (
                       <button
                         key={num}
                         type="button"
                         onClick={() => handleChange("num_items", num)}
-                        className={`py-3 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
+                        className={`py-2 px-3 rounded-lg font-semibold text-sm transition-all border-2 flex items-center justify-between ${
                           formData.num_items === num
-                            ? "bg-blue-500 text-white border-blue-500 shadow-md transform scale-105"
+                            ? "bg-blue-500 text-white border-blue-500 shadow-md"
                             : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
                         }`}
                       >
-                        {num} Questions
-                        <div className="text-xs opacity-75 mt-1">
+                        <span>{num} Questions</span>
+                        <span className="text-xs opacity-75">
                           {num <= 20
-                            ? "Quick Quiz"
+                            ? "Quick"
                             : num <= 50
-                              ? "Standard Test"
-                              : "Major Exam"}
-                        </div>
+                              ? "Standard"
+                              : "Major"}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -699,15 +650,15 @@ export default function NewExam() {
                     🔤 Select how many answer choices each question will have.
                     Most common is 4 choices (A, B, C, D).
                   </p>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 gap-2">
                     {[2, 3, 4, 5].map((num) => (
                       <button
                         key={num}
                         type="button"
                         onClick={() => handleChange("choices_per_item", num)}
-                        className={`py-4 px-4 rounded-lg font-semibold text-sm transition-all border-2 ${
+                        className={`py-2 px-3 rounded-lg font-semibold text-sm transition-all border-2 ${
                           formData.choices_per_item === num
-                            ? "bg-blue-500 text-white border-blue-500 shadow-md transform scale-105"
+                            ? "bg-blue-500 text-white border-blue-500 shadow-md"
                             : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"
                         }`}
                       >
@@ -891,12 +842,7 @@ Examples:
                           {formData.className || "Not selected"}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Subject:</span>
-                        <span className="font-medium text-gray-900">
-                          {formData.subject || "Not set"}
-                        </span>
-                      </div>
+                      {/* Subject / Folder removed */}
                       <div className="flex justify-between">
                         <span className="text-gray-600">Date:</span>
                         <span className="font-medium text-gray-900">
@@ -997,7 +943,7 @@ Examples:
               ) : (
                 <Button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg"
+                  className="flex-1 gradient-primary"
                   disabled={loading || Object.keys(errors).length > 0}
                 >
                   {loading ? (

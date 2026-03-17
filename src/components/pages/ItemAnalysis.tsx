@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
+import { BarChart3, TrendingUp, AlertCircle, ArrowLeft } from 'lucide-react';
 import { getExamById, Exam } from '@/services/examService';
 import { AnswerKeyService } from '@/services/answerKeyService';
 import { ScanningService } from '@/services/scanningService';
 import { AnswerChoice } from '@/types/scanning';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 interface ItemAnalysisProps {
@@ -171,9 +171,14 @@ export default function ItemAnalysisPage({ params }: ItemAnalysisProps) {
   if (!exam) {
     return (
       <div className="space-y-6">
-        <Link href="/exams" className="p-2 hover:bg-muted rounded-md transition-colors inline-block">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
+        <Button
+          variant="outline"
+          onClick={() => window.history.back()}
+          className="mb-4"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
         <p className="text-foreground">Exam not found</p>
       </div>
     );
@@ -190,12 +195,14 @@ export default function ItemAnalysisPage({ params }: ItemAnalysisProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 sm:gap-4">
-        <Link
-          href={`/exams/${params.id}`}
-          className="p-2 hover:bg-muted rounded-md transition-colors"
+        <Button
+          variant="outline"
+          onClick={() => window.history.back()}
+          className="mb-4"
         >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Exam
+        </Button>
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
             <BarChart3 className="w-6 h-6" />

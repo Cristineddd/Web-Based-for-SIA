@@ -39,7 +39,7 @@ export interface Exam {
   instructorId?: string; // Instructor ID for the exam creator
   updatedAt?: string;
   className?: string;
-  classId?: string;
+  classId?: string; // Class ID linking exam to a class
   examType?: "board" | "diagnostic";
   choicePoints?: { [choice: string]: number };
   isArchived?: boolean;
@@ -160,6 +160,7 @@ export async function createExam(
       ...(instructorId && { instructorId: instructorId }), // Include instructorId in return value
       updatedAt: new Date().toISOString(),
       className: examData.className || undefined,
+      classId: examData.classId || undefined,
       examType: examData.examType || "board",
       choicePoints: examData.choicePoints,
       examCode: examCode, // Include examCode in return value
@@ -186,12 +187,21 @@ export async function getRecentExams(
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
 
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
       // Filter by userId on client-side and exclude archived exams
       if (data.createdBy === userId && !data.isArchived) {
+        // Back-fill examCode for legacy exams
+        let examCode = data.examCode;
+        if (!examCode) {
+          examCode = generateExamCode();
+          const docRef = doc(db, "exams", docSnap.id);
+          updateDoc(docRef, { examCode }).catch((err) => {
+            console.warn("Failed to back-fill exam code:", err);
+          });
+        }
         exams.push({
-          id: doc.id,
+          id: docSnap.id,
           title: data.title,
           subject: data.subject,
           num_items: data.num_items,
@@ -208,6 +218,7 @@ export async function getRecentExams(
             new Date().toISOString(),
           className: data.className || undefined,
           isArchived: data.isArchived,
+          examCode: examCode,
         });
       }
     });
@@ -260,14 +271,27 @@ export async function getExams(userId?: string): Promise<Exam[]> {
 
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
+    const updatePromises: Promise<void>[] = [];
 
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
       // Filter by userId if provided (additional client-side check)
       // Also filter out archived exams
       if ((!userId || data.createdBy === userId) && !data.isArchived) {
+        // Back-fill examCode for legacy exams that don't have one
+        let examCode = data.examCode;
+        if (!examCode) {
+          examCode = generateExamCode();
+          // Queue background update (non-blocking)
+          const docRef = doc(db, "exams", docSnap.id);
+          updatePromises.push(
+            updateDoc(docRef, { examCode }).catch((err) => {
+              console.warn("Failed to back-fill exam code:", err);
+            }),
+          );
+        }
         exams.push({
-          id: doc.id,
+          id: docSnap.id,
           title: data.title,
           subject: data.subject,
           num_items: data.num_items,
@@ -283,11 +307,9 @@ export async function getExams(userId?: string): Promise<Exam[]> {
             data.updatedAt?.toDate?.().toISOString() ||
             new Date().toISOString(),
           className: data.className || undefined,
+          classId: data.classId || undefined,
           isArchived: data.isArchived,
-          status: (data.status as "draft" | "final") || "draft",
-          institutionName: data.institutionName,
-          logoUrl: data.logoUrl,
-          examCode: data.examCode,
+          examCode: examCode,
         });
       }
     });
@@ -298,6 +320,15 @@ export async function getExams(userId?: string): Promise<Exam[]> {
       const dateB = new Date(b.updatedAt || b.created_at).getTime();
       return dateB - dateA;
     });
+
+    // Fire off background updates without waiting
+    if (updatePromises.length > 0) {
+      Promise.allSettled(updatePromises).then(() => {
+        console.log(
+          `Updated ${updatePromises.length} exam codes in background`,
+        );
+      });
+    }
 
     return exams;
   } catch (error: any) {
@@ -469,9 +500,11 @@ export async function getArchivedExams(userId: string): Promise<Exam[]> {
         updatedAt:
           data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
         className: data.className || undefined,
+        classId: data.classId || undefined,
         isArchived: data.isArchived,
         archivedAt:
           data.archivedAt?.toDate?.().toISOString() || new Date().toISOString(),
+        examCode: data.examCode || undefined,
       });
     });
 
@@ -495,12 +528,9 @@ export async function getArchivedExams(userId: string): Promise<Exam[]> {
 export async function deleteExam(examId: string): Promise<void> {
   try {
     const docRef = doc(db, "exams", examId);
-    // Instead of deleting the document, set isArchived to false and mark as deleted
-    await updateDoc(docRef, {
-      isArchived: false,
-      deletedAt: new Date().toISOString(),
-      status: "deleted",
-    });
+    // Permanently delete the exam document.
+    // NOTE: This does not automatically delete related docs (templates/answer keys/results).
+    await deleteDoc(docRef);
   } catch (error) {
     console.error("Error deleting exam:", error);
     throw new Error("Failed to delete exam");

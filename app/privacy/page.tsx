@@ -1,26 +1,19 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+
+import { BackButton } from '@/components/ui/BackButton';
+
+
 
 export default function PrivacyPolicyPage() {
-  const router = useRouter();
+
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.back()}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </Button>
+          <BackButton>Back</BackButton>
         </div>
         <div>
           <h1 className="text-3xl font-bold text-foreground">Privacy Policy</h1>
@@ -36,7 +29,7 @@ export default function PrivacyPolicyPage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p>
-                SIA (Smart Exam Checking & Auto-Grading System) is committed to protecting your privacy.
+                GC Scan (Smart Exam Checking System) is committed to protecting your privacy.
                 This Privacy Policy explains how we collect, use, disclose, and safeguard your information
                 when you visit our website and use our services.
               </p>

@@ -33,6 +33,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Search,
@@ -66,17 +73,12 @@ export default function ClassManagement() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
-  const [editingClass, setEditingClass] = useState<Class | null>(null);
-  const [currentTab, setCurrentTab] = useState("basic");
   const [importing] = useState(false);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [roomWarning, setRoomWarning] = useState(false);
-  const [classNameWarning, setClassNameWarning] = useState(false);
-  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
   const [uploadSummary, setUploadSummary] = useState<{
     total: number;
     successful: number;
@@ -85,7 +87,7 @@ export default function ClassManagement() {
     invalidEntries: Array<{ student: Student; errors: string[] }>;
   } | null>(null);
   const [showUploadSummary, setShowUploadSummary] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
 
   const [newClass, setNewClass] = useState({
     class_name: "",
@@ -95,6 +97,8 @@ export default function ClassManagement() {
   });
 
   const [students, setStudents] = useState<Student[]>([]);
+  const [currentTab, setCurrentTab] = useState("basic");
+  const [editingClass] = useState<Class | null>(null);
   const [newStudent, setNewStudent] = useState({
     student_id: "",
     first_name: "",
@@ -146,14 +150,20 @@ export default function ClassManagement() {
     }
 
     // Validate Class Name minimum length
-    if (newClass.class_name.trim().length < 5) {
-      toast.error("Class Name must be at least 5 characters long");
+    if (newClass.class_name.trim().length < 3) {
+      toast.error("Class Name must be at least 3 characters long");
       return;
     }
 
     // Validate Course/Subject minimum length
-    if (newClass.course_subject.trim().length < 5) {
-      toast.error("Course/Subject must be at least 5 characters long");
+    if (newClass.course_subject.trim().length < 4) {
+      toast.error("Course/Subject must be at least 4 characters long");
+      return;
+    }
+
+    // Validate Year is selected
+    if (!newClass.year || newClass.year.trim() === "") {
+      toast.error("Year level is required");
       return;
     }
 
@@ -242,24 +252,6 @@ export default function ClassManagement() {
           errorMessage: error instanceof Error ? error.message : String(error),
         },
       );
-    }
-  };
-
-  const handleArchive = async () => {
-    if (!archiveId) return;
-
-    try {
-      const classToArchive = classes.find((c) => c.id === archiveId);
-      if (!classToArchive) return;
-
-      const updatedClass = { ...classToArchive, isArchived: true };
-      await updateClass(archiveId, updatedClass);
-      setClasses(classes.filter((c) => c.id !== archiveId));
-      setArchiveId(null);
-      toast.success("Class archived successfully");
-    } catch (error) {
-      console.error("Error archiving class:", error);
-      toast.error("Failed to archive class");
     }
   };
 
@@ -459,6 +451,29 @@ export default function ClassManagement() {
     setStudents(students.filter((s) => s.student_id !== studentId));
   };
 
+  const handleArchive = async (classId?: string) => {
+    const idToArchive = classId || archiveId;
+    if (!idToArchive) return;
+
+    try {
+      // Update the class to mark as archived
+      const classToArchive = classes.find((c) => c.id === idToArchive);
+      if (classToArchive) {
+        const updatedClass = { ...classToArchive, isArchived: true };
+        await updateClass(idToArchive, updatedClass);
+
+        // Remove from current list
+        setClasses(classes.filter((c) => c.id !== idToArchive));
+        toast.success("Class archived successfully");
+      }
+    } catch (error) {
+      console.error("Error archiving class:", error);
+      toast.error("Failed to archive class");
+    } finally {
+      setArchiveId(null);
+    }
+  };
+
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -474,17 +489,22 @@ export default function ClassManagement() {
           const workbook = XLSX.read(data, { type: "array" });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          // Preserve empty cells so we can detect blanks correctly.
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1,
+            defval: "",
+            blankrows: false,
+          }) as any[];
 
           // Skip header row and create raw student data
-          const rawStudents = jsonData
+          const rawStudents = (jsonData as any[])
             .slice(1) // Skip header
-            .filter((row: any) => row.length >= 3) // Ensure basic validation
+            .filter((row: any) => row && row.length >= 3) // Ensure expected columns exist
             .map((row: any) => ({
-              student_id: String(row[0] || ""),
-              first_name: String(row[1] || ""),
-              last_name: String(row[2] || ""),
-              email: row[3] ? String(row[3]) : undefined,
+              student_id: String(row?.[0] ?? "").trim(),
+              first_name: String(row?.[1] ?? "").trim(),
+              last_name: String(row?.[2] ?? "").trim(),
+              email: String(row?.[3] ?? "").trim(),
             }));
 
           if (rawStudents.length === 0) {
@@ -492,12 +512,34 @@ export default function ClassManagement() {
             return;
           }
 
-          // Validate all student IDs
+          // Validate all required fields + student IDs
           const validStudents: Student[] = [];
           const invalidStudents: Array<{ student: Student; errors: string[] }> =
             [];
 
           for (const student of rawStudents) {
+            const requiredErrors: string[] = [];
+            if (!student.student_id)
+              requiredErrors.push("Student ID is required");
+            if (!student.first_name)
+              requiredErrors.push("First Name is required");
+            if (!student.last_name)
+              requiredErrors.push("Last Name is required");
+
+            if (requiredErrors.length > 0) {
+              invalidStudents.push({
+                // Ensure we never store `undefined` in state
+                student: {
+                  student_id: student.student_id,
+                  first_name: student.first_name,
+                  last_name: student.last_name,
+                  ...(student.email ? { email: student.email } : {}),
+                },
+                errors: requiredErrors,
+              });
+              continue;
+            }
+
             const validation =
               StudentIDValidationService.validateStudentIdFormat(
                 student.student_id,
@@ -505,7 +547,12 @@ export default function ClassManagement() {
 
             if (!validation.isValid) {
               invalidStudents.push({
-                student,
+                student: {
+                  student_id: student.student_id,
+                  first_name: student.first_name,
+                  last_name: student.last_name,
+                  ...(student.email ? { email: student.email } : {}),
+                },
                 errors: [validation.error || "Invalid Student ID format"],
               });
 
@@ -534,7 +581,12 @@ export default function ClassManagement() {
                 );
               }
             } else {
-              validStudents.push(student);
+              validStudents.push({
+                student_id: student.student_id,
+                first_name: student.first_name,
+                last_name: student.last_name,
+                ...(student.email ? { email: student.email } : {}),
+              });
             }
           }
 
@@ -623,6 +675,27 @@ export default function ClassManagement() {
             return;
           }
 
+          // Hard block: if *any* required blanks exist, don't allow import preview.
+          // (User requirement: no blank cells allowed in required fields.)
+          const blankRequiredCount = invalidStudents.filter((x) =>
+            x.errors.some(
+              (e) =>
+                e === "Student ID is required" ||
+                e === "First Name is required" ||
+                e === "Last Name is required",
+            ),
+          ).length;
+
+          if (blankRequiredCount > 0) {
+            toast.error(
+              `Upload blocked: ${blankRequiredCount} row(s) have blank required fields (Student ID / First Name / Last Name). Fix the file then re-upload.`,
+            );
+            setShowUploadSummary(true);
+            setImportPreview([]);
+            setShowImportDialog(false);
+            return;
+          }
+
           // Success case with mixed results
           if (invalidStudents.length > 0 || duplicates.length > 0) {
             toast.info(
@@ -702,6 +775,19 @@ export default function ClassManagement() {
   };
 
   const confirmImport = () => {
+    // Safety net: never import students with blanks in required fields.
+    const hasBlankRequired = importPreview.some(
+      (s) =>
+        !s.student_id?.trim() || !s.first_name?.trim() || !s.last_name?.trim(),
+    );
+
+    if (hasBlankRequired) {
+      toast.error(
+        "Import blocked: One or more rows have blank required fields (Student ID / First Name / Last Name).",
+      );
+      return;
+    }
+
     // Final duplicate check before adding
     const existingIds = new Set(students.map((s) => s.student_id));
     const newOnly = importPreview.filter((s) => !existingIds.has(s.student_id));
@@ -771,57 +857,22 @@ export default function ClassManagement() {
     );
   };
 
-  const filteredClasses = classes
-    .filter((classItem) => !classItem.isArchived) // Only show non-archived classes
-    .filter(
-      (c) =>
-        c.class_name.toLowerCase().includes(search.toLowerCase()) ||
-        c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
-        c.section_block.toLowerCase().includes(search.toLowerCase()),
-    )
-    .sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
-    });
+  const filteredClasses = classes.filter(
+    (c) =>
+      c.class_name.toLowerCase().includes(search.toLowerCase()) ||
+      c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
+      c.year?.toLowerCase().includes(search.toLowerCase()),
+  );
 
   return (
     <div className="page-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-            Class
+            Classes
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage student roster and information
-          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={downloadTemplate}
-            variant="outline"
-            className="gap-2 flex-shrink-0 border-primary/20 hover:bg-transparent hover:text-current"
-          >
-            <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Download Template</span>
-            <span className="sm:hidden">Template</span>
-          </Button>
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            variant="outline"
-            className="gap-2 flex-shrink-0 border-primary/20 hover:bg-transparent hover:text-current"
-          >
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Import Excel</span>
-            <span className="sm:hidden">Import</span>
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
+        <div className="flex flex-wrap gap-4">
           <Button
             onClick={() => setShowAddDialog(true)}
             className="gradient-primary gap-2"
@@ -924,8 +975,7 @@ export default function ClassManagement() {
               key={classItem.id}
               className="card-elevated hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => {
-                setEditingClass(classItem);
-                setShowViewDialog(true);
+                router.push(`/classes/edit/${classItem.id}`);
               }}
             >
               <CardContent className="p-6">
@@ -944,32 +994,32 @@ export default function ClassManagement() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        Total Students
+                      </p>
+                      <p className="text-sm font-medium flex items-center gap-1">
+                        <GraduationCap className="w-4 h-4 text-yellow-600" />
+                        {classItem.students.length}
+                      </p>
+                    </div>
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         setArchiveId(classItem.id);
                       }}
+                      className="p-1 h-auto text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                     >
                       <Archive className="w-4 h-4" />
                     </Button>
                   </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">
-                      Total Students
-                    </p>
-                    <p className="text-sm font-medium flex items-center gap-1">
-                      <GraduationCap className="w-4 h-4 text-yellow-600" />
-                      {classItem.students.length}
-                    </p>
-                  </div>
-                  <div className="text-right">
                     <p className="text-xs text-muted-foreground mb-1">
                       Created
                     </p>
@@ -978,9 +1028,18 @@ export default function ClassManagement() {
                         ? new Date(classItem.created_at).toLocaleDateString(
                             "en-US",
                             {
-                              month: "long",
+                              month: "short",
                               day: "numeric",
                               year: "numeric",
+                            },
+                          ) +
+                          " • " +
+                          new Date(classItem.created_at).toLocaleTimeString(
+                            "en-US",
+                            {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
                             },
                           )
                         : "---"}
@@ -992,6 +1051,36 @@ export default function ClassManagement() {
           ))}
         </div>
       )}
+
+      {/* Archive Confirmation Dialog */}
+      <AlertDialog
+        open={!!archiveId}
+        onOpenChange={(open) => {
+          if (!open) setArchiveId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this class?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This class will be moved to the archive. You can restore it later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setArchiveId(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!archiveId) return;
+                await handleArchive(archiveId);
+              }}
+            >
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Add Class Dialog */}
       <Dialog
@@ -1060,33 +1149,22 @@ export default function ClassManagement() {
                       onChange={(e) => {
                         const value = e.target.value;
                         setNewClass({ ...newClass, class_name: value });
-
-                        // Show warning if length exceeds 0 but is less than 5
-                        if (
-                          value.trim().length > 0 &&
-                          value.trim().length < 5
-                        ) {
-                          setClassNameWarning(true);
-                          setTimeout(() => setClassNameWarning(false), 2000);
-                        } else {
-                          setClassNameWarning(false);
-                        }
                       }}
                       placeholder="Enter program name"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
                         newClass.class_name.trim() &&
-                        newClass.class_name.trim().length >= 5
-                          ? "border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30"
+                        newClass.class_name.trim().length >= 3
+                          ? "border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5"
                           : newClass.class_name.trim() &&
-                              newClass.class_name.trim().length < 5
+                              newClass.class_name.trim().length < 3
                             ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30"
-                            : "border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100"
+                            : "border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
                       }`}
                     />
                     {newClass.class_name.trim() &&
-                      newClass.class_name.trim().length >= 5 && (
+                      newClass.class_name.trim().length >= 3 && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                          <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                             <span className="text-white text-xs font-bold">
                               &#x2713;
                             </span>
@@ -1095,26 +1173,25 @@ export default function ClassManagement() {
                       )}
                   </div>
                   {newClass.class_name.trim() &&
-                    newClass.class_name.trim().length >= 5 && (
-                      <div className="flex items-center gap-2 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    newClass.class_name.trim().length >= 3 && (
+                      <div className="flex items-center gap-2 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                         <span>Valid class name</span>
                       </div>
                     )}
                   {newClass.class_name.trim() &&
-                    newClass.class_name.trim().length < 5 && (
+                    newClass.class_name.trim().length < 3 && (
                       <div className="flex items-center gap-2 text-xs text-gray-500">
                         <div className="w-2 h-2 bg-gray-400 rounded-full" />
                         <span>
-                          {newClass.class_name.trim().length}/5 characters
-                          minimum
+                          Letters only, {newClass.class_name.trim().length}/3
+                          characters minimum
                         </span>
                       </div>
                     )}
-                  {classNameWarning && (
-                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Class Name must be at least 5 characters long</span>
+                  {!newClass.class_name.trim() && (
+                    <div className="text-xs text-gray-400">
+                      Letters only, minimum 3 characters
                     </div>
                   )}
                 </div>
@@ -1135,36 +1212,22 @@ export default function ClassManagement() {
                           ...newClass,
                           course_subject: value,
                         });
-
-                        // Show warning if length exceeds 0 but is less than 5
-                        if (
-                          value.trim().length > 0 &&
-                          value.trim().length < 5
-                        ) {
-                          setCourseSubjectWarning(true);
-                          setTimeout(
-                            () => setCourseSubjectWarning(false),
-                            2000,
-                          );
-                        } else {
-                          setCourseSubjectWarning(false);
-                        }
                       }}
                       placeholder="Enter course subject"
                       className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
                         newClass.course_subject.trim() &&
-                        newClass.course_subject.trim().length >= 5
-                          ? "border-green-400 focus:border-green-500 focus:ring-4 focus:ring-green-100 bg-green-50/30"
+                        newClass.course_subject.trim().length >= 4
+                          ? "border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5"
                           : newClass.course_subject.trim() &&
-                              newClass.course_subject.trim().length < 5
+                              newClass.course_subject.trim().length < 4
                             ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30"
-                            : "border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100"
+                            : "border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
                       }`}
                     />
                     {newClass.course_subject.trim() &&
-                      newClass.course_subject.trim().length >= 5 && (
+                      newClass.course_subject.trim().length >= 4 && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                          <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
                             <span className="text-white text-xs font-bold">
                               &#x2713;
                             </span>
@@ -1173,28 +1236,25 @@ export default function ClassManagement() {
                       )}
                   </div>
                   {newClass.course_subject.trim() &&
-                    newClass.course_subject.trim().length >= 5 && (
-                      <div className="flex items-center gap-2 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    newClass.course_subject.trim().length >= 4 && (
+                      <div className="flex items-center gap-2 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                         <span>Valid course subject</span>
                       </div>
                     )}
                   {newClass.course_subject.trim() &&
-                    newClass.course_subject.trim().length < 5 && (
+                    newClass.course_subject.trim().length < 4 && (
                       <div className="flex items-center gap-2 text-xs text-gray-500">
                         <div className="w-2 h-2 bg-gray-400 rounded-full" />
                         <span>
-                          {newClass.course_subject.trim().length}/5 characters
-                          minimum
+                          Letters only, {newClass.course_subject.trim().length}
+                          /4 characters minimum
                         </span>
                       </div>
                     )}
-                  {courseSubjectWarning && (
-                    <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>
-                        Course/Subject must be at least 5 characters long
-                      </span>
+                  {!newClass.course_subject.trim() && (
+                    <div className="text-xs text-gray-400">
+                      Letters only, minimum 4 characters
                     </div>
                   )}
                 </div>
@@ -1203,48 +1263,42 @@ export default function ClassManagement() {
                     htmlFor="year"
                     className="text-sm font-semibold text-gray-700"
                   >
-                    Year{" "}
-                    <span className="text-gray-400 text-xs">(Optional)</span>
+                    Year <span className="text-red-500">*</span>
                   </Label>
-                  <div className="relative">
-                    <Input
-                      id="year"
-                      value={newClass.year}
-                      onChange={(e) =>
-                        setNewClass({
-                          ...newClass,
-                          year: e.target.value,
-                        })
-                      }
-                      className={`w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 bg-background focus:outline-none focus:ring-4 ${
-                        newClass.section_block.trim()
-                          ? "border-green-400 focus:border-green-500 focus:ring-green-100 bg-green-50/30"
-                          : "border-gray-200 focus:border-green-400 focus:ring-green-100"
+                  <Select
+                    value={newClass.year || ""}
+                    onValueChange={(value) =>
+                      setNewClass({
+                        ...newClass,
+                        year: value,
+                      })
+                    }
+                  >
+                    <SelectTrigger
+                      className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
+                        newClass.year
+                          ? "border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5"
+                          : "border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
                       }`}
                     >
-                      <option value="">Select a block...</option>
-                      {Array.from({ length: 26 }, (_, i) =>
-                        String.fromCharCode(65 + i),
-                      ).map((letter) => (
-                        <option key={letter} value={letter}>
-                          {letter}
-                        </option>
-                      ))}
-                    </select>
-                    {newClass.section_block.trim() && (
-                      <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">
-                            &#x2713;
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                      <SelectValue placeholder="Select year level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1st Year</SelectItem>
+                      <SelectItem value="2">2nd Year</SelectItem>
+                      <SelectItem value="3">3rd Year</SelectItem>
+                      <SelectItem value="4">4th Year</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {newClass.year.trim() && (
                     <div className="flex items-center gap-2 text-xs text-primary">
                       <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                      <span>Year specified</span>
+                      <span>Year level selected</span>
+                    </div>
+                  )}
+                  {!newClass.year.trim() && (
+                    <div className="text-xs text-gray-400">
+                      Select a year level
                     </div>
                   )}
                 </div>
@@ -1331,12 +1385,12 @@ export default function ClassManagement() {
             </TabsContent>
 
             <TabsContent value="students" className="space-y-4 mt-4">
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+              <div className="flex flex-wrap gap-2 mb-4">
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importing}
-                  className="w-full sm:w-auto"
+                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   {importing ? "Importing..." : "Import CSV/Excel"}
@@ -1344,7 +1398,7 @@ export default function ClassManagement() {
                 <Button
                   variant="outline"
                   onClick={downloadTemplate}
-                  className="w-full sm:w-auto"
+                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Download Template
@@ -1358,16 +1412,16 @@ export default function ClassManagement() {
                 />
               </div>
 
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 space-y-5">
+              <div className="bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-6 space-y-5">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-green-600" />
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <Plus className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-green-900">
+                    <h4 className="font-semibold text-foreground">
                       Add Student Manually
                     </h4>
-                    <p className="text-sm text-green-700">
+                    <p className="text-sm text-muted-foreground">
                       Enter student information below
                     </p>
                   </div>
@@ -1390,13 +1444,13 @@ export default function ClassManagement() {
                       }
                       className={`transition-all duration-200 ${
                         newStudent.student_id.trim()
-                          ? "border-green-500 focus:border-green-500 focus:ring-green-200"
+                          ? "border-primary/50 focus:border-primary focus:ring-primary/20"
                           : "focus:border-primary focus:ring-primary/20"
                       }`}
                     />
                     {newStudent.student_id.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <div className="flex items-center gap-1 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
                         Valid student ID
                       </div>
                     )}
@@ -1418,13 +1472,13 @@ export default function ClassManagement() {
                       }
                       className={`transition-all duration-200 ${
                         newStudent.first_name.trim()
-                          ? "border-green-500 focus:border-green-500 focus:ring-green-200"
+                          ? "border-primary/50 focus:border-primary focus:ring-primary/20"
                           : "focus:border-primary focus:ring-primary/20"
                       }`}
                     />
                     {newStudent.first_name.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <div className="flex items-center gap-1 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
                         Valid first name
                       </div>
                     )}
@@ -1446,13 +1500,13 @@ export default function ClassManagement() {
                       }
                       className={`transition-all duration-200 ${
                         newStudent.last_name.trim()
-                          ? "border-green-500 focus:border-green-500 focus:ring-green-200"
+                          ? "border-primary/50 focus:border-primary focus:ring-primary/20"
                           : "focus:border-primary focus:ring-primary/20"
                       }`}
                     />
                     {newStudent.last_name.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <div className="flex items-center gap-1 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
                         Valid last name
                       </div>
                     )}
@@ -1475,16 +1529,16 @@ export default function ClassManagement() {
                       className="focus:border-primary focus:ring-primary/20 transition-all duration-200"
                     />
                     {newStudent.email.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      <div className="flex items-center gap-1 text-xs text-primary">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
                         Email provided
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-green-200">
-                  <div className="text-sm text-green-700">
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <div className="text-sm text-muted-foreground">
                     <span className="font-medium">
                       {newStudent.student_id.trim() &&
                       newStudent.first_name.trim() &&
@@ -1500,7 +1554,7 @@ export default function ClassManagement() {
                       !newStudent.first_name.trim() ||
                       !newStudent.last_name.trim()
                     }
-                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 min-w-[120px]"
+                    className="bg-primary hover:bg-primary/90 min-w-[120px]"
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Student
@@ -1863,28 +1917,6 @@ export default function ClassManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Archive Confirmation Dialog */}
-      <AlertDialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Archive Class?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will move the class to the archive. You can restore it later
-              from the Archive page if needed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleArchive}
-              className="bg-amber-600 text-white hover:bg-amber-700"
-            >
-              Archive
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

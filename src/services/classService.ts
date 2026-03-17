@@ -27,6 +27,7 @@ export interface Class {
   id: string;
   class_name: string;
   course_subject: string;
+  section_block?: string;
   year?: string; // Optional year field
   room?: string;
   semester?: string;
@@ -40,6 +41,26 @@ export interface Class {
 }
 
 const CLASSES_COLLECTION = "classes";
+
+function stripUndefinedDeep(value: any): any {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (Array.isArray(value)) {
+    // Keep array shape, but strip undefined items and strip undefined fields inside objects.
+    return value
+      .map((v) => stripUndefinedDeep(v))
+      .filter((v) => v !== undefined);
+  }
+  if (typeof value === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      const cleaned = stripUndefinedDeep(v);
+      if (cleaned !== undefined) out[k] = cleaned;
+    }
+    return out;
+  }
+  return value;
+}
 
 /**
  * Create a new class in Firestore
@@ -59,13 +80,15 @@ export async function createClass(
       console.warn("[WARNING] WARNING: instructorId is undefined or null!");
     }
 
-    const newClassData = {
+    // Firestore rejects `undefined` anywhere in the payload. Normalize + strip it.
+    // Also: this codebase uses both `created_at` (string) and `createdAt` (Timestamp).
+    const newClassData = stripUndefinedDeep({
       ...classData,
       createdBy: userId, // Keep userId for backward compatibility
-      ...(instructorId && { instructorId: instructorId }), // Only include if not undefined
+      instructorId: instructorId || undefined,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
+    });
 
     console.log("[SEND] Sending to Firestore:", newClassData);
     const docRef = await addDoc(
@@ -143,10 +166,17 @@ export async function getClasses(userId?: string): Promise<Class[]> {
 
     querySnapshot.forEach((doc) => {
       const data = doc.data() as any;
+
+      // Skip archived classes in the main class list
+      if (data.isArchived === true) {
+        return;
+      }
+
       classes.push({
         id: doc.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
+        section_block: data.section_block,
         year: data.year,
         room: data.room,
         students: data.students || [],
@@ -156,6 +186,7 @@ export async function getClasses(userId?: string): Promise<Class[]> {
           new Date().toISOString(),
         createdBy: data.createdBy,
         updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
+        isArchived: data.isArchived || false,
       });
     });
 
@@ -189,6 +220,7 @@ export async function getClassById(classId: string): Promise<Class | null> {
         id: docSnap.id,
         class_name: data.class_name,
         course_subject: data.course_subject,
+        section_block: data.section_block,
         year: data.year,
         room: data.room,
         students: data.students || [],
@@ -337,6 +369,66 @@ export async function removeStudentFromClass(
     }
   } catch (error) {
     console.error("Error removing student from class:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get archived classes for a specific user
+ */
+export async function getArchivedClasses(userId?: string): Promise<Class[]> {
+  try {
+    let q;
+
+    if (userId) {
+      // Query archived classes by createdBy
+      q = query(
+        collection(db, CLASSES_COLLECTION),
+        where("createdBy", "==", userId),
+        where("isArchived", "==", true),
+      );
+    } else {
+      q = query(
+        collection(db, CLASSES_COLLECTION),
+        where("isArchived", "==", true),
+        orderBy("createdAt", "desc"),
+      );
+    }
+
+    const querySnapshot = await getDocs(q);
+    const classes: Class[] = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data() as any;
+      classes.push({
+        id: doc.id,
+        class_name: data.class_name,
+        course_subject: data.course_subject,
+        year: data.year,
+        room: data.room,
+        students: data.students || [],
+        created_at:
+          data.created_at ||
+          data.createdAt?.toDate?.()?.toISOString() ||
+          new Date().toISOString(),
+        createdBy: data.createdBy,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
+        isArchived: data.isArchived || false,
+      });
+    });
+
+    // Sort in JavaScript if filtering by user
+    if (userId) {
+      classes.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA; // descending order (newest first)
+      });
+    }
+
+    return classes;
+  } catch (error) {
+    console.error("Error fetching archived classes:", error);
     throw error;
   }
 }

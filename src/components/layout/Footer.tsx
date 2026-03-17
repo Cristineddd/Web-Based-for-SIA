@@ -42,9 +42,9 @@ export function Footer() {
           {/* Brand Info */}
           <div className="space-y-4">
             <div>
-              <h3 className="text-xl font-bold text-sidebar-foreground">SIA</h3>
+              <h3 className="text-xl font-bold text-sidebar-foreground">GC SMART CHECK</h3>
               <p className="text-sm text-sidebar-foreground/60 mt-1">
-                Smart Exam Checking & Auto-Grading System
+                GC SMART CHECK: Smart Exam Checking System
               </p>
             </div>
             <p className="text-sm text-sidebar-foreground/70 max-w-sm">
@@ -80,7 +80,7 @@ export function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-xs text-sidebar-foreground/60">
             <p>
-              &copy; {currentYear} SIA - Smart Exam Checking & Auto-Grading System. All rights reserved.
+              &copy; {currentYear} GC SMART CHECK. All rights reserved.
             </p>
           </div>
 
@@ -132,7 +132,7 @@ export function MinimalFooter() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-sm text-sidebar-foreground/60">
             <p>
-              &copy; {currentYear} SIA - Smart Exam Checking & Auto-Grading System
+              &copy; {currentYear} GC SMART CHECK
             </p>
           </div>
 
@@ -167,7 +167,7 @@ export function DashboardFooter() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-4">
           {/* About */}
           <div>
-            <h5 className="font-semibold text-foreground mb-2 text-sm">About SIA</h5>
+            <h5 className="font-semibold text-foreground mb-2 text-sm">About GC Scan</h5>
             <p className="text-xs text-muted-foreground">
               Streamline your exam management with automated checking and grading.
             </p>
@@ -207,7 +207,7 @@ export function DashboardFooter() {
 
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
-            &copy; {currentYear} SIA System. All rights reserved.
+            &copy; {currentYear} GC SMART CHECK. All rights reserved.
           </p>
           <p className="text-xs text-muted-foreground">
             v1.0.0

@@ -294,9 +294,9 @@ export default function ReportHistory() {
 
       {/* Search & Filters */}
       <Card className="p-4 border">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3">
           {/* Search */}
-          <div className="relative flex-1">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search reports by class, exam, or keyword..."
@@ -306,52 +306,55 @@ export default function ReportHistory() {
             />
           </div>
 
-          {/* Format filter */}
-          <Select value={filterFormat} onValueChange={(v) => setFilterFormat(v as ReportFormat | 'all')}>
-            <SelectTrigger className="w-[130px]">
-              <Filter className="w-4 h-4 mr-1.5" />
-              <SelectValue placeholder="Format" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Formats</SelectItem>
-              <SelectItem value="PDF">PDF</SelectItem>
-              <SelectItem value="Excel">Excel</SelectItem>
-              <SelectItem value="CSV">CSV</SelectItem>
-              <SelectItem value="Email">Email</SelectItem>
-              <SelectItem value="Batch">Batch</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Filters Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Format filter */}
+            <Select value={filterFormat} onValueChange={(v) => setFilterFormat(v as ReportFormat | 'all')}>
+              <SelectTrigger className="w-full">
+                <Filter className="w-4 h-4 mr-1.5" />
+                <SelectValue placeholder="Format" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Formats</SelectItem>
+                <SelectItem value="PDF">PDF</SelectItem>
+                <SelectItem value="Excel">Excel</SelectItem>
+                <SelectItem value="CSV">CSV</SelectItem>
+                <SelectItem value="Email">Email</SelectItem>
+                <SelectItem value="Batch">Batch</SelectItem>
+              </SelectContent>
+            </Select>
 
-          {/* Type filter */}
-          <Select value={filterType} onValueChange={(v) => setFilterType(v as ReportType | 'all')}>
-            <SelectTrigger className="w-[160px]">
-              <ClipboardList className="w-4 h-4 mr-1.5" />
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="class-results">Class Results</SelectItem>
-              <SelectItem value="exam-scores">Exam Scores</SelectItem>
-              <SelectItem value="class-summary">Class Summary</SelectItem>
-              <SelectItem value="batch-export">Batch Export</SelectItem>
-              <SelectItem value="email-delivery">Email Delivery</SelectItem>
-            </SelectContent>
-          </Select>
+            {/* Type filter */}
+            <Select value={filterType} onValueChange={(v) => setFilterType(v as ReportType | 'all')}>
+              <SelectTrigger className="w-full">
+                <ClipboardList className="w-4 h-4 mr-1.5" />
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="class-results">Class Results</SelectItem>
+                <SelectItem value="exam-scores">Exam Scores</SelectItem>
+                <SelectItem value="class-summary">Class Summary</SelectItem>
+                <SelectItem value="batch-export">Batch Export</SelectItem>
+                <SelectItem value="email-delivery">Email Delivery</SelectItem>
+              </SelectContent>
+            </Select>
 
-          {/* Date range */}
-          <Select value={dateRange} onValueChange={(v) => setDateRange(v as typeof dateRange)}>
-            <SelectTrigger className="w-[130px]">
-              <Calendar className="w-4 h-4 mr-1.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Time</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="1y">Last year</SelectItem>
-            </SelectContent>
-          </Select>
+            {/* Date range */}
+            <Select value={dateRange} onValueChange={(v) => setDateRange(v as typeof dateRange)}>
+              <SelectTrigger className="w-full">
+                <Calendar className="w-4 h-4 mr-1.5" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="1y">Last year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Bulk actions */}
@@ -395,24 +398,25 @@ export default function ReportHistory() {
         </Card>
       ) : (
         <Card className="border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.size === entries.length && entries.length > 0}
-                    onChange={toggleSelectAll}
-                    className="w-4 h-4"
-                  />
-                </TableHead>
-                <TableHead>Report</TableHead>
-                <TableHead className="hidden sm:table-cell">Type</TableHead>
-                <TableHead className="hidden md:table-cell">Format</TableHead>
-                <TableHead className="hidden lg:table-cell">Students</TableHead>
-                <TableHead className="hidden lg:table-cell">Size</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="w-10"></TableHead>
+          <div className="overflow-x-auto max-w-full">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-6">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === entries.length && entries.length > 0}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4"
+                    />
+                  </TableHead>
+                  <TableHead className="min-w-[120px] w-[50%]">Report</TableHead>
+                  <TableHead className="hidden lg:table-cell min-w-[70px] w-[15%]">Type</TableHead>
+                  <TableHead className="hidden lg:table-cell min-w-[70px] w-[12%]">Format</TableHead>
+                  <TableHead className="hidden lg:table-cell min-w-[50px] w-[8%]">Students</TableHead>
+                  <TableHead className="hidden lg:table-cell min-w-[50px] w-[8%]">Size</TableHead>
+                  <TableHead className="min-w-[80px] w-[20%]">Date</TableHead>
+                  <TableHead className="w-6"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -431,13 +435,21 @@ export default function ReportHistory() {
                     </TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-medium text-foreground text-sm">{entry.title}</p>
+                        <p className="font-medium text-foreground text-sm break-words overflow-hidden text-ellipsis" style={{maxWidth: '120px'}}>{entry.title}</p>
                         {entry.description && (
-                          <p className="text-xs text-muted-foreground break-words">{entry.description}</p>
+                          <p className="text-xs text-muted-foreground break-words overflow-hidden text-ellipsis" style={{maxWidth: '120px'}}>{entry.description}</p>
                         )}
                         {entry.examTitle && (
-                          <p className="text-xs text-muted-foreground">{entry.examTitle}</p>
+                          <p className="text-xs text-muted-foreground break-words overflow-hidden text-ellipsis" style={{maxWidth: '120px'}}>{entry.examTitle}</p>
                         )}
+                        {/* Mobile-only info */}
+                        <div className="lg:hidden text-xs text-muted-foreground mt-1">
+                          {reportTypeLabel(entry.reportType)}
+                          {entry.studentCount && ` • ${entry.studentCount} students`}
+                          {entry.format && (
+                            <span> • {formatBadge(entry.format).label}</span>
+                          )}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
@@ -455,24 +467,30 @@ export default function ReportHistory() {
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                       {formatBytes(entry.fileSizeBytes)}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {formatDate(entry.createdAt)}
+                    <TableCell className="text-sm text-muted-foreground">
+                      <div className="break-words overflow-hidden text-ellipsis" style={{maxWidth: '80px'}}>
+                        {formatDate(entry.createdAt)}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDeleteTarget(entry.id!)}
-                        className="text-muted-foreground hover:text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeleteTarget(entry.id!)}
+                          className="text-muted-foreground hover:text-red-600 h-8 w-8 p-0 flex items-center justify-center"
+                          title="Delete report"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
           </Table>
+          </div>
 
           {/* Load More / Cleanup footer */}
           <div className="flex items-center justify-between p-3 border-t bg-muted/20">

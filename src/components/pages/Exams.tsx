@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +44,7 @@ import {
   type Exam,
   type ExamFormData,
 } from "@/services/examService";
+import { getClasses, type Class } from "@/services/classService";
 import { AnswerKeyService } from "@/services/answerKeyService";
 import {
   collection,
@@ -53,7 +54,20 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AuditLogger } from "@/services/auditLogger";
+
+function usePageVisibilityRefresh(onVisible: () => void) {
+  useEffect(() => {
+    const handler = () => {
+      if (!document.hidden) onVisible();
+    };
+    document.addEventListener("visibilitychange", handler);
+    window.addEventListener("focus", handler);
+    return () => {
+      document.removeEventListener("visibilitychange", handler);
+      window.removeEventListener("focus", handler);
+    };
+  }, [onVisible]);
+}
 
 interface ExamWithStatus extends Exam {
   answerKeyStatus?: {
@@ -70,6 +84,7 @@ export default function Exams() {
   const [exams, setExams] = useState<ExamWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [classById, setClassById] = useState<Record<string, Class>>({});
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [duplicateExamData, setDuplicateExamData] =
@@ -86,39 +101,21 @@ export default function Exams() {
     logoUrl: "",
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [templateData, setTemplateData] = useState<{
-    name: string;
-    totalQuestions: number;
-    choicesPerItem: number;
-    description: string;
-    classId?: string;
-    className?: string;
-  } | null>(null);
 
-  // Handle template reuse flow from query params
-  useEffect(() => {
-    if (searchParams.get("fromTemplate") === "true") {
-      const tplName = searchParams.get("templateName") || "";
-      const tplQuestions = Number(searchParams.get("templateQuestions")) || 50;
-      const tplChoices = Number(searchParams.get("templateChoices")) || 4;
-      const tplDesc = searchParams.get("templateDescription") || "";
-      const tplClassId = searchParams.get("templateClassId") || undefined;
-      const tplClassName = searchParams.get("templateClassName") || undefined;
+  const getCourseForExam = (exam: Exam): string => {
+    const classId = exam.classId;
+    if (classId && classById[classId]?.course_subject)
+      return classById[classId].course_subject;
+    // Legacy fallback
+    return exam.subject || "—";
+  };
 
-      setTemplateData({
-        name: tplName,
-        totalQuestions: tplQuestions,
-        choicesPerItem: tplChoices,
-        description: tplDesc,
-        classId: tplClassId,
-        className: tplClassName,
-      });
-      setShowCreateModal(true);
-
-      // Clean up URL
-      window.history.replaceState(null, "", "/exams");
-    }
-  }, [searchParams]);
+  const getClassNameForExam = (exam: Exam): string => {
+    const classId = exam.classId;
+    if (classId && classById[classId]?.class_name)
+      return classById[classId].class_name;
+    return exam.className || "—";
+  };
 
   useEffect(() => {
     const title = searchParams.get("title");
@@ -247,18 +244,29 @@ export default function Exams() {
     fetchExams();
   }, [user]);
 
-  // Re-fetch whenever the tab becomes visible again (e.g. returning from ExamDetails after finalizing)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchExams();
+  const refreshClassesForCourseLookup = useCallback(async () => {
+    try {
+      if (!user?.id) {
+        setClassById({});
+        return;
       }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
+      const classes = await getClasses(user.id);
+      const map: Record<string, Class> = {};
+      for (const c of classes) map[c.id] = c;
+      setClassById(map);
+    } catch (error) {
+      console.error("Error fetching classes for exam course lookup:", error);
+      // Non-blocking; table will fall back to exam.subject.
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshClassesForCourseLookup();
   }, [user]);
+
+  usePageVisibilityRefresh(() => {
+    refreshClassesForCourseLookup();
+  });
 
   const handleCreateExam = async (
     formData: ExamFormData,
@@ -499,11 +507,9 @@ export default function Exams() {
   const filteredExams = exams.filter(
     (exam) =>
       exam.title.toLowerCase().includes(search.toLowerCase()) ||
-      exam.subject.toLowerCase().includes(search.toLowerCase()) ||
-      (exam.className &&
-        exam.className.toLowerCase().includes(search.toLowerCase())) ||
-      exam.num_items.toString().includes(search) ||
-      exam.choices_per_item.toString().includes(search),
+      getCourseForExam(exam).toLowerCase().includes(search.toLowerCase()) ||
+      getClassNameForExam(exam).toLowerCase().includes(search.toLowerCase()) ||
+      exam.num_items.toString().includes(search),
   );
 
   return (
@@ -564,7 +570,7 @@ export default function Exams() {
           <TableHeader>
             <TableRow className="bg-table-header hover:bg-table-header">
               <TableHead>Title</TableHead>
-              <TableHead className="hidden sm:table-cell">Subject</TableHead>
+              <TableHead className="hidden sm:table-cell">Course</TableHead>
               <TableHead className="hidden lg:table-cell">Class</TableHead>
               <TableHead className="text-center">Items</TableHead>
               <TableHead className="text-center">Actions</TableHead>
@@ -609,10 +615,10 @@ export default function Exams() {
                 >
                   <TableCell className="font-medium">{exam.title}</TableCell>
                   <TableCell className="text-muted-foreground hidden sm:table-cell">
-                    {exam.subject}
+                    {getCourseForExam(exam)}
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden lg:table-cell">
-                    {exam.className || "—"}
+                    {getClassNameForExam(exam)}
                   </TableCell>
                   <TableCell className="text-center">
                     {exam.num_items}
@@ -743,20 +749,7 @@ export default function Exams() {
                   placeholder="Exam name"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Subject / Folder <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={editForm.subject}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, subject: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Subject"
-                />
-              </div>
+              <div className="space-y-1">{/* Subject / Folder removed */}</div>
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">
                   Number of Items <span className="text-destructive">*</span>

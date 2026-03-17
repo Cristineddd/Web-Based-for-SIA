@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         html: `<p>Hi ${body.instructorName},</p>
                <p>${sentCount} student(s) received their <strong>${body.examTitle}</strong> results for <strong>${body.className}</strong>.</p>
                ${failedCount > 0 ? `<p style="color:red;">${failedCount} email(s) failed to deliver.</p>` : ''}
-               <p style="color:#6b7280;font-size:13px;">— Gordon College SIA</p>`,
+               <p style="color:#6b7280;font-size:13px;">— GC SMART CHECK</p>`,
         text: `${sentCount} student(s) received their ${body.examTitle} results for ${body.className}. ${failedCount > 0 ? `${failedCount} failed.` : ''}`,
       });
     }

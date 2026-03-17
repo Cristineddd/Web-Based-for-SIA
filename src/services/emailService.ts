@@ -64,7 +64,7 @@ function getTransporter(): Transporter {
 }
 
 function getFromAddress(): string {
-  const name = process.env.SMTP_FROM_NAME || 'Gordon College SIA';
+  const name = process.env.SMTP_FROM_NAME || 'GC SMART CHECK';
   const email = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'noreply@gordoncollege.edu.ph';
   return `"${name}" <${email}>`;
 }

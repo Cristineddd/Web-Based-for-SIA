@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Plus, Trash2, Tag, FileText, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Tag, FileText, AlertCircle } from 'lucide-react';
 import { getExamById, Exam } from '@/services/examService';
 import { toast } from 'sonner';
+import { BackButton } from '@/components/ui/BackButton';
 
 interface TagReportsProps {
   params: { id: string };
@@ -116,9 +117,7 @@ export default function TagReportsPage({ params }: TagReportsProps) {
   if (!exam) {
     return (
       <div className="space-y-6">
-        <Link href="/exams" className="p-2 hover:bg-muted rounded-md transition-colors inline-block">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
+        <BackButton href="/exams" asLink />
         <p className="text-foreground">Exam not found</p>
       </div>
     );
@@ -129,12 +128,7 @@ export default function TagReportsPage({ params }: TagReportsProps) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
-          <Link
-            href={`/exams/${params.id}`}
-            className="p-2 hover:bg-muted rounded-md transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
+          <BackButton href={`/exams/${params.id}`} asLink />
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
               <Tag className="w-6 h-6 flex-shrink-0" />

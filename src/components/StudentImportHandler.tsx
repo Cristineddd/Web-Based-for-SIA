@@ -389,7 +389,7 @@ export function StudentImportHandler({
       {/* Import Button */}
       {validationResult?.isValid && parsedRecords.length > 0 && !showDuplicateReview && (
         <Button
-          onClick={handleImport}
+          onClick={() => handleImport()}
           disabled={importing}
           className="w-full"
           size="lg"

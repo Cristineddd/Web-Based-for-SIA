@@ -163,23 +163,27 @@ export default function ArchivedExams() {
           </p>
         </Card>
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <Table>
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto max-w-full">
+            <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[200px]">
+                  <TableHead className="min-w-[140px] w-[45%]">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4" />
                       Title
                     </div>
                   </TableHead>
-                  <TableHead className="min-w-[120px]">Subject</TableHead>
-                  <TableHead className="min-w-[80px]">Items</TableHead>
-                  <TableHead className="min-w-[120px] hidden sm:table-cell">
+                  <TableHead className="min-w-[80px] w-[20%] hidden sm:table-cell">
+                    Subject
+                  </TableHead>
+                  <TableHead className="min-w-[60px] w-[15%] hidden md:table-cell">
+                    Items
+                  </TableHead>
+                  <TableHead className="min-w-[90px] w-[20%] hidden lg:table-cell">
                     Archived Date
                   </TableHead>
-                  <TableHead className="text-right min-w-[100px]">
+                  <TableHead className="text-right min-w-[80px] w-[20%]">
                     Actions
                   </TableHead>
                 </TableRow>
@@ -188,36 +192,63 @@ export default function ArchivedExams() {
                 {filteredExams.map((exam) => (
                   <TableRow key={exam.id}>
                     <TableCell className="font-medium">
-                      <div className="break-words min-w-0" title={exam.title}>
+                      <div
+                        className="break-words overflow-hidden text-ellipsis"
+                        style={{ maxWidth: "140px" }}
+                        title={exam.title}
+                      >
                         {exam.title}
                       </div>
+                      <div className="text-xs text-muted-foreground sm:hidden mt-1">
+                        {exam.subject}
+                        <span className="md:hidden">
+                          {" "}
+                          • {exam.num_items} items
+                        </span>
+                        {exam.archivedAt && (
+                          <span className="lg:hidden">
+                            {" "}
+                            • {new Date(exam.archivedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="break-words min-w-0" title={exam.subject}>
+                    <TableCell className="hidden sm:table-cell">
+                      <div
+                        className="break-words overflow-hidden text-ellipsis"
+                        style={{ maxWidth: "80px" }}
+                        title={exam.subject}
+                      >
                         {exam.subject}
                       </div>
                     </TableCell>
-                    <TableCell>{exam.num_items} items</TableCell>
-                    <TableCell className="hidden sm:table-cell">
+                    <TableCell className="text-center hidden md:table-cell">
+                      <span className="text-sm">{exam.num_items}</span>
+                      <span className="hidden sm:inline text-xs text-muted-foreground ml-1">
+                        items
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">
                       {exam.archivedAt
                         ? new Date(exam.archivedAt).toLocaleDateString()
                         : "Unknown"}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1">
                         <Link href={`/exams/${exam.id}`}>
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
+                            size="sm"
+                            className="h-8 w-8 p-0 flex items-center justify-center"
+                            title="View exam"
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
                         </Link>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 flex items-center justify-center"
                           onClick={() => setRestoreId(exam.id)}
                           title="Restore exam to active"
                         >
@@ -225,8 +256,8 @@ export default function ArchivedExams() {
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive flex items-center justify-center"
                           onClick={() => setDeleteId(exam.id)}
                           title="Permanently delete exam"
                         >

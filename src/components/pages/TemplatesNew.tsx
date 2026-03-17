@@ -490,10 +490,6 @@ export default function Templates() {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
             Answer Sheet Templates
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            View and manage templates generated from exams. Templates are
-            created automatically when you create an exam.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -1003,20 +999,20 @@ export default function Templates() {
                     <div className="absolute bottom-[4px] right-[4px] w-[8px] h-[8px] bg-black"></div>
 
                     {/* Header */}
-                    <div className="flex items-center justify-center gap-1 mb-1">
+                    <div className="flex items-center justify-center gap-1 mb-0.5">
                       <img
-                        src={branding?.logoUrl || "/gclogo.png"}
-                        className="w-[18px] h-[18px] object-contain"
-                        alt="logo"
+                        src="/gclogo.png"
+                        alt="Gordon College logo"
+                        className="w-[10px] h-[10px] object-contain"
                       />
-                      <span className="text-[10px] font-bold text-black tracking-tight">
-                        {branding?.institutionName || "Gordon College"}
+                      <span className="text-[7px] font-bold">
+                        Gordon College
                       </span>
                     </div>
 
                     {/* Exam Code */}
                     {previewTemplate?.examCode && (
-                      <div className="text-center text-[7px] text-gray-800 font-medium mb-1">
+                      <div className="text-center text-[5px] text-gray-600 mb-0.5">
                         Exam Code: {previewTemplate.examCode}
                       </div>
                     )}

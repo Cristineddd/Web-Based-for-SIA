@@ -86,7 +86,7 @@ function stylizeHeaderRow(ws: XLSX.WorkSheet, headerCount: number, rowIndex: num
 function freezeHeaderRow(ws: XLSX.WorkSheet, frozenRows: number = 1): void {
   ws['!freeze'] = { xSplit: 0, ySplit: frozenRows };
   // Some consumers use '!views' instead
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   (ws as any)['!views'] = [{ state: 'frozen', ySplit: frozenRows }];
 }
 
@@ -115,10 +115,10 @@ function addDataValidation(
   allowedValues: string[],
 ): void {
   if (!ws['!dataValidation']) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (ws as any)['!dataValidation'] = [];
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   (ws as any)['!dataValidation'].push({
     type: 'list',
     operator: 'equal',
@@ -183,6 +183,7 @@ export function exportExamScoresToExcel(
   const statsHeaders = ['Metric', 'Value'];
   const statsData = [
     ['Exam Title', examTitle],
+    ...(metadata?.examCode ? [['Exam Code', metadata.examCode]] : []),
     ['Generated', new Date().toLocaleDateString()],
     ['', ''],
     ['Total Students', stats.total],
@@ -299,6 +300,8 @@ export function exportClassResultsToExcel(
   const statsHeaders = ['Metric', 'Value'];
   const statsData = [
     ['Class', className],
+    ...(metadata?.examCode ? [['Exam Code', metadata.examCode]] : []),
+    ...(metadata?.subject ? [['Subject', metadata.subject]] : []),
     ['Generated', new Date().toLocaleDateString()],
     ['', ''],
     ['Total Students', studentResults.length],
@@ -384,6 +387,8 @@ export function exportClassResultsToExcelBuffer(
   const statsHeaders = ['Metric', 'Value'];
   const statsData = [
     ['Class', className],
+    ...(metadata?.examCode ? [['Exam Code', metadata.examCode]] : []),
+    ...(metadata?.subject ? [['Subject', metadata.subject]] : []),
     ['Generated', new Date().toLocaleDateString()],
     ['', ''],
     ['Total Students', studentResults.length],

@@ -427,54 +427,40 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Excel Actions Group */}
-          <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg p-1 shadow-sm">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDownloadTemplate}
-              className="text-gray-600 hover:text-[#1a472a] hover:bg-[#1a472a]/10 h-8"
-              title="Download blank Excel template to fill out"
-            >
-              <FileSpreadsheet className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline font-medium">Get Template</span>
-            </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Download Answer Key Button */}
+          <button
+            onClick={handleDownloadAnswerKey}
+            className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors text-sm"
+            title="Download current answer key"
+            disabled={answersEntered === 0}
+          >
+            <FileDown className="w-4 h-4" />
+            <span className="hidden sm:inline">Download Key</span>
+          </button>
 
-            <div className="w-px h-4 bg-slate-300 mx-1"></div>
+          {/* Download Template Button */}
+          <button
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-2 px-3 py-2 border border-muted rounded-md font-semibold hover:bg-muted transition-colors text-sm"
+            title="Download Excel template"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Template</span>
+          </button>
 
-            <label className="cursor-pointer">
-              <div
-                className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none hover:bg-[#1a472a]/10 hover:text-[#1a472a] text-gray-600 h-8 px-3 ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                <Upload className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline font-medium">
-                  Upload Excel
-                </span>
-              </div>
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleUploadAnswerKey}
-                className="hidden"
-                disabled={isLocked}
-              />
-            </label>
-
-            <div className="w-px h-4 bg-slate-300 mx-1"></div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDownloadAnswerKey}
-              disabled={answersEntered === 0}
-              className="text-gray-600 hover:text-[#1a472a] hover:bg-[#1a472a]/10 h-8 disabled:opacity-50"
-              title="Export current answers as Excel"
-            >
-              <Download className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline font-medium">Export</span>
-            </Button>
-          </div>
+          {/* Upload Answer Key Button */}
+          <label className="flex items-center gap-2 px-3 py-2 border border-muted rounded-md font-semibold hover:bg-muted transition-colors cursor-pointer text-sm">
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">Upload</span>
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleUploadAnswerKey}
+              className="hidden"
+              disabled={isLocked}
+            />
+          </label>
 
           {isLocked && (
             <Badge
@@ -554,19 +540,24 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
         </div>
       </Card>
 
-      {/* Answer Key Grid - responsive: 2 cols mobile, 3 sm, 5 md+ */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
+      {/* Answer Key Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {Array.from({ length: totalQuestions }, (_, i) => i + 1).map(
           (questionNum) => (
             <div
               key={questionNum}
-              className={`p-3 rounded-lg border transition-all ${answers[questionNum] ? "bg-blue-50 border-primary" : "bg-background border-muted"}`}
+              className={`p-2 rounded-lg border-2 transition-all ${answers[questionNum] ? "bg-blue-50 border-primary" : "bg-background border-gray-300"}`}
             >
-              <div className="text-center mb-2">
-                <label className="text-xs font-semibold text-foreground block mb-2">
-                  Q{questionNum}
-                </label>
-                <div className="flex flex-wrap justify-center gap-1">
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-1 mb-2">
+                  <label className="text-xs font-semibold text-foreground">
+                    Q{questionNum}
+                  </label>
+                  {answers[questionNum] && (
+                    <span className="text-xs font-bold text-primary">✓</span>
+                  )}
+                </div>
+                <div className="flex justify-center gap-1">
                   {availableChoices.map((choice) => (
                     <label key={choice} className="cursor-pointer">
                       <input
@@ -581,10 +572,10 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
                         className="hidden"
                       />
                       <span
-                        className={`w-6 h-6 flex items-center justify-center rounded text-xs font-semibold transition-colors cursor-pointer block ${
+                        className={`w-8 h-8 flex items-center justify-center rounded-md text-sm font-semibold transition-all duration-200 cursor-pointer block hover:scale-105 ${
                           answers[questionNum] === choice
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted hover:bg-primary/20"
+                            ? "bg-primary text-primary-foreground shadow-md"
+                            : "bg-muted hover:bg-primary/20 border border-border"
                         }`}
                       >
                         {choice}
@@ -592,9 +583,6 @@ export default function AnswerKeyEditor({ params }: AnswerKeyEditorProps) {
                     </label>
                   ))}
                 </div>
-                {answers[questionNum] && (
-                  <span className="text-xs font-bold text-primary mt-1">✓</span>
-                )}
               </div>
             </div>
           ),

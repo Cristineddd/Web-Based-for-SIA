@@ -61,13 +61,13 @@ export default function About() {
       <section className="bg-gradient-to-b from-primary/5 to-background py-12 sm:py-16 md:py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4 sm:mb-6">
-            About SIA
+            About GC Scan
           </h1>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8">
-            Smart Exam Checking & Auto-Grading System
+            GC Scan: Smart Exam Checking System
           </p>
           <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            SIA is a comprehensive web-based solution designed to revolutionize the way educators 
+            GC Scan is a comprehensive web-based solution designed to revolutionize the way educators 
             manage, grade, and analyze exams. Built with modern technology and user experience in mind, 
             we help educational institutions save time and improve accuracy in assessment processes.
           </p>
@@ -88,7 +88,7 @@ export default function About() {
               </p>
               <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
                 We believe that technology should enhance, not complicate, the educational experience. 
-                That's why we've built SIA to be intuitive, reliable, and accessible to institutions 
+                That's why we've built GC Scan to be intuitive, reliable, and accessible to institutions 
                 of all sizes.
               </p>
             </div>
@@ -188,7 +188,7 @@ export default function About() {
             Built with Modern Technology
           </h2>
           <p className="text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8 leading-relaxed">
-            SIA is built using the latest web technologies including Next.js, React, TypeScript, 
+            GC Scan is built using the latest web technologies including Next.js, React, TypeScript, 
             and Firebase, ensuring a fast, reliable, and scalable platform that grows with your needs.
           </p>
           <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
@@ -211,7 +211,7 @@ export default function About() {
             Get in Touch
           </h2>
           <p className="text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">
-            Have questions or want to learn more about SIA? We'd love to hear from you.
+            Have questions or want to learn more about GC Scan? We'd love to hear from you.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
@@ -224,7 +224,7 @@ export default function About() {
               href="/dashboard"
               className="px-6 py-3 border-2 border-primary text-primary rounded-lg font-semibold hover:bg-primary/5 transition-colors"
             >
-              Try SIA Now
+              Try GC Scan Now
             </a>
           </div>
         </div>

@@ -1,4 +1,4 @@
-# SIA - Student Information Analysis System
+# GC Scan - Smart Exam Checking System
 
 A comprehensive web-based system for managing student data, conducting exams, and analyzing academic performance built with Next.js and Firebase.
 

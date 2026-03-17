@@ -69,21 +69,23 @@ export default function Landing() {
     <div className="min-h-screen bg-white">
       {/* Navigation */}
       <nav className="border-b bg-white sticky top-0 z-50 shadow-sm">
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <Image src="/Sia.png" alt="SIA Logo" width={40} height={40} className="w-10 h-10 object-contain aspect-square flex-shrink-0" />
-              <div>
-                <h1 className="text-lg font-bold text-[#166534]">SIA</h1>
-                <p className="text-xs text-gray-600">Smart Exam Checking</p>
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center flex-shrink-0">
+                <Image
+                  src="/gclogo.png"
+                  alt="GC Logo"
+                  width={28}
+                  height={28}
+                  className="object-contain sm:w-8 sm:h-8"
+                />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-lg font-bold text-[#166534] truncate">GC SMART CHECK</h1>
+                <p className="text-xs text-gray-600 hidden sm:block">Exam & Quiz Builder</p>
               </div>
             </div>
-            <button 
-              onClick={() => setShowAuthModal(true)}
-              className="px-6 py-2.5 rounded-lg font-semibold transition-all bg-[#166534] hover:bg-[#1a7a3e] text-white"
-            >
-              Get Started
-            </button>
           </div>
         </div>
       </nav>
@@ -95,7 +97,7 @@ export default function Landing() {
             {/* Left Content */}
             <div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
-                Smart Exam Checking & Auto-Grading System
+                GC SMART CHECK
               </h1>
               
               <p className="text-lg text-gray-600 mb-8 leading-relaxed">
@@ -107,7 +109,7 @@ export default function Landing() {
                   onClick={() => setShowAuthModal(true)}
                   className="px-8 py-4 rounded-lg font-semibold transition-all bg-[#166534] hover:bg-[#1a7a3e] text-white shadow-lg hover:shadow-xl"
                 >
-                  Start Now - It's Free
+                  Get Started
                 </button>
                 
                 <button 
@@ -146,7 +148,7 @@ export default function Landing() {
         <div className="w-full max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-              Why Choose SIA?
+              Why Choose GC Scan?
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Minimize manual work. Maximize accuracy. Save precious time.
@@ -205,13 +207,13 @@ export default function Landing() {
             Streamline Your Grading Process
           </h2>
           <p className="text-lg text-green-100 mb-8">
-            Focus on teaching. Let SIA handle the grading.
+            Focus on teaching. Let GC Scan handle the grading.
           </p>
           <button 
             onClick={() => setShowAuthModal(true)}
             className="px-8 py-4 rounded-lg font-semibold transition-all bg-white hover:bg-gray-100 text-[#166534] shadow-lg"
           >
-            Get Started Free
+            Get Started
           </button>
         </div>
       </section>

@@ -16,19 +16,17 @@ export default function Archive() {
 
   return (
     <div className="page-container">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">Archive</h1>
-        <p className="text-muted-foreground mt-1">
-          View and manage archived exams, classes, and report history
-        </p>
-      </div>
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="exams">Archived Exams</TabsTrigger>
-          <TabsTrigger value="classes">Archived Classes</TabsTrigger>
-          <TabsTrigger value="reports">Report History</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsTrigger value="exams" className="text-xs sm:text-sm">
+            <span className="hidden sm:inline">Archived </span>Exams
+          </TabsTrigger>
+          <TabsTrigger value="classes" className="text-xs sm:text-sm">
+            <span className="hidden sm:inline">Archived </span>Classes
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="text-xs sm:text-sm">
+            <span className="hidden sm:inline">Report </span>History
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="exams" className="mt-6">
