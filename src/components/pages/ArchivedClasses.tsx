@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { getArchivedClasses, Class } from "@/services/classService";
+import { AuditLogger } from "@/services/auditLogger";
 import {
   AlertDialog,
   AlertDialogAction,

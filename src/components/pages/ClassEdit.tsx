@@ -107,10 +107,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       toast.error('Course subject must be at least 4 characters long');
       return;
     }
-    if (!/^[a-zA-ZñÑ\s]+$/.test(classData.course_subject.trim())) {
-      toast.error('Course subject can only contain letters and spaces');
-      return;
-    }
+
 
     // Validate Year (optional)
     if (classData.year && !/^[1-4]$/.test(classData.year.trim())) {
@@ -569,15 +566,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   onChange={(e) => setClassData({ ...classData, course_subject: e.target.value })}
                   placeholder="Enter course or subject"
                   className={
-                    !classData.course_subject.trim() || 
-                    !/^[a-zA-ZñÑ\s]+$/.test(classData.course_subject.trim()) || 
-                    classData.course_subject.trim().length < 4 
-                      ? 'border-red-300 focus:border-red-500' 
+                    !classData.course_subject.trim() ||
+                    classData.course_subject.trim().length < 4
+                      ? 'border-red-300 focus:border-red-500'
                       : 'border-green-300 focus:border-green-500'
                   }
                 />
                 <p className="text-xs text-gray-600">
-                  Letters only, minimum 4 characters
+                  Minimum 4 characters
                   {classData.course_subject.trim() && ` (${classData.course_subject.trim().length}/4)`}
                 </p>
               </div>
@@ -739,7 +735,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       {sortBy === 'email' && <ArrowUpDown className="w-3 h-3" />}
                     </div>
                   </TableHead>
-                  <TableHead className="min-w-[80px]">Year</TableHead>
                   <TableHead className="w-16">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -774,23 +769,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                         className="border-0 p-1 h-8"
                         placeholder="Email"
                       />
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={student.grade || 'none'}
-                        onValueChange={(value) => updateStudentField(student.student_id, 'grade', value === 'none' ? '' : value)}
-                      >
-                        <SelectTrigger className="border-0 p-1 h-8">
-                          <SelectValue placeholder="Year" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          <SelectItem value="1">1st Year</SelectItem>
-                          <SelectItem value="2">2nd Year</SelectItem>
-                          <SelectItem value="3">3rd Year</SelectItem>
-                          <SelectItem value="4">4th Year</SelectItem>
-                        </SelectContent>
-                      </Select>
                     </TableCell>
                     <TableCell>
                       <Button
@@ -841,9 +819,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                         className="border p-2 h-8"
                         type="email"
                       />
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      Year (optional)
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
