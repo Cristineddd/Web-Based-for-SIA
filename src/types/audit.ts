@@ -2,23 +2,37 @@
  * Audit Log Types - For tracking all upload, administrative, and grade activities
  */
 
-export type ActivityType = 
-  | 'file_upload' 
-  | 'file_delete' 
-  | 'file_download'
-  | 'student_import'
-  | 'answer_key_upload'
-  | 'exam_created'
-  | 'exam_deleted'
-  | 'admin_action'
-  | 'settings_changed'
+export type ActivityType =
+  | "file_upload"
+  | "file_delete"
+  | "file_download"
+  | "student_import"
+  | "answer_key_upload"
+  | "exam_created"
+  | "exam_deleted"
+  | "exam_updated"
+  | "exam_finalized"
+  | "class_created"
+  | "class_deleted"
+  | "admin_action"
+  | "settings_changed"
   // Grade modification activity types
-  | 'grade_created'
-  | 'grade_updated'
-  | 'grade_deleted'
-  | 'grade_override'
-  | 'score_submitted'
-  | 'score_override';
+  | "grade_created"
+  | "grade_updated"
+  | "grade_deleted"
+  | "grade_override"
+  | "score_submitted"
+  | "score_override"
+  // Validation activity types
+  | "bulk_validation"
+  | "quality_check"
+  | "duplicate_detection"
+  | "mark_official"
+  | "validation_status_change"
+  | "validation_override"
+  | "validation_reset"
+  // Template activity types
+  | "template_generated";
 
 /** Snapshot of grade field values — used for before/after diff tracking */
 export interface GradeSnapshot {
@@ -40,27 +54,27 @@ export interface AuditLog {
   timestamp: string;
   ipAddress?: string;
   userAgent?: string;
-  
+
   // File-related fields
   fileName?: string;
   fileType?: string;
   fileSize?: number;
   filePath?: string;
-  
+
   // Entity-related fields
   entityId?: string;
   entityType?: string;
   entityName?: string;
-  
+
   // Status and result
-  status: 'success' | 'failed' | 'pending';
+  status: "success" | "failed" | "pending";
   errorMessage?: string;
   metadata?: Record<string, unknown>;
 
   // Grade modification change tracking
   beforeValues?: GradeSnapshot;
   afterValues?: GradeSnapshot;
-  
+
   // Indexing fields
   createdAt: string;
   updatedAt?: string;
@@ -71,7 +85,7 @@ export interface AuditLogQuery {
   adminId?: string;
   activity?: ActivityType;
   entityType?: string;
-  status?: 'success' | 'failed' | 'pending';
+  status?: "success" | "failed" | "pending";
   startDate?: string;
   endDate?: string;
   limit?: number;

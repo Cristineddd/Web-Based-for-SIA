@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -109,20 +106,24 @@ export default function Students() {
 
       // First try to get from classes collection (where students actually are)
       try {
-        const { collection, query, where, getDocs } = await import('firebase/firestore');
-        const { db } = await import('@/lib/firebase');
-        
-        const classesRef = collection(db, 'classes');
-        const classesQuery = query(classesRef, where('createdBy', '==', user.id));
+        const { collection, query, where, getDocs } =
+          await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+
+        const classesRef = collection(db, "classes");
+        const classesQuery = query(
+          classesRef,
+          where("createdBy", "==", user.id),
+        );
         const classesSnapshot = await getDocs(classesQuery);
-        
+
         // Aggregate all students from all classes
         const allStudents = new Map<string, Student>(); // Use Map to avoid duplicates
-        
-        classesSnapshot.docs.forEach(doc => {
+
+        classesSnapshot.docs.forEach((doc) => {
           const data = doc.data();
           const classStudents = data.students || [];
-          
+
           // Only process students from non-archived classes
           if (!data.isArchived) {
             classStudents.forEach((student: any) => {
@@ -130,8 +131,8 @@ export default function Students() {
                 allStudents.set(student.student_id, {
                   id: student.student_id,
                   student_id: student.student_id,
-                  first_name: student.first_name || '',
-                  last_name: student.last_name || '',
+                  first_name: student.first_name || "",
+                  last_name: student.last_name || "",
                   grade: student.grade || null,
                   email: student.email || null,
                   section: student.section || null,
@@ -141,13 +142,16 @@ export default function Students() {
             });
           }
         });
-        
+
         const mappedStudents = Array.from(allStudents.values());
-        console.log('Students loaded from classes:', mappedStudents.length);
+        console.log("Students loaded from classes:", mappedStudents.length);
         setStudents(mappedStudents);
       } catch (classError) {
-        console.warn('Could not fetch from classes, falling back to students collection:', classError);
-        
+        console.warn(
+          "Could not fetch from classes, falling back to students collection:",
+          classError,
+        );
+
         // Fallback to dedicated students collection
         const records = await StudentService.getAllStudents(user.id);
         const mappedStudents: Student[] = records.map((record) => ({
@@ -183,41 +187,45 @@ export default function Students() {
       }
 
       setExporting(true);
-      
+
       // Get students from classes collection first (where the actual data is)
       try {
-        const { collection, query, where, getDocs } = await import('firebase/firestore');
-        const { db } = await import('@/lib/firebase');
-        
-        const classesRef = collection(db, 'classes');
-        const classesQuery = query(classesRef, where('createdBy', '==', user.id));
+        const { collection, query, where, getDocs } =
+          await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+
+        const classesRef = collection(db, "classes");
+        const classesQuery = query(
+          classesRef,
+          where("createdBy", "==", user.id),
+        );
         const classesSnapshot = await getDocs(classesQuery);
-        
+
         // Aggregate all students from all classes
         const allStudents = new Map<string, any>(); // Use Map to avoid duplicates
-        
-        classesSnapshot.docs.forEach(doc => {
+
+        classesSnapshot.docs.forEach((doc) => {
           const data = doc.data();
           const classStudents = data.students || [];
-          
+
           // Only process students from non-archived classes
           if (!data.isArchived) {
             classStudents.forEach((student: any) => {
               if (student.student_id && !allStudents.has(student.student_id)) {
                 allStudents.set(student.student_id, {
                   student_id: student.student_id,
-                  first_name: student.first_name || '',
-                  last_name: student.last_name || '',
-                  email: student.email || '',
+                  first_name: student.first_name || "",
+                  last_name: student.last_name || "",
+                  email: student.email || "",
                 });
               }
             });
           }
         });
-        
+
         const records = Array.from(allStudents.values());
-        console.log('Exporting students from classes:', records.length);
-        
+        console.log("Exporting students from classes:", records.length);
+
         if (records.length === 0) {
           toast.error("No student records to export");
           return;
@@ -250,8 +258,11 @@ export default function Students() {
 
         toast.success(`Exported ${rows.length} student ID records`);
       } catch (classError) {
-        console.warn('Could not export from classes, falling back to students collection:', classError);
-        
+        console.warn(
+          "Could not export from classes, falling back to students collection:",
+          classError,
+        );
+
         // Fallback to dedicated students collection
         const records = await StudentService.getAllStudents(user.id);
         if (records.length === 0) {
@@ -335,7 +346,7 @@ export default function Students() {
     } catch (error) {
       console.error("Error adding student:", error);
       const errorMessage = (error as Error).message || "Failed to add student";
-      if (errorMessage.includes('already exists')) {
+      if (errorMessage.includes("already exists")) {
         toast.error(errorMessage);
       } else {
         toast.error("Failed to add student: " + errorMessage);
@@ -424,7 +435,8 @@ export default function Students() {
       });
     } catch (error) {
       console.error("Error updating student:", error);
-      const errorMessage = error instanceof Error ? error.message : "An error occurred";
+      const errorMessage =
+        error instanceof Error ? error.message : "An error occurred";
       toast.error("Failed to update student: " + errorMessage);
     }
   };
@@ -478,13 +490,24 @@ export default function Students() {
                 row["last_name"] || row["Last Name"] || row["LastName"] || "",
               ).trim(),
               grade: String(
-                row["grade"] || row["Grade"] || row["year"] || row["Year"] || "",
+                row["grade"] ||
+                  row["Grade"] ||
+                  row["year"] ||
+                  row["Year"] ||
+                  "",
               ).trim(),
               email: String(row["email"] || row["Email"] || "").trim() || null,
               section:
                 String(row["section"] || row["Section"] || "").trim() || null,
             }))
-            .filter((s) => s.student_id && s.first_name && s.last_name && s.grade && s.section);
+            .filter(
+              (s) =>
+                s.student_id &&
+                s.first_name &&
+                s.last_name &&
+                s.grade &&
+                s.section,
+            );
 
           if (parsedStudents.length === 0) {
             toast.error("No valid student records found in file");
@@ -495,24 +518,32 @@ export default function Students() {
           const existingIds = new Set(students.map((s) => s.student_id));
           const fileIdCounts = new Map<string, number>();
           parsedStudents.forEach((s) => {
-            fileIdCounts.set(s.student_id, (fileIdCounts.get(s.student_id) || 0) + 1);
+            fileIdCounts.set(
+              s.student_id,
+              (fileIdCounts.get(s.student_id) || 0) + 1,
+            );
           });
 
           const dupes = new Set<string>();
           parsedStudents.forEach((s) => {
             if (existingIds.has(s.student_id)) dupes.add(s.student_id);
-            if ((fileIdCounts.get(s.student_id) || 0) > 1) dupes.add(s.student_id);
+            if ((fileIdCounts.get(s.student_id) || 0) > 1)
+              dupes.add(s.student_id);
           });
           setDuplicateIds(dupes);
 
           if (dupes.size > 0 && dupes.size === parsedStudents.length) {
-            toast.warning(`All ${parsedStudents.length} students already exist in the system. Nothing new to import.`);
+            toast.warning(
+              `All ${parsedStudents.length} students already exist in the system. Nothing new to import.`,
+            );
             setImporting(false);
             return;
           }
 
           if (dupes.size > 0) {
-            toast.warning(`${dupes.size} out of ${parsedStudents.length} students already exist and will be skipped.`);
+            toast.warning(
+              `${dupes.size} out of ${parsedStudents.length} students already exist and will be skipped.`,
+            );
           }
 
           setImportPreview(parsedStudents);
@@ -558,7 +589,15 @@ export default function Students() {
             grade: string;
             email: string | null;
             section: string | null;
-          } => Boolean(s.student_id && s.first_name && s.last_name && s.grade && s.section && !duplicateIds.has(s.student_id)),
+          } =>
+            Boolean(
+              s.student_id &&
+              s.first_name &&
+              s.last_name &&
+              s.grade &&
+              s.section &&
+              !duplicateIds.has(s.student_id),
+            ),
         )
         .map((s) => ({
           student_id: s.student_id,
@@ -570,7 +609,9 @@ export default function Students() {
         }));
 
       if (studentsToInsert.length === 0) {
-        toast.error("All students in this file already exist in the system. Nothing to import.");
+        toast.error(
+          "All students in this file already exist in the system. Nothing to import.",
+        );
         setShowImportDialog(false);
         setImportPreview([]);
         setDuplicateIds(new Set());
@@ -585,22 +626,30 @@ export default function Students() {
       await fetchStudents();
 
       const skippedCount = importPreview.length - studentsToInsert.length;
-      const duplicateErrors = result.errors.filter(e => e.includes('already exists'));
-      const otherErrors = result.errors.filter(e => !e.includes('already exists'));
+      const duplicateErrors = result.errors.filter((e) =>
+        e.includes("already exists"),
+      );
+      const otherErrors = result.errors.filter(
+        (e) => !e.includes("already exists"),
+      );
       const totalSkipped = skippedCount + duplicateErrors.length;
 
       if (result.created.length > 0 && totalSkipped === 0) {
-        toast.success(`Successfully imported ${result.created.length} students`);
+        toast.success(
+          `Successfully imported ${result.created.length} students`,
+        );
       } else if (result.created.length > 0 && totalSkipped > 0) {
         toast.success(`Imported ${result.created.length} new students`);
         toast.warning(`${totalSkipped} duplicate student(s) were skipped`);
       } else if (result.created.length === 0 && totalSkipped > 0) {
-        toast.warning(`No new students imported - all ${totalSkipped} student(s) already exist in the system.`);
+        toast.warning(
+          `No new students imported - all ${totalSkipped} student(s) already exist in the system.`,
+        );
       }
 
       if (otherErrors.length > 0) {
         toast.error(
-          `Failed to import ${otherErrors.length} student(s): ${otherErrors.slice(0, 3).join('; ')}`,
+          `Failed to import ${otherErrors.length} student(s): ${otherErrors.slice(0, 3).join("; ")}`,
         );
       }
 
@@ -672,9 +721,10 @@ export default function Students() {
     if (!query) return true;
 
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-    const reverseFullName = `${student.last_name} ${student.first_name}`.toLowerCase();
+    const reverseFullName =
+      `${student.last_name} ${student.first_name}`.toLowerCase();
     const studentId = student.student_id.toLowerCase();
-    const section = student.section?.toLowerCase() || '';
+    const section = student.section?.toLowerCase() || "";
 
     // Check if the entire query matches any single field or the combined full name
     if (
@@ -689,11 +739,12 @@ export default function Students() {
     // Split by spaces and check if ALL terms match at least one field
     const terms = query.split(/\s+/).filter(Boolean);
     if (terms.length > 1) {
-      return terms.every((term) =>
-        studentId.includes(term) ||
-        student.first_name.toLowerCase().includes(term) ||
-        student.last_name.toLowerCase().includes(term) ||
-        section.includes(term)
+      return terms.every(
+        (term) =>
+          studentId.includes(term) ||
+          student.first_name.toLowerCase().includes(term) ||
+          student.last_name.toLowerCase().includes(term) ||
+          section.includes(term),
       );
     }
 
@@ -705,8 +756,12 @@ export default function Students() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Students</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">Manage student records</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            Students
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            Manage student records
+          </p>
         </div>
         <div className="flex gap-2">
           <input
@@ -948,7 +1003,8 @@ export default function Students() {
               Edit Student
             </DialogTitle>
             <DialogDescription>
-              Update the student's information below. Note: Student ID cannot be changed.
+              Update the student's information below. Note: Student ID cannot be
+              changed.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -972,7 +1028,10 @@ export default function Students() {
                   id="edit_first_name"
                   value={editStudent.first_name}
                   onChange={(e) =>
-                    setEditStudent({ ...editStudent, first_name: e.target.value })
+                    setEditStudent({
+                      ...editStudent,
+                      first_name: e.target.value,
+                    })
                   }
                   placeholder="John"
                 />
@@ -983,7 +1042,10 @@ export default function Students() {
                   id="edit_last_name"
                   value={editStudent.last_name}
                   onChange={(e) =>
-                    setEditStudent({ ...editStudent, last_name: e.target.value })
+                    setEditStudent({
+                      ...editStudent,
+                      last_name: e.target.value,
+                    })
                   }
                   placeholder="Doe"
                 />
@@ -1051,23 +1113,32 @@ export default function Students() {
               </TableHeader>
               <TableBody>
                 {importPreview.slice(0, 10).map((student, index) => {
-                  const isDuplicate = duplicateIds.has(student.student_id || '');
+                  const isDuplicate = duplicateIds.has(
+                    student.student_id || "",
+                  );
                   return (
-                  <TableRow key={index} className={isDuplicate ? 'bg-red-50 dark:bg-red-950/30' : ''}>
-                    <TableCell className="font-mono">
-                      {student.student_id}
-                      {isDuplicate && (
-                        <span className="ml-2 text-xs text-red-600 font-semibold">DUPLICATE</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {student.last_name}, {student.first_name}
-                    </TableCell>
-                    <TableCell>{student.grade || "-"}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {student.email || "-"}
-                    </TableCell>
-                  </TableRow>
+                    <TableRow
+                      key={index}
+                      className={
+                        isDuplicate ? "bg-red-50 dark:bg-red-950/30" : ""
+                      }
+                    >
+                      <TableCell className="font-mono">
+                        {student.student_id}
+                        {isDuplicate && (
+                          <span className="ml-2 text-xs text-red-600 font-semibold">
+                            DUPLICATE
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {student.last_name}, {student.first_name}
+                      </TableCell>
+                      <TableCell>{student.grade || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {student.email || "-"}
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
               </TableBody>
@@ -1082,20 +1153,27 @@ export default function Students() {
             <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
               <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
               <p className="text-sm text-red-600">
-                <strong>{duplicateIds.size} duplicate(s) found</strong> - these students already exist and will be <strong>skipped</strong> during import.
+                <strong>{duplicateIds.size} duplicate(s) found</strong> - these
+                students already exist and will be <strong>skipped</strong>{" "}
+                during import.
               </p>
             </div>
           )}
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => { setShowImportDialog(false); setDuplicateIds(new Set()); }}
+              onClick={() => {
+                setShowImportDialog(false);
+                setDuplicateIds(new Set());
+              }}
             >
               Cancel
             </Button>
             <Button
               onClick={confirmImport}
-              disabled={importing || (importPreview.length - duplicateIds.size) === 0}
+              disabled={
+                importing || importPreview.length - duplicateIds.size === 0
+              }
               className="gradient-primary"
             >
               {importing ? (
@@ -1104,7 +1182,7 @@ export default function Students() {
                   Importing...
                 </>
               ) : (
-                `Import ${importPreview.length - duplicateIds.size} Student${(importPreview.length - duplicateIds.size) !== 1 ? 's' : ''}`
+                `Import ${importPreview.length - duplicateIds.size} Student${importPreview.length - duplicateIds.size !== 1 ? "s" : ""}`
               )}
             </Button>
           </DialogFooter>

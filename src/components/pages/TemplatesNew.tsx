@@ -1,10 +1,11 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -12,20 +13,46 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { FileText, Download, Eye, Trash2, Search, Filter, Archive, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
-import { collection, getDocs, deleteDoc, doc, serverTimestamp, query, where, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { generateTemplatePDF } from '@/lib/templatePdfGenerator';
+} from "@/components/ui/select";
+import {
+  FileText,
+  Download,
+  Eye,
+  Trash2,
+  Search,
+  Filter,
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Copy,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import {
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+  query,
+  where,
+  updateDoc,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
+import {
+  InstructorSettingsService,
+  InstructorSettings,
+} from "@/services/instructorSettingsService";
+import { AuditLogger } from "@/services/auditLogger";
 
 interface Template {
   id: string;
@@ -33,7 +60,7 @@ interface Template {
   description: string;
   numQuestions: number;
   choicesPerQuestion: number;
-  layout: 'single' | 'double' | 'quad';
+  layout: "single" | "double" | "quad";
   includeStudentId: boolean;
   studentIdLength: number;
   createdBy: string;
@@ -49,6 +76,16 @@ interface Template {
   isArchived?: boolean;
   archivedAt?: string;
   archivedBy?: string;
+  version?: number;
+  versionHistory?: Array<{
+    version: number;
+    name: string;
+    description: string;
+    numQuestions: number;
+    choicesPerQuestion: number;
+    updatedBy: string;
+    updatedAt: string;
+  }>;
 }
 
 interface Class {
@@ -66,59 +103,74 @@ const ITEMS_PER_PAGE = 9; // 3x3 grid
 
 // Helper function to format dates (handles Firestore Timestamps and strings)
 const formatDate = (dateValue: unknown): string => {
-  if (!dateValue) return 'N/A';
-  
+  if (!dateValue) return "N/A";
+
   try {
     // Handle Firestore Timestamp objects
-    if (typeof dateValue === 'object' && dateValue !== null && 'toDate' in dateValue) {
-      return (dateValue as { toDate: () => Date }).toDate().toLocaleDateString();
+    if (
+      typeof dateValue === "object" &&
+      dateValue !== null &&
+      "toDate" in dateValue
+    ) {
+      return (dateValue as { toDate: () => Date })
+        .toDate()
+        .toLocaleDateString();
     }
-    
+
     // Handle string dates
-    if (typeof dateValue === 'string') {
+    if (typeof dateValue === "string") {
       const date = new Date(dateValue);
-      if (isNaN(date.getTime())) return 'N/A';
+      if (isNaN(date.getTime())) return "N/A";
       return date.toLocaleDateString();
     }
-    
+
     // Handle Date objects
     if (dateValue instanceof Date) {
       return dateValue.toLocaleDateString();
     }
-    
+
     // Handle seconds (Firestore timestamp as plain object)
-    if (typeof dateValue === 'object' && 'seconds' in (dateValue as Record<string, unknown>)) {
+    if (
+      typeof dateValue === "object" &&
+      "seconds" in (dateValue as Record<string, unknown>)
+    ) {
       const seconds = (dateValue as { seconds: number }).seconds;
       return new Date(seconds * 1000).toLocaleDateString();
     }
-    
-    return 'N/A';
+
+    return "N/A";
   } catch {
-    return 'N/A';
+    return "N/A";
   }
 };
 
 export default function Templates() {
   const { user } = useAuth();
+  const router = useRouter();
   const [showPreview, setShowPreview] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
+  const [templateToDelete, setTemplateToDelete] = useState<Template | null>(
+    null,
+  );
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
-  const [templateToArchive, setTemplateToArchive] = useState<Template | null>(null);
+  const [templateToArchive, setTemplateToArchive] = useState<Template | null>(
+    null,
+  );
   const [templates, setTemplates] = useState<Template[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [branding, setBranding] = useState<InstructorSettings | null>(null);
+
   // Search and Filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterClass, setFilterClass] = useState<string>('all');
-  const [filterExam, setFilterExam] = useState<string>('all');
-  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterClass, setFilterClass] = useState<string>("all");
+  const [filterExam, setFilterExam] = useState<string>("all");
+  const [filterDateFrom, setFilterDateFrom] = useState<string>("");
   const [showArchived, setShowArchived] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -127,47 +179,54 @@ export default function Templates() {
     if (user?.id) {
       fetchClassesAndExams();
       fetchTemplates();
+      fetchBranding();
     }
   }, [user?.id]);
 
+  const fetchBranding = async () => {
+    if (!user?.id) return;
+    const settings = await InstructorSettingsService.getSettings(user.id);
+    setBranding(settings);
+  };
+
   const fetchClassesAndExams = async () => {
     if (!user?.instructorId) {
-      console.log('No instructorId found, skipping class/exam fetch');
+      console.log("No instructorId found, skipping class/exam fetch");
       return;
     }
 
     try {
       // Fetch classes for current instructor only
       const classesQuery = query(
-        collection(db, 'classes'),
-        where('instructorId', '==', user.instructorId)
+        collection(db, "classes"),
+        where("instructorId", "==", user.instructorId),
       );
       const classesSnapshot = await getDocs(classesQuery);
-      const fetchedClasses = classesSnapshot.docs.map(doc => ({
+      const fetchedClasses = classesSnapshot.docs.map((doc) => ({
         id: doc.id,
-        class_name: doc.data().class_name || 'Unnamed Class',
+        class_name: doc.data().class_name || "Unnamed Class",
       }));
       setClasses(fetchedClasses);
 
       // Fetch exams for current instructor only
       const examsQuery = query(
-        collection(db, 'exams'),
-        where('instructorId', '==', user.instructorId)
+        collection(db, "exams"),
+        where("instructorId", "==", user.instructorId),
       );
       const examsSnapshot = await getDocs(examsQuery);
-      const fetchedExams = examsSnapshot.docs.map(doc => ({
+      const fetchedExams = examsSnapshot.docs.map((doc) => ({
         id: doc.id,
-        title: doc.data().title || 'Unnamed Exam',
+        title: doc.data().title || "Unnamed Exam",
       }));
       setExams(fetchedExams);
     } catch (error) {
-      console.error('Error fetching classes/exams:', error);
+      console.error("Error fetching classes/exams:", error);
     }
   };
 
   const fetchTemplates = async () => {
     if (!user?.instructorId) {
-      console.log('No instructorId found, skipping template fetch');
+      console.log("No instructorId found, skipping template fetch");
       setLoading(false);
       return;
     }
@@ -176,17 +235,20 @@ export default function Templates() {
       setLoading(true);
       // Query templates filtered by current user's instructorId
       const templatesQuery = query(
-        collection(db, 'templates'),
-        where('instructorId', '==', user.instructorId)
+        collection(db, "templates"),
+        where("instructorId", "==", user.instructorId),
       );
       const templatesSnapshot = await getDocs(templatesQuery);
-      const fetchedTemplates = templatesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as Template));
+      const fetchedTemplates = templatesSnapshot.docs.map(
+        (doc) =>
+          ({
+            id: doc.id,
+            ...doc.data(),
+          }) as Template,
+      );
       setTemplates(fetchedTemplates);
     } catch (error) {
-      console.error('Error fetching templates:', error);
+      console.error("Error fetching templates:", error);
     } finally {
       setLoading(false);
     }
@@ -195,50 +257,60 @@ export default function Templates() {
   // Filter and search logic
   const filteredTemplates = useMemo(() => {
     let result = templates;
-    
+
     // Filter archived/active
-    result = result.filter(t => showArchived ? t.isArchived : !t.isArchived);
-    
+    result = result.filter((t) =>
+      showArchived ? t.isArchived : !t.isArchived,
+    );
+
     // Search by name or description
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(t => 
-        t.name.toLowerCase().includes(query) ||
-        t.description?.toLowerCase().includes(query) ||
-        t.className?.toLowerCase().includes(query) ||
-        t.examName?.toLowerCase().includes(query)
+      result = result.filter(
+        (t) =>
+          t.name.toLowerCase().includes(query) ||
+          t.description?.toLowerCase().includes(query) ||
+          t.className?.toLowerCase().includes(query) ||
+          t.examName?.toLowerCase().includes(query),
       );
     }
-    
+
     // Filter by class
-    if (filterClass && filterClass !== 'all') {
-      result = result.filter(t => t.classId === filterClass);
+    if (filterClass && filterClass !== "all") {
+      result = result.filter((t) => t.classId === filterClass);
     }
-    
+
     // Filter by exam
-    if (filterExam && filterExam !== 'all') {
-      result = result.filter(t => t.examId === filterExam);
+    if (filterExam && filterExam !== "all") {
+      result = result.filter((t) => t.examId === filterExam);
     }
-    
+
     // Filter by date (created from)
     if (filterDateFrom) {
       const fromDate = new Date(filterDateFrom);
       fromDate.setHours(0, 0, 0, 0);
-      result = result.filter(t => {
+      result = result.filter((t) => {
         const createdAt = t.createdAt ? new Date(t.createdAt) : null;
         return createdAt && createdAt >= fromDate;
       });
     }
-    
+
     // Sort by createdAt descending (newest first)
     result.sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return dateB - dateA;
     });
-    
+
     return result;
-  }, [templates, searchQuery, filterClass, filterExam, filterDateFrom, showArchived]);
+  }, [
+    templates,
+    searchQuery,
+    filterClass,
+    filterExam,
+    filterDateFrom,
+    showArchived,
+  ]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredTemplates.length / ITEMS_PER_PAGE);
@@ -253,14 +325,18 @@ export default function Templates() {
   }, [searchQuery, filterClass, filterExam, filterDateFrom, showArchived]);
 
   const clearFilters = () => {
-    setSearchQuery('');
-    setFilterClass('all');
-    setFilterExam('all');
-    setFilterDateFrom('');
+    setSearchQuery("");
+    setFilterClass("all");
+    setFilterExam("all");
+    setFilterDateFrom("");
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = searchQuery || filterClass !== 'all' || filterExam !== 'all' || filterDateFrom;
+  const hasActiveFilters =
+    searchQuery ||
+    filterClass !== "all" ||
+    filterExam !== "all" ||
+    filterDateFrom;
 
   const handlePreview = (template: Template) => {
     setPreviewTemplate(template);
@@ -269,7 +345,7 @@ export default function Templates() {
 
   const handleDownload = async (template: Template) => {
     try {
-      toast.info('📄 Generating PDF...');
+      toast.info("📄 Generating PDF...");
       await generateTemplatePDF({
         name: template.name,
         description: template.description,
@@ -280,9 +356,22 @@ export default function Templates() {
         examCode: template.examCode, // Include exam code on template
       });
       toast.success(`✅ Downloaded ${template.name}`);
+
+      // Log this template generation to audit trail
+      if (user?.id && user?.email) {
+        AuditLogger.logTemplateGenerated(
+          user.id,
+          user.email,
+          template.name,
+          template.examName || template.name,
+          template.numQuestions,
+          template.className,
+          template.examCode,
+        ).catch(console.error);
+      }
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast.error('Failed to generate PDF');
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF");
     }
   };
 
@@ -295,12 +384,12 @@ export default function Templates() {
     if (!templateToDelete) return;
 
     try {
-      await deleteDoc(doc(db, 'templates', templateToDelete.id));
+      await deleteDoc(doc(db, "templates", templateToDelete.id));
       setTemplates((prev) => prev.filter((t) => t.id !== templateToDelete.id));
       toast.success(`"${templateToDelete.name}" deleted successfully`);
     } catch (error) {
-      console.error('Error deleting template:', error);
-      toast.error('Failed to delete template');
+      console.error("Error deleting template:", error);
+      toast.error("Failed to delete template");
     } finally {
       setShowDeleteDialog(false);
       setTemplateToDelete(null);
@@ -317,23 +406,30 @@ export default function Templates() {
     if (!templateToArchive || !user?.id) return;
 
     try {
-      await updateDoc(doc(db, 'templates', templateToArchive.id), {
+      await updateDoc(doc(db, "templates", templateToArchive.id), {
         isArchived: true,
         archivedAt: serverTimestamp(),
         archivedBy: user.id,
       });
-      
+
       // Update local state
-      setTemplates((prev) => prev.map((t) => 
-        t.id === templateToArchive.id 
-          ? { ...t, isArchived: true, archivedAt: new Date().toISOString(), archivedBy: user.id }
-          : t
-      ));
-      
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t.id === templateToArchive.id
+            ? {
+                ...t,
+                isArchived: true,
+                archivedAt: new Date().toISOString(),
+                archivedBy: user.id,
+              }
+            : t,
+        ),
+      );
+
       toast.success(`"${templateToArchive.name}" archived successfully`);
     } catch (error) {
-      console.error('Error archiving template:', error);
-      toast.error('Failed to archive template');
+      console.error("Error archiving template:", error);
+      toast.error("Failed to archive template");
     } finally {
       setShowArchiveDialog(false);
       setTemplateToArchive(null);
@@ -344,24 +440,45 @@ export default function Templates() {
     if (!user?.id) return;
 
     try {
-      await updateDoc(doc(db, 'templates', template.id), {
+      await updateDoc(doc(db, "templates", template.id), {
         isArchived: false,
         archivedAt: null,
         archivedBy: null,
       });
-      
+
       // Update local state
-      setTemplates((prev) => prev.map((t) => 
-        t.id === template.id 
-          ? { ...t, isArchived: false, archivedAt: undefined, archivedBy: undefined }
-          : t
-      ));
-      
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t.id === template.id
+            ? {
+                ...t,
+                isArchived: false,
+                archivedAt: undefined,
+                archivedBy: undefined,
+              }
+            : t,
+        ),
+      );
+
       toast.success(`"${template.name}" restored successfully`);
     } catch (error) {
-      console.error('Error restoring template:', error);
-      toast.error('Failed to restore template');
+      console.error("Error restoring template:", error);
+      toast.error("Failed to restore template");
     }
+  };
+
+  const handleReuse = (template: Template) => {
+    // Navigate to Exams page with template data as query params
+    const params = new URLSearchParams({
+      fromTemplate: "true",
+      templateName: template.name,
+      templateQuestions: String(template.numQuestions),
+      templateChoices: String(template.choicesPerQuestion),
+      templateDescription: template.description || "",
+    });
+    if (template.classId) params.set("templateClassId", template.classId);
+    if (template.className) params.set("templateClassName", template.className);
+    router.push(`/exams?${params.toString()}`);
   };
 
   return (
@@ -370,7 +487,9 @@ export default function Templates() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Answer Sheet Templates</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            Answer Sheet Templates
+          </h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -379,7 +498,7 @@ export default function Templates() {
             onClick={() => setShowArchived(!showArchived)}
           >
             <Archive className="w-4 h-4 mr-2" />
-            {showArchived ? 'Viewing Archived' : 'View Archived'}
+            {showArchived ? "Viewing Archived" : "View Archived"}
           </Button>
         </div>
       </div>
@@ -397,7 +516,7 @@ export default function Templates() {
               className="pl-10"
             />
           </div>
-          
+
           {/* Filter Toggle Button */}
           <Button
             variant={showFilters ? "default" : "outline"}
@@ -411,7 +530,7 @@ export default function Templates() {
               </span>
             )}
           </Button>
-          
+
           {hasActiveFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X className="w-4 h-4 mr-1" />
@@ -419,13 +538,15 @@ export default function Templates() {
             </Button>
           )}
         </div>
-        
+
         {/* Expanded Filters */}
         {showFilters && (
           <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Filter by Class */}
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Filter by Class</Label>
+              <Label className="text-xs text-muted-foreground">
+                Filter by Class
+              </Label>
               <Select value={filterClass} onValueChange={setFilterClass}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Classes" />
@@ -440,10 +561,12 @@ export default function Templates() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Filter by Exam */}
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Filter by Exam</Label>
+              <Label className="text-xs text-muted-foreground">
+                Filter by Exam
+              </Label>
               <Select value={filterExam} onValueChange={setFilterExam}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Exams" />
@@ -458,10 +581,12 @@ export default function Templates() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* Date From */}
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Created On/After</Label>
+              <Label className="text-xs text-muted-foreground">
+                Created On/After
+              </Label>
               <Input
                 type="date"
                 value={filterDateFrom}
@@ -476,12 +601,16 @@ export default function Templates() {
       {!loading && templates.length > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Showing {paginatedTemplates.length} of {filteredTemplates.length} templates
-            {hasActiveFilters && ` (filtered from ${templates.filter(t => showArchived ? t.isArchived : !t.isArchived).length} total)`}
-            {showArchived && ' (archived)'}
+            Showing {paginatedTemplates.length} of {filteredTemplates.length}{" "}
+            templates
+            {hasActiveFilters &&
+              ` (filtered from ${templates.filter((t) => (showArchived ? t.isArchived : !t.isArchived)).length} total)`}
+            {showArchived && " (archived)"}
           </span>
           {totalPages > 1 && (
-            <span>Page {currentPage} of {totalPages}</span>
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
           )}
         </div>
       )}
@@ -499,14 +628,19 @@ export default function Templates() {
             </div>
             {templates.length === 0 ? (
               <>
-                <h3 className="font-semibold text-lg mb-2">No templates generated yet</h3>
+                <h3 className="font-semibold text-lg mb-2">
+                  No templates generated yet
+                </h3>
                 <p className="text-muted-foreground mb-4">
-                  Templates are automatically created when you create an exam. Go to the Exams page to create your first exam.
+                  Templates are automatically created when you create an exam.
+                  Go to the Exams page to create your first exam.
                 </p>
               </>
             ) : hasActiveFilters ? (
               <>
-                <h3 className="font-semibold text-lg mb-2">No templates match your filters</h3>
+                <h3 className="font-semibold text-lg mb-2">
+                  No templates match your filters
+                </h3>
                 <p className="text-muted-foreground mb-4">
                   Try adjusting your search or filter criteria.
                 </p>
@@ -518,12 +652,14 @@ export default function Templates() {
             ) : (
               <>
                 <h3 className="font-semibold text-lg mb-2">
-                  {showArchived ? 'No archived templates' : 'No active templates'}
+                  {showArchived
+                    ? "No archived templates"
+                    : "No active templates"}
                 </h3>
                 <p className="text-muted-foreground mb-4">
-                  {showArchived 
-                    ? 'Archived templates will appear here.' 
-                    : 'Templates are automatically generated when exams are created.'}
+                  {showArchived
+                    ? "Archived templates will appear here."
+                    : "Templates are automatically generated when exams are created."}
                 </p>
               </>
             )}
@@ -533,12 +669,20 @@ export default function Templates() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {paginatedTemplates.map((template) => (
-              <Card key={template.id} className={`p-6 border hover:shadow-md hover:border-primary/30 transition-all ${template.isArchived ? 'opacity-75 bg-muted/30' : ''}`}>
+              <Card
+                key={template.id}
+                className={`p-6 border hover:shadow-md hover:border-primary/30 transition-all ${template.isArchived ? "opacity-75 bg-muted/30" : ""}`}
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
                     <FileText className="w-6 h-6 text-blue-600" />
                   </div>
                   <div className="flex items-center gap-2">
+                    {template.version && template.version > 1 && (
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
+                        v{template.version}
+                      </span>
+                    )}
                     {template.isArchived && (
                       <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">
                         Archived
@@ -549,26 +693,32 @@ export default function Templates() {
                     </span>
                   </div>
                 </div>
-                
-                <h3 className="font-semibold text-foreground mb-2">{template.name}</h3>
+
+                <h3 className="font-semibold text-foreground mb-2">
+                  {template.name}
+                </h3>
                 <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                  {template.description || 'No description'}
+                  {template.description || "No description"}
                 </p>
-                
+
                 {/* Created/Updated info */}
                 <div className="text-xs text-muted-foreground mb-4">
                   {template.createdAt && (
                     <span>Created: {formatDate(template.createdAt)}</span>
                   )}
                   {template.updatedAt && (
-                    <span className="ml-2">• Updated: {formatDate(template.updatedAt)}</span>
+                    <span className="ml-2">
+                      • Updated: {formatDate(template.updatedAt)}
+                    </span>
                   )}
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-4">
                   <div className="flex items-center gap-1">
                     <span className="font-medium">Choices:</span>
-                    <span>A-{String.fromCharCode(64 + template.choicesPerQuestion)}</span>
+                    <span>
+                      A-{String.fromCharCode(64 + template.choicesPerQuestion)}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="font-medium">Items:</span>
@@ -581,14 +731,20 @@ export default function Templates() {
                   <div className="mb-4 p-2 bg-blue-50 rounded text-xs space-y-1">
                     {template.className && (
                       <div className="flex items-center gap-1">
-                        <span className="font-medium text-blue-700">Class:</span>
-                        <span className="text-blue-600">{template.className}</span>
+                        <span className="font-medium text-blue-700">
+                          Class:
+                        </span>
+                        <span className="text-blue-600">
+                          {template.className}
+                        </span>
                       </div>
                     )}
                     {template.examName && (
                       <div className="flex items-center gap-1">
                         <span className="font-medium text-blue-700">Exam:</span>
-                        <span className="text-blue-600">{template.examName}</span>
+                        <span className="text-blue-600">
+                          {template.examName}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -615,7 +771,22 @@ export default function Templates() {
                     Download
                   </Button>
                 </div>
-                
+
+                {/* Reuse Button */}
+                {!template.isArchived && (
+                  <div className="mb-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-primary hover:text-primary hover:bg-primary/10 border-primary/30"
+                      onClick={() => handleReuse(template)}
+                    >
+                      <Copy className="w-4 h-4 mr-1" />
+                      Reuse for New Exam
+                    </Button>
+                  </div>
+                )}
+
                 {/* Archive/Restore Buttons */}
                 <div className="flex gap-2">
                   {!template.isArchived ? (
@@ -661,31 +832,35 @@ export default function Templates() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Previous
               </Button>
-              
+
               <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <Button
-                    key={page}
-                    variant={currentPage === page ? "default" : "outline"}
-                    size="sm"
-                    className="w-8 h-8 p-0"
-                    onClick={() => setCurrentPage(page)}
-                  >
-                    {page}
-                  </Button>
-                ))}
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                  (page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      className="w-8 h-8 p-0"
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  ),
+                )}
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
                 disabled={currentPage === totalPages}
               >
                 Next
@@ -706,215 +881,310 @@ export default function Templates() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="border rounded-lg p-4 bg-gray-200 overflow-auto" style={{ maxHeight: '65vh' }}>
-            {previewTemplate && (() => {
-              const numQ = previewTemplate.numQuestions;
-              const numC = previewTemplate.choicesPerQuestion;
-              const choiceLetters = ['A', 'B', 'C', 'D', 'E'].slice(0, numC);
+          <div
+            className="border rounded-lg p-4 bg-gray-200 overflow-auto"
+            style={{ maxHeight: "65vh" }}
+          >
+            {previewTemplate &&
+              (() => {
+                const numQ = previewTemplate.numQuestions;
+                const numC = previewTemplate.choicesPerQuestion;
+                const choiceLetters = ["A", "B", "C", "D", "E"].slice(0, numC);
 
-              // Reusable: question block component
-              const QBlock = ({ startQ, endQ }: { startQ: number; endQ: number }) => (
-                <div>
-                  {/* Header: ■ A B C D */}
-                  <div className="flex items-center gap-[2px] mb-[2px]">
-                    <div className="w-[6px] h-[6px] bg-black flex-shrink-0"></div>
-                    <div className="w-[14px]"></div>
-                    {choiceLetters.map(c => (
-                      <div key={c} className="w-[10px] text-center text-[6px] font-bold leading-none">{c}</div>
-                    ))}
-                  </div>
-                  {/* Rows */}
-                  {Array.from({ length: endQ - startQ + 1 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-[2px] mb-[1px]">
-                      <div className="w-[6px]"></div>
-                      <div className="w-[14px] text-right text-[6px] font-bold leading-none pr-[2px]">{startQ + i}</div>
-                      {choiceLetters.map((_, j) => (
-                        <div key={j} className="w-[10px] h-[10px] rounded-full border border-gray-800 bg-white flex-shrink-0"></div>
+                // Reusable: question block component
+                const QBlock = ({
+                  startQ,
+                  endQ,
+                }: {
+                  startQ: number;
+                  endQ: number;
+                }) => (
+                  <div>
+                    {/* Header: ■ A B C D */}
+                    <div className="flex justify-center gap-[2px] mb-[3px]">
+                      <div className="w-[6px] h-[6px] bg-black flex-shrink-0"></div>
+                      <div className="w-[14px]"></div>
+                      {choiceLetters.map((c) => (
+                        <div
+                          key={c}
+                          className="w-[10px] text-center text-[6px] font-bold leading-none"
+                        >
+                          {c}
+                        </div>
                       ))}
                     </div>
-                  ))}
-                </div>
-              );
-
-              // Reusable: ID section
-              const IdSection = ({ small }: { small?: boolean }) => (
-                <div className={`border border-black ${small ? 'p-1' : 'p-1.5'}`}>
-                  <div className={`${small ? 'text-[6px]' : 'text-[7px]'} font-bold mb-0.5`}>Student ZipGrade ID</div>
-                  {/* Input boxes */}
-                  <div className="flex gap-[2px] mb-[2px]">
-                    {Array.from({ length: 10 }).map((_, i) => (
-                      <div key={i} className={`${small ? 'w-[8px] h-[7px]' : 'w-[10px] h-[8px]'} border border-black`}></div>
-                    ))}
-                  </div>
-                  {/* Bubble grid */}
-                  <div className="flex gap-[1px] items-start">
-                    <div className="flex flex-col">
-                      {[0,1,2,3,4,5,6,7,8,9].map(n => (
-                        <div key={n} className={`${small ? 'h-[8px] text-[5px]' : 'h-[10px] text-[6px]'} flex items-center font-bold w-[8px] justify-end pr-[1px]`}>{n}</div>
-                      ))}
-                    </div>
-                    {Array.from({ length: 10 }).map((_, col) => (
-                      <div key={col} className="flex flex-col">
-                        {[0,1,2,3,4,5,6,7,8,9].map(row => (
-                          <div key={row} className={`${small ? 'w-[7px] h-[7px] m-[0.5px]' : 'w-[9px] h-[9px] m-[0.5px]'} rounded-full border border-gray-800 bg-white`}></div>
+                    {/* Rows */}
+                    {Array.from({ length: endQ - startQ + 1 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-[3px] mb-[2px]"
+                      >
+                        <div className="w-[6px]"></div>
+                        <div className="w-[14px] text-right text-[6px] font-bold leading-none pr-[2px]">
+                          {startQ + i}
+                        </div>
+                        {choiceLetters.map((_, j) => (
+                          <div
+                            key={j}
+                            className="w-[10px] h-[10px] rounded-full border-[1px] border-black bg-white flex-shrink-0"
+                          ></div>
                         ))}
                       </div>
                     ))}
                   </div>
-                </div>
-              );
+                );
 
-              // Reusable: mini sheet (for 20Q and 50Q)
-              const MiniSheet = ({ questions, sheetW, sheetH }: { questions: number; sheetW: string; sheetH: string }) => (
-                <div className="bg-white border border-black relative" style={{ width: sheetW, height: sheetH, padding: '6px' }}>
-                  {/* Corner markers */}
-                  <div className="absolute top-[4px] left-[4px] w-[5px] h-[5px] bg-black"></div>
-                  <div className="absolute top-[4px] right-[4px] w-[5px] h-[5px] bg-black"></div>
-                  <div className="absolute bottom-[4px] left-[4px] w-[5px] h-[5px] bg-black"></div>
-                  <div className="absolute bottom-[4px] right-[4px] w-[5px] h-[5px] bg-black"></div>
-
-                  {/* Header */}
-                  <div className="flex items-center justify-center gap-1 mb-0.5">
-                    <img
-                      src="/gclogo.png"
-                      alt="Gordon College logo"
-                      className="w-[10px] h-[10px] object-contain"
-                    />
-                    <span className="text-[7px] font-bold">Gordon College</span>
-                  </div>
-                  
-                  {/* Exam Code */}
-                  {previewTemplate?.examCode && (
-                    <div className="text-center text-[5px] text-gray-600 mb-0.5">
-                      Exam Code: {previewTemplate.examCode}
+                // Reusable: ID section
+                const IdSection = ({ small }: { small?: boolean }) => (
+                  <div
+                    className={`inline-flex flex-col border-[1.5px] border-black ${small ? "p-1" : "p-[4px]"}`}
+                  >
+                    <div
+                      className={`${small ? "text-[6.5px]" : "text-[6px]"} font-bold mb-1 leading-none`}
+                    >
+                      Student ZipGrade ID
                     </div>
-                  )}
-
-                  {/* Name/Date */}
-                  <div className="flex gap-1 mb-1 text-[5px]">
-                    <div className="flex-1">
-                      <span className="font-semibold">Name:</span>
-                      <div className="border-b border-black mt-[1px]"></div>
+                    {/* Input boxes */}
+                    <div className="flex justify-start gap-[1px] mb-[4px]">
+                      {Array.from({ length: 10 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className={`${small ? "w-[9px] h-[8px]" : "w-[12px] h-[10px]"} border border-black`}
+                        ></div>
+                      ))}
                     </div>
-                    <div className="flex-1">
-                      <span className="font-semibold">Date:</span>
-                      <div className="border-b border-black mt-[1px]"></div>
-                    </div>
-                  </div>
-
-                  {/* ID Section */}
-                  <div className="mb-1">
-                    <IdSection small />
-                  </div>
-
-                  {/* Answer blocks */}
-                  {questions === 20 ? (
-                    <div className="flex gap-2 mt-1">
-                      <QBlock startQ={1} endQ={10} />
-                      <QBlock startQ={11} endQ={20} />
-                    </div>
-                  ) : (
-                    <div className="flex gap-1 mt-1">
-                      <div className="space-y-1">
-                        <QBlock startQ={1} endQ={10} />
-                        <QBlock startQ={11} endQ={20} />
-                        <QBlock startQ={21} endQ={30} />
+                    {/* Bubble grid */}
+                    <div className="flex gap-[1px] items-start justify-start">
+                      <div className="flex flex-col">
+                        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                          <div
+                            key={n}
+                            className={`${small ? "h-[8.5px] text-[5.5px]" : "h-[11px] text-[7.5px]"} flex items-center font-bold w-[5px] justify-start`}
+                          >
+                            {n}
+                          </div>
+                        ))}
                       </div>
-                      <div className="space-y-1">
-                        <QBlock startQ={31} endQ={40} />
-                        <QBlock startQ={41} endQ={50} />
-                      </div>
+                      {Array.from({ length: 10 }).map((_, col) => (
+                        <div key={col} className="flex flex-col">
+                          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((row) => (
+                            <div
+                              key={row}
+                              className={`${small ? "w-[7.5px] h-[7.5px] m-[0.5px]" : "w-[10px] h-[10px] m-[0.5px]"} rounded-full border border-black bg-white flex-shrink-0`}
+                            ></div>
+                          ))}
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
-              );
-
-              if (numQ === 20) {
-                // 20Q: 4 mini sheets in 2x2 grid
-                return (
-                  <div className="mx-auto bg-white border border-gray-400 shadow-lg" style={{ width: '420px', aspectRatio: '210/297', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }}>
-                    <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
-                    <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
-                    <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
-                    <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
                   </div>
                 );
-              } else if (numQ === 50) {
-                // 50Q: 2 side by side
-                return (
-                  <div className="mx-auto bg-white border border-gray-400 shadow-lg" style={{ width: '420px', aspectRatio: '210/297', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-                    <MiniSheet questions={50} sheetW="100%" sheetH="100%" />
-                    <MiniSheet questions={50} sheetW="100%" sheetH="100%" />
-                  </div>
-                );
-              } else {
-                // 100Q: Full page
-                return (
-                  <div className="mx-auto bg-white border border-gray-400 shadow-lg relative" style={{ width: '420px', aspectRatio: '210/297', padding: '10px' }}>
+
+                // Reusable: mini sheet (for 20Q and 50Q)
+                const MiniSheet = ({
+                  questions,
+                  sheetW,
+                  sheetH,
+                }: {
+                  questions: number;
+                  sheetW: string;
+                  sheetH: string;
+                }) => (
+                  <div
+                    className="bg-white border border-black relative"
+                    style={{ width: sheetW, height: sheetH, padding: "8px" }}
+                  >
                     {/* Corner markers */}
-                    <div className="absolute top-[4px] left-[4px] w-[8px] h-[8px] bg-black"></div>
-                    <div className="absolute top-[4px] right-[4px] w-[8px] h-[8px] bg-black"></div>
+
                     <div className="absolute bottom-[4px] left-[4px] w-[8px] h-[8px] bg-black"></div>
                     <div className="absolute bottom-[4px] right-[4px] w-[8px] h-[8px] bg-black"></div>
 
                     {/* Header */}
-                    <div className="flex items-center justify-center gap-1.5 mb-1.5">
-                      <div className="w-[14px] h-[14px] bg-green-700 rounded-full flex items-center justify-center text-white text-[7px] font-bold">G</div>
-                      <span className="text-[11px] font-bold">Gordon College</span>
+                    <div className="flex items-center justify-center gap-1 mb-0.5">
+                      <img
+                        src="/gclogo.png"
+                        alt="Gordon College logo"
+                        className="w-[10px] h-[10px] object-contain"
+                      />
+                      <span className="text-[7px] font-bold">
+                        Gordon College
+                      </span>
                     </div>
+
+                    {/* Exam Code */}
+                    {previewTemplate?.examCode && (
+                      <div className="text-center text-[5px] text-gray-600 mb-0.5">
+                        Exam Code: {previewTemplate.examCode}
+                      </div>
+                    )}
 
                     {/* Name/Date */}
-                    <div className="flex gap-3 mb-2 text-[7px]">
-                      <div className="flex-[3]">
-                        <span className="font-bold">Name:</span>
-                        <div className="border-b border-black mt-[1px] ml-1"></div>
+                    <div className="flex items-center gap-[3px] mb-2 text-[7px]">
+                      <div className="w-[8px] h-[8px] bg-black flex-shrink-0"></div>
+                      <div className="flex-1 flex gap-2 items-end">
+                        <div className="flex-[3] flex items-end">
+                          <span className="text-[5px]">Name:</span>
+                          <div className="flex-1 border-b-[1.5px] border-black h-[1px]"></div>
+                        </div>
+                        <div className="flex-[2] flex items-end">
+                          <span className="text-[7px]">Date:</span>
+                          <div className="flex-1 border-b-[1.5px] border-black h-[1px]"></div>
+                        </div>
                       </div>
-                      <div className="flex-[2]">
-                        <span className="font-bold">Date:</span>
-                        <div className="border-b border-black mt-[1px] ml-1"></div>
-                      </div>
+                      <div className="w-[8px] h-[8px] bg-black flex-shrink-0"></div>
                     </div>
 
-                    {/* Top section: ID + Q41-50 + Q71-80 */}
-                    <div className="flex gap-2 mb-2 items-start">
-                      <div className="flex-shrink-0">
-                        <IdSection />
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        <QBlock startQ={41} endQ={50} />
-                        <QBlock startQ={71} endQ={80} />
-                      </div>
+                    {/* ID Section */}
+                    <div className="mb-2">
+                      <IdSection />
                     </div>
 
-                    {/* Bottom: 4 cols x 2 rows */}
-                    <div className="flex gap-2 mb-1">
-                      <QBlock startQ={1} endQ={10} />
-                      <QBlock startQ={21} endQ={30} />
-                      <QBlock startQ={51} endQ={60} />
-                      <QBlock startQ={81} endQ={90} />
-                    </div>
-                    <div className="flex gap-2">
-                      <QBlock startQ={11} endQ={20} />
-                      <QBlock startQ={31} endQ={40} />
-                      <QBlock startQ={61} endQ={70} />
-                      <QBlock startQ={91} endQ={100} />
-                    </div>
-
-                    {/* Footer */}
-                    <div className="absolute bottom-[6px] left-0 right-0 text-center text-[5px] text-gray-500 italic">
-                      Do not fold, staple, or tear this answer sheet.
-                    </div>
+                    {/* Answer blocks */}
+                    {questions === 20 ? (
+                      <div className="flex gap-2 mt-2">
+                        <QBlock startQ={1} endQ={10} />
+                        <QBlock startQ={11} endQ={20} />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 justify-center mt-2">
+                        <div className="space-y-2">
+                          <QBlock startQ={1} endQ={10} />
+                          <QBlock startQ={11} endQ={20} />
+                          <QBlock startQ={21} endQ={30} />
+                        </div>
+                        <div className="space-y-2">
+                          <QBlock startQ={31} endQ={40} />
+                          <QBlock startQ={41} endQ={50} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
-              }
-            })()}
+
+                if (numQ === 20) {
+                  // 20Q: 4 mini sheets in 2x2 grid
+                  return (
+                    <div
+                      className="mx-auto bg-white border border-gray-400 shadow-lg"
+                      style={{
+                        width: "420px",
+                        aspectRatio: "210/297",
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gridTemplateRows: "1fr 1fr",
+                      }}
+                    >
+                      <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
+                      <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
+                      <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
+                      <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
+                    </div>
+                  );
+                } else if (numQ === 50) {
+                  // 50Q: 2 side by side
+                  return (
+                    <div
+                      className="mx-auto bg-white border border-gray-400 shadow-lg"
+                      style={{
+                        width: "420px",
+                        aspectRatio: "210/297",
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                      }}
+                    >
+                      <MiniSheet questions={50} sheetW="100%" sheetH="100%" />
+                      <MiniSheet questions={50} sheetW="100%" sheetH="100%" />
+                    </div>
+                  );
+                } else {
+                  // 100Q: Full page
+                  return (
+                    <div
+                      className="mx-auto bg-white border border-gray-400 shadow-lg relative"
+                      style={{
+                        width: "420px",
+                        aspectRatio: "210/297",
+                        padding: "10px",
+                      }}
+                    >
+                      {/* Corner markers */}
+                      <div className="absolute top-[4px] left-[4px] w-[14px] h-[14px] bg-black"></div>
+                      <div className="absolute top-[4px] right-[4px] w-[14px] h-[14px] bg-black"></div>
+                      <div className="absolute bottom-[4px] left-[4px] w-[14px] h-[14px] bg-black"></div>
+                      <div className="absolute bottom-[4px] right-[4px] w-[14px] h-[14px] bg-black"></div>
+
+                      {/* Header */}
+                      <div className="flex items-center justify-center gap-1 mb-3 mt-2">
+                        <img
+                          src={branding?.logoUrl || "/gclogo.png"}
+                          className="w-[32px] h-[32px] object-contain"
+                          alt="logo"
+                        />
+                        <span className="text-[12px] font-bold text-black tracking-tight">
+                          {branding?.institutionName || "Gordon College"}
+                        </span>
+                      </div>
+
+                      {/* Exam Code */}
+                      {previewTemplate?.examCode && (
+                        <div className="text-center text-[10px] text-gray-800 font-medium mb-2">
+                          Exam Code: {previewTemplate.examCode}
+                        </div>
+                      )}
+
+                      {/* Name/Date */}
+                      <div className="flex gap-4  mb-4 text-[10px] items-end">
+                        <div className="flex-[3] flex items-end">
+                          <span className="font-bold mr-1">Name:</span>
+                          <div className="flex-1 border-b-[2px] border-black h-[1px]"></div>
+                        </div>
+                        <div className="flex-[2] flex items-end">
+                          <span className="font-bold mr-1">Date:</span>
+                          <div className="flex-1 border-b-[2px] border-black h-[1px]"></div>
+                        </div>
+                      </div>
+
+                      {/* Top section: ID + Q41-50 + Q71-80 */}
+                      <div className="flex justify-evenly gap-4 mb-4 items-start">
+                        <div className="flex-shrink-0">
+                          <IdSection />
+                        </div>
+                        <div className="flex gap-4 mt-6">
+                          <QBlock startQ={41} endQ={50} />
+                          <QBlock startQ={71} endQ={80} />
+                        </div>
+                      </div>
+
+                      {/* Bottom: 4 cols x 2 rows */}
+                      <div className="flex gap-4 mb-2">
+                        <QBlock startQ={1} endQ={10} />
+                        <QBlock startQ={21} endQ={30} />
+                        <QBlock startQ={51} endQ={60} />
+                        <QBlock startQ={81} endQ={90} />
+                      </div>
+                      <div className="flex gap-4">
+                        <QBlock startQ={11} endQ={20} />
+                        <QBlock startQ={31} endQ={40} />
+                        <QBlock startQ={61} endQ={70} />
+                        <QBlock startQ={91} endQ={100} />
+                      </div>
+
+                      {/* Footer */}
+                      <div className="absolute bottom-[10px] left-0 right-0 text-center text-[7px] text-gray-600 italic">
+                        Do not fold, staple, or tear this answer sheet.
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPreview(false)}>
               Close
             </Button>
-            <Button onClick={() => previewTemplate && handleDownload(previewTemplate)}>
+            <Button
+              onClick={() => previewTemplate && handleDownload(previewTemplate)}
+            >
               <Download className="w-4 h-4 mr-2" />
               Download PDF
             </Button>
@@ -928,11 +1198,16 @@ export default function Templates() {
           <DialogHeader>
             <DialogTitle className="text-red-600">Delete Template</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>&quot;{templateToDelete?.name}&quot;</strong>? This action cannot be undone.
+              Are you sure you want to delete{" "}
+              <strong>&quot;{templateToDelete?.name}&quot;</strong>? This action
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -951,14 +1226,20 @@ export default function Templates() {
       <Dialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-amber-600">Archive Template</DialogTitle>
+            <DialogTitle className="text-amber-600">
+              Archive Template
+            </DialogTitle>
             <DialogDescription>
-              Are you sure you want to archive <strong>&quot;{templateToArchive?.name}&quot;</strong>? 
-              You can restore it later from the archived templates view.
+              Are you sure you want to archive{" "}
+              <strong>&quot;{templateToArchive?.name}&quot;</strong>? You can
+              restore it later from the archived templates view.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowArchiveDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowArchiveDialog(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -981,27 +1262,51 @@ export default function Templates() {
         <ul className="space-y-2 text-sm text-muted-foreground">
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
-            <span>Templates are automatically created when you create an exam in the Exams page</span>
+            <span>
+              Templates are automatically created when you create an exam in the
+              Exams page
+            </span>
           </li>
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
-            <span>Templates include alignment markers (black squares) for optical scanning accuracy</span>
+            <span>
+              Templates include alignment markers (black squares) for optical
+              scanning accuracy
+            </span>
           </li>
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
-            <span>Student ID section uses bubble format for easy scanning and validation</span>
+            <span>
+              Student ID section uses bubble format for easy scanning and
+              validation
+            </span>
           </li>
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
-            <span>Print on standard Letter (8.5" x 11") white paper for best results</span>
+            <span>
+              Print on standard Letter (8.5" x 11") white paper for best results
+            </span>
           </li>
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
-            <span>Instruct students to use #2 pencils and fill bubbles completely</span>
+            <span>
+              Instruct students to use #2 pencils and fill bubbles completely
+            </span>
           </li>
           <li className="flex gap-3">
             <span className="text-blue-600 font-bold">•</span>
-            <span>Archived templates are preserved for audit purposes and log integrity</span>
+            <span>
+              Archived templates are preserved for audit purposes and log
+              integrity
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="text-blue-600 font-bold">•</span>
+            <span>
+              Use the <strong>&quot;Reuse for New Exam&quot;</strong> button to
+              create a new exam pre-filled with an existing template&apos;s
+              settings
+            </span>
           </li>
         </ul>
       </Card>

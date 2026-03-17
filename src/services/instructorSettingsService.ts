@@ -4,10 +4,10 @@
  * configurable passing-grade threshold used throughout the grading system.
  */
 
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
-const SETTINGS_COLLECTION = 'instructorSettings';
+const SETTINGS_COLLECTION = "instructorSettings";
 
 /** The shape of a single instructor's persisted settings document. */
 export interface InstructorSettings {
@@ -19,12 +19,14 @@ export interface InstructorSettings {
   timezone?: string;
   /** Firestore bookkeeping */
   updatedAt?: string;
+  /** Custom Institution Logo URL */
+  logoUrl?: string;
 }
 
 const DEFAULT_SETTINGS: InstructorSettings = {
   passingThreshold: 60,
-  institutionName: 'University of Science and Technology',
-  timezone: 'UTC-8:00 (Philippine Time)',
+  institutionName: "Gordon College",
+  timezone: "UTC-8:00 (Philippine Time)",
 };
 
 export class InstructorSettingsService {
@@ -42,7 +44,10 @@ export class InstructorSettingsService {
       }
       return { ...DEFAULT_SETTINGS };
     } catch (error) {
-      console.error('[InstructorSettingsService] Error reading settings:', error);
+      console.error(
+        "[InstructorSettingsService] Error reading settings:",
+        error,
+      );
       return { ...DEFAULT_SETTINGS };
     }
   }
@@ -52,14 +57,21 @@ export class InstructorSettingsService {
    */
   static async saveSettings(
     instructorId: string,
-    updates: Partial<InstructorSettings>
+    updates: Partial<InstructorSettings>,
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const ref = doc(db, SETTINGS_COLLECTION, instructorId);
-      await setDoc(ref, { ...updates, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(
+        ref,
+        { ...updates, updatedAt: serverTimestamp() },
+        { merge: true },
+      );
       return { success: true };
     } catch (error) {
-      console.error('[InstructorSettingsService] Error saving settings:', error);
+      console.error(
+        "[InstructorSettingsService] Error saving settings:",
+        error,
+      );
       return { success: false, error: (error as Error).message };
     }
   }
@@ -77,7 +89,7 @@ export class InstructorSettingsService {
    */
   static async setPassingThreshold(
     instructorId: string,
-    threshold: number
+    threshold: number,
   ): Promise<{ success: boolean; error?: string }> {
     const clamped = Math.max(0, Math.min(100, Math.round(threshold)));
     return this.saveSettings(instructorId, { passingThreshold: clamped });

@@ -13,11 +13,16 @@ import {
   Timestamp,
   serverTimestamp,
   QueryConstraint,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { AuditLog, AuditLogQuery, ActivityType, GradeSnapshot } from '@/types/audit';
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import {
+  AuditLog,
+  AuditLogQuery,
+  ActivityType,
+  GradeSnapshot,
+} from "@/types/audit";
 
-const AUDIT_LOGS_COLLECTION = 'auditLogs';
+const AUDIT_LOGS_COLLECTION = "auditLogs";
 const LOG_RETENTION_DAYS = 90; // Keep logs for 90 days
 
 export class AuditLogger {
@@ -40,42 +45,58 @@ export class AuditLogger {
       ipAddress?: string;
       userAgent?: string;
       metadata?: Record<string, unknown>;
-      status?: 'success' | 'failed' | 'pending';
+      status?: "success" | "failed" | "pending";
       errorMessage?: string;
       beforeValues?: GradeSnapshot;
       afterValues?: GradeSnapshot;
-    }
+    },
   ): Promise<AuditLog | null> {
     try {
-      // Calculate expiry date (90 days from now)
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + LOG_RETENTION_DAYS);
 
-      const logData = {
+      // Create log object with mandatory fields
+      const logData: any = {
         adminId,
         adminEmail,
         activity,
         description,
         timestamp: new Date().toISOString(),
-        ipAddress: options?.ipAddress,
-        userAgent: options?.userAgent,
-        fileName: options?.fileName,
-        fileType: options?.fileType,
-        fileSize: options?.fileSize,
-        filePath: options?.filePath,
-        entityId: options?.entityId,
-        entityType: options?.entityType,
-        entityName: options?.entityName,
-        status: options?.status || 'success',
-        errorMessage: options?.errorMessage,
-        metadata: options?.metadata,
-        beforeValues: options?.beforeValues || null,
-        afterValues: options?.afterValues || null,
+        status: options?.status || "success",
         createdAt: serverTimestamp(),
         expiresAt: Timestamp.fromDate(expiresAt),
       };
 
-      const docRef = await addDoc(collection(db, AUDIT_LOGS_COLLECTION), logData);
+      // Only add optional fields if they are defined
+      if (options) {
+        if (options.ipAddress !== undefined)
+          logData.ipAddress = options.ipAddress;
+        if (options.userAgent !== undefined)
+          logData.userAgent = options.userAgent;
+        if (options.fileName !== undefined) logData.fileName = options.fileName;
+        if (options.fileType !== undefined) logData.fileType = options.fileType;
+        if (options.fileSize !== undefined) logData.fileSize = options.fileSize;
+        if (options.filePath !== undefined) logData.filePath = options.filePath;
+        if (options.entityId !== undefined) logData.entityId = options.entityId;
+        if (options.entityType !== undefined)
+          logData.entityType = options.entityType;
+        if (options.entityName !== undefined)
+          logData.entityName = options.entityName;
+        if (options.errorMessage !== undefined)
+          logData.errorMessage = options.errorMessage;
+        if (options.metadata !== undefined) logData.metadata = options.metadata;
+        if (options.beforeValues !== undefined)
+          logData.beforeValues = options.beforeValues;
+        if (options.afterValues !== undefined)
+          logData.afterValues = options.afterValues;
+      }
+
+      console.log("AuditLogger: Sending log data to Firestore:", logData);
+
+      const docRef = await addDoc(
+        collection(db, AUDIT_LOGS_COLLECTION),
+        logData,
+      );
 
       return {
         id: docRef.id,
@@ -93,7 +114,7 @@ export class AuditLogger {
         entityId: options?.entityId,
         entityType: options?.entityType,
         entityName: options?.entityName,
-        status: options?.status || 'success',
+        status: options?.status || "success",
         errorMessage: options?.errorMessage,
         metadata: options?.metadata,
         beforeValues: options?.beforeValues || null,
@@ -101,7 +122,7 @@ export class AuditLogger {
         createdAt: new Date().toISOString(),
       } as unknown as AuditLog;
     } catch (error) {
-      console.error('Error logging activity:', error);
+      console.error("Error logging activity:", error);
       // Don't throw - logging failure shouldn't crash the app
       return null;
     }
@@ -120,23 +141,23 @@ export class AuditLogger {
     success: boolean = true,
     errorMessage?: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
   ): Promise<AuditLog | null> {
     return this.logActivity(
       adminId,
       adminEmail,
-      'file_upload',
+      "file_upload",
       `Uploaded file: ${fileName}`,
       {
         fileName,
         fileType,
         fileSize,
         filePath,
-        status: success ? 'success' : 'failed',
+        status: success ? "success" : "failed",
         errorMessage,
         ipAddress,
         userAgent,
-      }
+      },
     );
   }
 
@@ -149,19 +170,19 @@ export class AuditLogger {
     fileName: string,
     filePath: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
   ): Promise<AuditLog | null> {
     return this.logActivity(
       adminId,
       adminEmail,
-      'file_delete',
+      "file_delete",
       `Deleted file: ${fileName}`,
       {
         fileName,
         filePath,
         ipAddress,
         userAgent,
-      }
+      },
     );
   }
 
@@ -174,19 +195,19 @@ export class AuditLogger {
     fileName: string,
     filePath: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
   ): Promise<AuditLog | null> {
     return this.logActivity(
       adminId,
       adminEmail,
-      'file_download',
+      "file_download",
       `Downloaded file: ${fileName}`,
       {
         fileName,
         filePath,
         ipAddress,
         userAgent,
-      }
+      },
     );
   }
 
@@ -201,21 +222,21 @@ export class AuditLogger {
     success: boolean = true,
     errorMessage?: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
   ): Promise<AuditLog | null> {
     return this.logActivity(
       adminId,
       adminEmail,
-      'student_import',
+      "student_import",
       `Imported ${studentCount} students from ${fileName}`,
       {
         fileName,
-        status: success ? 'success' : 'failed',
+        status: success ? "success" : "failed",
         errorMessage,
         ipAddress,
         userAgent,
         metadata: { studentCount },
-      }
+      },
     );
   }
 
@@ -231,23 +252,53 @@ export class AuditLogger {
     success: boolean = true,
     errorMessage?: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
   ): Promise<AuditLog | null> {
     return this.logActivity(
       adminId,
       adminEmail,
-      'answer_key_upload',
+      "answer_key_upload",
       `Uploaded answer key for exam: ${examName}`,
       {
         entityId: examId,
-        entityType: 'exam',
+        entityType: "exam",
         entityName: examName,
-        status: success ? 'success' : 'failed',
+        status: success ? "success" : "failed",
         errorMessage,
         ipAddress,
         userAgent,
         metadata: { questionCount },
-      }
+      },
+    );
+  }
+
+  /**
+   * Log template generated / downloaded activity
+   */
+  static async logTemplateGenerated(
+    adminId: string,
+    adminEmail: string,
+    templateName: string,
+    examName: string,
+    numQuestions: number,
+    className?: string,
+    examCode?: string,
+  ): Promise<AuditLog | null> {
+    return this.logActivity(
+      adminId,
+      adminEmail,
+      "template_generated",
+      `Generated template: "${templateName}" for exam "${examName}"`,
+      {
+        entityType: "template",
+        entityName: templateName,
+        metadata: {
+          examName,
+          numQuestions,
+          ...(className && { className }),
+          ...(examCode && { examCode }),
+        },
+      },
     );
   }
 
@@ -259,31 +310,31 @@ export class AuditLogger {
       const constraints: QueryConstraint[] = [];
 
       if (queryOpts?.adminId) {
-        constraints.push(where('adminId', '==', queryOpts.adminId));
+        constraints.push(where("adminId", "==", queryOpts.adminId));
       }
 
       if (queryOpts?.activity) {
-        constraints.push(where('activity', '==', queryOpts.activity));
+        constraints.push(where("activity", "==", queryOpts.activity));
       }
 
       if (queryOpts?.entityType) {
-        constraints.push(where('entityType', '==', queryOpts.entityType));
+        constraints.push(where("entityType", "==", queryOpts.entityType));
       }
 
       if (queryOpts?.status) {
-        constraints.push(where('status', '==', queryOpts.status));
+        constraints.push(where("status", "==", queryOpts.status));
       }
 
       if (queryOpts?.startDate) {
-        constraints.push(where('timestamp', '>=', queryOpts.startDate));
+        constraints.push(where("timestamp", ">=", queryOpts.startDate));
       }
 
       if (queryOpts?.endDate) {
-        constraints.push(where('timestamp', '<=', queryOpts.endDate));
+        constraints.push(where("timestamp", "<=", queryOpts.endDate));
       }
 
       // Always order by timestamp descending
-      constraints.push(orderBy('timestamp', 'desc'));
+      constraints.push(orderBy("timestamp", "desc"));
 
       const q = query(collection(db, AUDIT_LOGS_COLLECTION), ...constraints);
       const snapshot = await getDocs(q);
@@ -292,10 +343,12 @@ export class AuditLogger {
         id: doc.id,
         ...doc.data(),
         timestamp: doc.data().timestamp || new Date().toISOString(),
-        createdAt: doc.data().createdAt?.toDate?.().toISOString() || new Date().toISOString(),
+        createdAt:
+          doc.data().createdAt?.toDate?.().toISOString() ||
+          new Date().toISOString(),
       })) as AuditLog[];
     } catch (error) {
-      console.error('Error retrieving audit logs:', error);
+      console.error("Error retrieving audit logs:", error);
       return [];
     }
   }
@@ -305,7 +358,7 @@ export class AuditLogger {
    */
   static async getAdminLogs(
     adminId: string,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<AuditLog[]> {
     return this.getLogs({ adminId, limit });
   }
@@ -315,7 +368,7 @@ export class AuditLogger {
    */
   static async getActivityLogs(
     activity: ActivityType,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<AuditLog[]> {
     return this.getLogs({ activity, limit });
   }
@@ -326,7 +379,7 @@ export class AuditLogger {
   static async getLogsByDateRange(
     startDate: string,
     endDate: string,
-    limit: number = 100
+    limit: number = 100,
   ): Promise<AuditLog[]> {
     return this.getLogs({ startDate, endDate, limit });
   }
@@ -335,7 +388,7 @@ export class AuditLogger {
    * Get failed activities (for monitoring security issues)
    */
   static async getFailedActivities(limit: number = 50): Promise<AuditLog[]> {
-    return this.getLogs({ status: 'failed', limit });
+    return this.getLogs({ status: "failed", limit });
   }
 
   /**
@@ -343,13 +396,13 @@ export class AuditLogger {
    */
   static async getActivityByEntity(
     entityId: string,
-    entityType: string
+    entityType: string,
   ): Promise<AuditLog[]> {
     try {
       const constraints: QueryConstraint[] = [
-        where('entityId', '==', entityId),
-        where('entityType', '==', entityType),
-        orderBy('timestamp', 'desc'),
+        where("entityId", "==", entityId),
+        where("entityType", "==", entityType),
+        orderBy("timestamp", "desc"),
       ];
 
       const q = query(collection(db, AUDIT_LOGS_COLLECTION), ...constraints);
@@ -359,10 +412,12 @@ export class AuditLogger {
         id: doc.id,
         ...doc.data(),
         timestamp: doc.data().timestamp || new Date().toISOString(),
-        createdAt: doc.data().createdAt?.toDate?.().toISOString() || new Date().toISOString(),
+        createdAt:
+          doc.data().createdAt?.toDate?.().toISOString() ||
+          new Date().toISOString(),
       })) as AuditLog[];
     } catch (error) {
-      console.error('Error retrieving activity logs:', error);
+      console.error("Error retrieving activity logs:", error);
       return [];
     }
   }
@@ -374,13 +429,36 @@ export class AuditLogger {
     ipAddress?: string;
     userAgent?: string;
   } {
-    const ipAddress = 
-      request.headers.get('x-forwarded-for')?.split(',')[0] ||
-      request.headers.get('x-real-ip') ||
-      'unknown';
+    const ipAddress =
+      request.headers.get("x-forwarded-for")?.split(",")[0] ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
 
-    const userAgent = request.headers.get('user-agent') || 'unknown';
+    const userAgent = request.headers.get("user-agent") || "unknown";
 
     return { ipAddress, userAgent };
+  }
+
+  /**
+   * Remove undefined fields from an object recursively
+   */
+  private static sanitize(obj: any): any {
+    const sanitized: any = {};
+    Object.keys(obj).forEach((key) => {
+      if (obj[key] !== undefined) {
+        if (
+          typeof obj[key] === "object" &&
+          obj[key] !== null &&
+          !(obj[key] instanceof Date) &&
+          !(obj[key] instanceof Timestamp) &&
+          typeof obj[key].as_id !== "function" // Not a serverTimestamp proxy
+        ) {
+          sanitized[key] = this.sanitize(obj[key]);
+        } else {
+          sanitized[key] = obj[key];
+        }
+      }
+    });
+    return sanitized;
   }
 }

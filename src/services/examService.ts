@@ -17,8 +17,8 @@ import { db } from "@/lib/firebase";
  * This code is printed on answer sheets to identify which exam they belong to
  */
 function generateExamCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars like 0/O, 1/I/L
-  let code = '';
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Exclude confusing chars like 0/O, 1/I/L
+  let code = "";
   for (let i = 0; i < 6; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
@@ -40,17 +40,55 @@ export interface Exam {
   updatedAt?: string;
   className?: string;
   classId?: string; // Class ID linking exam to a class
-  examType?: 'board' | 'diagnostic';
+  examType?: "board" | "diagnostic";
   choicePoints?: { [choice: string]: number };
   isArchived?: boolean;
   archivedAt?: string;
   examCode?: string; // Unique exam code for template validation (e.g., "EX-A1B2C3")
+  status?: "draft" | "final"; // Status to control editability
+  institutionName?: string;
+  logoUrl?: string;
 }
 
 export interface GeneratedSheet {
   id: string;
   sheet_count: number;
   created_at: string;
+  examCode?: string; // Links this batch to the exam code printed on sheets
+  batchNumber?: number; // Sequential batch number (1, 2, 3…)
+}
+
+// ── Exam Edit Business Rules ──────────────────────────────────────────────
+
+/**
+ * Message shown to users when editing is blocked.
+ */
+export const EDIT_RESTRICTION_MESSAGE =
+  "Editing is not allowed once the exam date has been reached.";
+
+/**
+ * Determines whether an exam can still be edited.
+ *
+ * Business rules:
+ *   1. Exams with status "final" cannot be edited.
+ *   2. Exams are editable only **before** their scheduled date (`created_at`).
+ *      Once today's date is equal to or past the exam date, all edits are blocked.
+ *
+ * @param exam - The exam (or any object with `created_at` and optional `status`).
+ * @returns `true` if the exam can be edited; `false` otherwise.
+ */
+export function canEditExam(
+  exam: Pick<Exam, "created_at"> & { status?: string },
+): boolean {
+  // Finalized exams are never editable
+  if (exam.status === "final") return false;
+
+  // Block editing once the exam date has been reached
+  const examDate = new Date(exam.created_at);
+  examDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today < examDate;
 }
 
 export interface ExamFormData {
@@ -61,7 +99,7 @@ export interface ExamFormData {
   className?: string;
   classId?: string;
   choicesPerItem?: number;
-  examType?: 'board' | 'diagnostic';
+  examType?: "board" | "diagnostic";
   choicePoints?: { [choice: string]: number };
 }
 
@@ -74,19 +112,19 @@ export async function createExam(
   instructorId?: string, // Add instructorId parameter
 ): Promise<Exam> {
   try {
-    console.log('📝 Creating exam...');
-    console.log('  - Exam data:', formData);
-    console.log('  - User ID:', userId);
-    console.log('  - Instructor ID:', instructorId);
-    
+    console.log("📝 Creating exam...");
+    console.log("  - Exam data:", formData);
+    console.log("  - User ID:", userId);
+    console.log("  - Instructor ID:", instructorId);
+
     if (!instructorId) {
-      console.warn('⚠️ WARNING: instructorId is undefined or null!');
+      console.warn("⚠️ WARNING: instructorId is undefined or null!");
     }
 
     // Generate a unique exam code for this exam
     const examCode = generateExamCode();
-    console.log('  - Generated Exam Code:', examCode);
-    
+    console.log("  - Generated Exam Code:", examCode);
+
     const examData = {
       title: formData.name,
       subject: formData.folder,
@@ -101,9 +139,10 @@ export async function createExam(
       updatedAt: serverTimestamp(),
       className: formData.className || null,
       classId: formData.classId || null,
-      examType: formData.examType || 'board',
+      examType: formData.examType || "board",
       choicePoints: formData.choicePoints || {},
       examCode: examCode, // Unique code for template validation
+      status: "draft", // New field: initial status is draft
     };
     const docRef = await addDoc(collection(db, "exams"), examData);
 
@@ -122,7 +161,7 @@ export async function createExam(
       updatedAt: new Date().toISOString(),
       className: examData.className || undefined,
       classId: examData.classId || undefined,
-      examType: examData.examType || 'board',
+      examType: examData.examType || "board",
       choicePoints: examData.choicePoints,
       examCode: examCode, // Include examCode in return value
     };
@@ -138,7 +177,10 @@ export async function createExam(
  * Get recent exams for a user (lightweight - for dashboard)
  * Uses client-side filtering to avoid composite index requirement
  */
-export async function getRecentExams(userId: string, limit: number = 5): Promise<Exam[]> {
+export async function getRecentExams(
+  userId: string,
+  limit: number = 5,
+): Promise<Exam[]> {
   try {
     // Fetch all exams without filters to avoid composite index
     const q = query(collection(db, "exams"));
@@ -154,8 +196,8 @@ export async function getRecentExams(userId: string, limit: number = 5): Promise
         if (!examCode) {
           examCode = generateExamCode();
           const docRef = doc(db, "exams", docSnap.id);
-          updateDoc(docRef, { examCode }).catch(err => {
-            console.warn('Failed to back-fill exam code:', err);
+          updateDoc(docRef, { examCode }).catch((err) => {
+            console.warn("Failed to back-fill exam code:", err);
           });
         }
         exams.push({
@@ -172,7 +214,8 @@ export async function getRecentExams(userId: string, limit: number = 5): Promise
           generated_sheets: data.generated_sheets || [],
           createdBy: data.createdBy,
           updatedAt:
-            data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
+            data.updatedAt?.toDate?.().toISOString() ||
+            new Date().toISOString(),
           className: data.className || undefined,
           isArchived: data.isArchived,
           examCode: examCode,
@@ -193,7 +236,6 @@ export async function getRecentExams(userId: string, limit: number = 5): Promise
     return [];
   }
 }
-
 
 export async function getExamCount(userId: string): Promise<number> {
   try {
@@ -226,7 +268,7 @@ export async function getExams(userId?: string): Promise<Exam[]> {
     const q = userId
       ? query(collection(db, "exams"), where("createdBy", "==", userId))
       : query(collection(db, "exams"));
-    
+
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
     const updatePromises: Promise<void>[] = [];
@@ -243,9 +285,9 @@ export async function getExams(userId?: string): Promise<Exam[]> {
           // Queue background update (non-blocking)
           const docRef = doc(db, "exams", docSnap.id);
           updatePromises.push(
-            updateDoc(docRef, { examCode }).catch(err => {
-              console.warn('Failed to back-fill exam code:', err);
-            })
+            updateDoc(docRef, { examCode }).catch((err) => {
+              console.warn("Failed to back-fill exam code:", err);
+            }),
           );
         }
         exams.push({
@@ -262,7 +304,8 @@ export async function getExams(userId?: string): Promise<Exam[]> {
           generated_sheets: data.generated_sheets || [],
           createdBy: data.createdBy,
           updatedAt:
-            data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
+            data.updatedAt?.toDate?.().toISOString() ||
+            new Date().toISOString(),
           className: data.className || undefined,
           classId: data.classId || undefined,
           isArchived: data.isArchived,
@@ -281,7 +324,9 @@ export async function getExams(userId?: string): Promise<Exam[]> {
     // Fire off background updates without waiting
     if (updatePromises.length > 0) {
       Promise.allSettled(updatePromises).then(() => {
-        console.log(`Updated ${updatePromises.length} exam codes in background`);
+        console.log(
+          `Updated ${updatePromises.length} exam codes in background`,
+        );
       });
     }
 
@@ -305,17 +350,17 @@ export async function getExamById(examId: string): Promise<Exam | null> {
     }
 
     const data = docSnap.data();
-    
+
     // If exam doesn't have an examCode, generate one and save it (for legacy exams)
     let examCode = data.examCode;
     if (!examCode) {
       examCode = generateExamCode();
       // Update the exam with the new code (fire and forget)
-      updateDoc(docRef, { examCode }).catch(err => {
-        console.warn('Failed to save generated exam code:', err);
+      updateDoc(docRef, { examCode }).catch((err) => {
+        console.warn("Failed to save generated exam code:", err);
       });
     }
-    
+
     return {
       id: docSnap.id,
       title: data.title,
@@ -335,21 +380,28 @@ export async function getExamById(examId: string): Promise<Exam | null> {
         data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
       className: data.className || undefined,
       classId: data.classId || undefined,
-      examType: (data.examType as 'board' | 'diagnostic') || 'board',
+      examType: (data.examType as "board" | "diagnostic") || "board",
       choicePoints: data.choicePoints || {},
       isArchived: data.isArchived || false,
       examCode: examCode, // Include exam code for template validation
+      status: (data.status as "draft" | "final") || "draft",
+      institutionName: data.institutionName,
+      logoUrl: data.logoUrl,
     };
   } catch (error: any) {
     // Silently handle offline errors - don't throw
-    if (error?.code === 'failed-precondition' || error?.code === 'unavailable' || error?.message?.includes('offline')) {
-      console.warn('Firestore offline - retrying...');
+    if (
+      error?.code === "failed-precondition" ||
+      error?.code === "unavailable" ||
+      error?.message?.includes("offline")
+    ) {
+      console.warn("Firestore offline - retrying...");
       return null;
     }
     // Surface permission errors clearly
-    if (error?.code === 'permission-denied') {
-      console.error('Firestore permission denied when fetching exam:', error);
-      throw new Error('Permission denied. Please make sure you are logged in.');
+    if (error?.code === "permission-denied") {
+      console.error("Firestore permission denied when fetching exam:", error);
+      throw new Error("Permission denied. Please make sure you are logged in.");
     }
     console.error("Error fetching exam:", error);
     throw new Error("Failed to fetch exam");
@@ -364,13 +416,30 @@ export async function updateExam(
   updates: Partial<Exam>,
 ): Promise<void> {
   try {
+    // Enforce edit restriction at the service layer
+    const examSnap = await getDoc(doc(db, "exams", examId));
+    if (examSnap.exists()) {
+      const examData = examSnap.data() as Exam;
+      if (!canEditExam(examData)) {
+        throw new Error(EDIT_RESTRICTION_MESSAGE);
+      }
+    }
+
     const docRef = doc(db, "exams", examId);
-    await updateDoc(docRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
+
+    // Strip undefined values — Firestore rejects them
+    const sanitized = Object.fromEntries(
+      Object.entries({ ...updates, updatedAt: serverTimestamp() }).filter(
+        ([, v]) => v !== undefined,
+      ),
+    );
+
+    await updateDoc(docRef, sanitized);
   } catch (error) {
     console.error("Error updating exam:", error);
+    if (error instanceof Error && error.message === EDIT_RESTRICTION_MESSAGE) {
+      throw error;
+    }
     throw new Error("Failed to update exam");
   }
 }
@@ -391,7 +460,7 @@ export async function archiveExam(examId: string): Promise<void> {
     // Delete any templates linked to this exam
     const templateQuery = query(
       collection(db, "templates"),
-      where("examId", "==", examId)
+      where("examId", "==", examId),
     );
     const templateSnap = await getDocs(templateQuery);
     const deletePromises = templateSnap.docs.map((d) => deleteDoc(d.ref));
@@ -402,14 +471,13 @@ export async function archiveExam(examId: string): Promise<void> {
   }
 }
 
-
 export async function getArchivedExams(userId: string): Promise<Exam[]> {
   try {
     // Use where clause to filter by userId and isArchived to minimize data read
     const q = query(
       collection(db, "exams"),
       where("createdBy", "==", userId),
-      where("isArchived", "==", true)
+      where("isArchived", "==", true),
     );
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
@@ -460,9 +528,9 @@ export async function getArchivedExams(userId: string): Promise<Exam[]> {
 export async function deleteExam(examId: string): Promise<void> {
   try {
     const docRef = doc(db, "exams", examId);
-  // Permanently delete the exam document.
-  // NOTE: This does not automatically delete related docs (templates/answer keys/results).
-  await deleteDoc(docRef);
+    // Permanently delete the exam document.
+    // NOTE: This does not automatically delete related docs (templates/answer keys/results).
+    await deleteDoc(docRef);
   } catch (error) {
     console.error("Error deleting exam:", error);
     throw new Error("Failed to delete exam");

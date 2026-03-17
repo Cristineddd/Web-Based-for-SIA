@@ -1,14 +1,25 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Archive as ArchiveIcon, Search, FileText, Eye, Trash2, RotateCcw } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { getArchivedExams, type Exam, deleteExam } from '@/services/examService';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Archive as ArchiveIcon,
+  Search,
+  FileText,
+  Eye,
+  Trash2,
+  RotateCcw,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  getArchivedExams,
+  type Exam,
+  deleteExam,
+} from "@/services/examService";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +29,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -26,13 +37,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 
 export default function ArchivedExams() {
   const { user } = useAuth();
   const [archivedExams, setArchivedExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [restoreId, setRestoreId] = useState<string | null>(null);
 
@@ -48,7 +59,7 @@ export default function ArchivedExams() {
         const exams = await getArchivedExams(user.id);
         setArchivedExams(exams);
       } catch (error) {
-        console.error('Error fetching archived exams:', error);
+        console.error("Error fetching archived exams:", error);
       } finally {
         setLoading(false);
       }
@@ -67,13 +78,29 @@ export default function ArchivedExams() {
     if (!deleteId) return;
 
     try {
+      const examToDelete = archivedExams.find((e) => e.id === deleteId);
       await deleteExam(deleteId);
-      setArchivedExams(archivedExams.filter(e => e.id !== deleteId));
+
+      if (user?.email && examToDelete) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "exam_deleted",
+          `Permanently deleted exam: ${examToDelete.title}`,
+          {
+            entityId: deleteId,
+            entityName: examToDelete.title,
+            entityType: "exam",
+          },
+        ).catch(console.error);
+      }
+
+      setArchivedExams(archivedExams.filter((e) => e.id !== deleteId));
       setDeleteId(null);
-      toast.success('Archived exam deleted successfully');
+      toast.success("Archived exam deleted successfully");
     } catch (error) {
-      console.error('Error deleting exam:', error);
-      toast.error('Failed to delete archived exam');
+      console.error("Error deleting exam:", error);
+      toast.error("Failed to delete archived exam");
     }
   };
 
@@ -81,14 +108,14 @@ export default function ArchivedExams() {
     if (!restoreId) return;
 
     try {
-      const { updateExam } = await import('@/services/examService');
+      const { updateExam } = await import("@/services/examService");
       await updateExam(restoreId, { isArchived: false });
-      setArchivedExams(archivedExams.filter(e => e.id !== restoreId));
+      setArchivedExams(archivedExams.filter((e) => e.id !== restoreId));
       setRestoreId(null);
-      toast.success('Exam restored successfully');
+      toast.success("Exam restored successfully");
     } catch (error) {
-      console.error('Error restoring exam:', error);
-      toast.error('Failed to restore exam');
+      console.error("Error restoring exam:", error);
+      toast.error("Failed to restore exam");
     }
   };
 
@@ -97,7 +124,9 @@ export default function ArchivedExams() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Archived Exams</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+            Archived Exams
+          </h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
             View, restore, and manage archived exams
           </p>
@@ -109,9 +138,9 @@ export default function ArchivedExams() {
         <div className="p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              type="text" 
-              placeholder="Search archived exams..." 
+            <Input
+              type="text"
+              placeholder="Search archived exams..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
@@ -128,7 +157,9 @@ export default function ArchivedExams() {
         <Card className="p-12 text-center">
           <ArchiveIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">
-            {search ? 'No archived exams found matching your search' : 'No archived exams'}
+            {search
+              ? "No archived exams found matching your search"
+              : "No archived exams"}
           </p>
         </Card>
       ) : (
@@ -143,46 +174,74 @@ export default function ArchivedExams() {
                       Title
                     </div>
                   </TableHead>
-                  <TableHead className="min-w-[80px] w-[20%] hidden sm:table-cell">Subject</TableHead>
-                  <TableHead className="min-w-[60px] w-[15%] hidden md:table-cell">Items</TableHead>
-                  <TableHead className="min-w-[90px] w-[20%] hidden lg:table-cell">Archived Date</TableHead>
-                  <TableHead className="text-right min-w-[80px] w-[20%]">Actions</TableHead>
+                  <TableHead className="min-w-[80px] w-[20%] hidden sm:table-cell">
+                    Subject
+                  </TableHead>
+                  <TableHead className="min-w-[60px] w-[15%] hidden md:table-cell">
+                    Items
+                  </TableHead>
+                  <TableHead className="min-w-[90px] w-[20%] hidden lg:table-cell">
+                    Archived Date
+                  </TableHead>
+                  <TableHead className="text-right min-w-[80px] w-[20%]">
+                    Actions
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredExams.map((exam) => (
                   <TableRow key={exam.id}>
                     <TableCell className="font-medium">
-                      <div className="break-words overflow-hidden text-ellipsis" style={{maxWidth: '140px'}} title={exam.title}>
+                      <div
+                        className="break-words overflow-hidden text-ellipsis"
+                        style={{ maxWidth: "140px" }}
+                        title={exam.title}
+                      >
                         {exam.title}
                       </div>
                       <div className="text-xs text-muted-foreground sm:hidden mt-1">
                         {exam.subject}
-                        <span className="md:hidden"> • {exam.num_items} items</span>
+                        <span className="md:hidden">
+                          {" "}
+                          • {exam.num_items} items
+                        </span>
                         {exam.archivedAt && (
-                          <span className="lg:hidden"> • {new Date(exam.archivedAt).toLocaleDateString()}</span>
+                          <span className="lg:hidden">
+                            {" "}
+                            • {new Date(exam.archivedAt).toLocaleDateString()}
+                          </span>
                         )}
                       </div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <div className="break-words overflow-hidden text-ellipsis" style={{maxWidth: '80px'}} title={exam.subject}>
+                      <div
+                        className="break-words overflow-hidden text-ellipsis"
+                        style={{ maxWidth: "80px" }}
+                        title={exam.subject}
+                      >
                         {exam.subject}
                       </div>
                     </TableCell>
                     <TableCell className="text-center hidden md:table-cell">
                       <span className="text-sm">{exam.num_items}</span>
-                      <span className="hidden sm:inline text-xs text-muted-foreground ml-1">items</span>
+                      <span className="hidden sm:inline text-xs text-muted-foreground ml-1">
+                        items
+                      </span>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">
-                      {exam.archivedAt 
+                      {exam.archivedAt
                         ? new Date(exam.archivedAt).toLocaleDateString()
-                        : 'Unknown'
-                      }
+                        : "Unknown"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
                         <Link href={`/exams/${exam.id}`}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex items-center justify-center" title="View exam">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 flex items-center justify-center"
+                            title="View exam"
+                          >
                             <Eye className="w-4 h-4" />
                           </Button>
                         </Link>
@@ -195,9 +254,9 @@ export default function ArchivedExams() {
                         >
                           <RotateCcw className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-8 w-8 p-0 text-destructive hover:text-destructive flex items-center justify-center"
                           onClick={() => setDeleteId(exam.id)}
                           title="Permanently delete exam"
@@ -218,7 +277,9 @@ export default function ArchivedExams() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
         <Card className="p-4 sm:p-6 border">
           <p className="text-sm text-muted-foreground">Total Archived</p>
-          <p className="text-2xl sm:text-3xl font-bold text-foreground mt-2">{archivedExams.length}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-foreground mt-2">
+            {archivedExams.length}
+          </p>
         </Card>
         <Card className="p-4 sm:p-6 border">
           <p className="text-sm text-muted-foreground">Total Questions</p>
@@ -230,8 +291,8 @@ export default function ArchivedExams() {
           <p className="text-sm text-muted-foreground">Last Archived</p>
           <p className="text-lg font-bold text-foreground mt-2">
             {archivedExams.length > 0
-              ? new Date(archivedExams[0].archivedAt || '').toLocaleDateString()
-              : '—'}
+              ? new Date(archivedExams[0].archivedAt || "").toLocaleDateString()
+              : "—"}
           </p>
         </Card>
       </div>
@@ -242,12 +303,16 @@ export default function ArchivedExams() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Archived Exam</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to permanently delete this archived exam? This action cannot be undone.
+              Are you sure you want to permanently delete this archived exam?
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -260,7 +325,8 @@ export default function ArchivedExams() {
           <AlertDialogHeader>
             <AlertDialogTitle>Restore Exam</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to restore this exam? It will reappear in your active exams.
+              Are you sure you want to restore this exam? It will reappear in
+              your active exams.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

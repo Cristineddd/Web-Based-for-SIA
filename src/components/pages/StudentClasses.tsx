@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useEffect, useState, useRef } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -11,7 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,86 +29,93 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { StudentIDService } from "@/services/studentIDService";
+import { useAuth } from "@/contexts/AuthContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { StudentIDService } from "@/services/studentIDService";
+import { useAuth } from "@/contexts/AuthContext";
+import type { Class, Student } from "@/services/classService";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
-import { StudentIDService } from '@/services/studentIDService';
-import { useAuth } from '@/contexts/AuthContext';
-import type { Class, Student } from '@/services/classService';
-import { createClass, deleteClass, updateClass, getClasses } from '@/services/classService';
-import { OfficialRecordService } from '@/services/officialRecordService';
-import { IDChangeLogger } from '@/services/idChangeLogger';
-import { StudentFieldValidationService } from '@/services/studentFieldValidationService';
-import { DataQualityService } from '@/services/dataQualityService';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { 
-  Search, 
-  Plus, 
+  createClass,
+  deleteClass,
+  updateClass,
+  getClasses,
+} from "@/services/classService";
+import { OfficialRecordService } from "@/services/officialRecordService";
+import { IDChangeLogger } from "@/services/idChangeLogger";
+import { StudentFieldValidationService } from "@/services/studentFieldValidationService";
+import { DataQualityService } from "@/services/dataQualityService";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import {
+  Search,
+  Plus,
   Loader2,
   GraduationCap,
   Upload,
   Download,
   AlertCircle,
   X,
-  Archive
-} from 'lucide-react';
+  Archive,
+} from "lucide-react";
 
 export default function StudentClasses() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
-  
+
   // Debug: Log user changes
   useEffect(() => {
-    console.log('[USER] User state changed in StudentClasses:');
-    console.log('  - User:', user);
-    console.log('  - InstructorId:', user?.instructorId);
+    console.log("[USER] User state changed in StudentClasses:");
+    console.log("  - User:", user);
+    console.log("  - InstructorId:", user?.instructorId);
   }, [user]);
-  
+
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [archiveId, setArchiveId] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [roomWarning, setRoomWarning] = useState(false);
   const [classNameWarning, setClassNameWarning] = useState(false);
-  const [currentTab, setCurrentTab] = useState('basic');
+  const [currentTab, setCurrentTab] = useState("basic");
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [dataQualityResult, setDataQualityResult] = useState<any>(null);
   const [showDataQualityDialog, setShowDataQualityDialog] = useState(false);
-  
+
   const [newClass, setNewClass] = useState({
-    class_name: '',
-    course_subject: '',
-    section_block: '',
-    room: '',
+    class_name: "",
+    course_subject: "",
+    section_block: "",
+    room: "",
   });
 
   const [students, setStudents] = useState<Student[]>([]);
   const [newStudent, setNewStudent] = useState({
-    student_id: '',
-    first_name: '',
-    last_name: '',
-    email: '',
+    student_id: "",
+    first_name: "",
+    last_name: "",
+    email: "",
   });
 
   const cleanStudentForFirestore = (s: Student): Student => ({
-    student_id: (s.student_id || '').trim(),
-    first_name: (s.first_name || '').trim(),
-    last_name: (s.last_name || '').trim(),
+    student_id: (s.student_id || "").trim(),
+    first_name: (s.first_name || "").trim(),
+    last_name: (s.last_name || "").trim(),
     // Firestore can't store `undefined`
     ...(s.email && s.email.trim() ? { email: s.email.trim() } : {}),
     ...(s.section ? { section: s.section } : {}),
@@ -128,14 +135,16 @@ export default function StudentClasses() {
 
     try {
       const fetchedClasses = await getClasses(user.id);
-      
+
       // Filter out archived classes
-      const activeClasses = fetchedClasses.filter(classItem => !(classItem as any).isArchived);
+      const activeClasses = fetchedClasses.filter(
+        (classItem) => !(classItem as any).isArchived,
+      );
 
       setClasses(activeClasses);
     } catch (error) {
-      console.error('Error fetching classes:', error);
-      toast.error('Failed to load classes');
+      console.error("Error fetching classes:", error);
+      toast.error("Failed to load classes");
     } finally {
       setLoading(false);
     }
@@ -144,52 +153,52 @@ export default function StudentClasses() {
   const handleAddClass = async () => {
     // Validation for Class Name - letters only and minimum 5 characters
     if (!newClass.class_name.trim()) {
-      toast.error('Class Name is required');
+      toast.error("Class Name is required");
       return;
     }
     if (!/^[a-zA-Z\s]+$/.test(newClass.class_name.trim())) {
-      toast.warning('Class Name must contain letters only');
+      toast.warning("Class Name must contain letters only");
       return;
     }
     if (newClass.class_name.trim().length < 5) {
-      toast.error('Class Name must be at least 5 characters long');
+      toast.error("Class Name must be at least 5 characters long");
       return;
     }
 
     // Validation for Course/Subject - required and minimum 5 characters
     if (!newClass.course_subject.trim()) {
-      toast.error('Course/Subject is required');
+      toast.error("Course/Subject is required");
       return;
     }
     if (newClass.course_subject.trim().length < 5) {
-      toast.error('Course/Subject must be at least 5 characters long');
+      toast.error("Course/Subject must be at least 5 characters long");
       return;
     }
 
     // Validation for Block - required
     if (!newClass.section_block) {
-      toast.error('Block/Section is required');
+      toast.error("Block/Section is required");
       return;
     }
 
     // Validation for Room - numbers only
     if (!newClass.room.trim()) {
-      toast.warning('Room number is required');
+      toast.warning("Room number is required");
       return;
     }
     if (!/^[0-9]{3}$/.test(newClass.room.trim())) {
-      toast.warning('Room must be exactly 3 digits (e.g., 101, 205, 312)');
+      toast.warning("Room must be exactly 3 digits (e.g., 101, 205, 312)");
       return;
     }
 
     // Validation for Students - at least one student required for new classes
     if (!editingClassId && students.length === 0) {
-      toast.error('At least one student is required to create a class');
+      toast.error("At least one student is required to create a class");
       return;
     }
 
     // Validate all students have required fields (no blanks) and proper IDs
-  const invalidStudents = students.filter((student) => {
+    const invalidStudents = students.filter((student) => {
       const missingRequired =
         !student.student_id?.trim() ||
         !student.first_name?.trim() ||
@@ -198,27 +207,27 @@ export default function StudentClasses() {
 
       return (
         !/^\d{9}$/.test(student.student_id.trim()) ||
-        !student.student_id.trim().startsWith('20')
+        !student.student_id.trim().startsWith("20")
       );
     });
-    
+
     if (invalidStudents.length > 0) {
       toast.error(
-        `${invalidStudents.length} student(s) have missing/invalid required fields (Student ID / First Name / Last Name). Please fix before creating class.`
+        `${invalidStudents.length} student(s) have missing/invalid required fields (Student ID / First Name / Last Name). Please fix before creating class.`,
       );
       return;
     }
 
     if (!user?.id) {
-      toast.error('User not authenticated');
+      toast.error("User not authenticated");
       return;
     }
 
     try {
       if (editingClassId) {
         // UPDATE existing class
-        const { updateClass } = await import('@/services/classService');
-        
+        const { updateClass } = await import("@/services/classService");
+
         const cleanedStudents = students.map(cleanStudentForFirestore);
         await updateClass(editingClassId, {
           ...newClass,
@@ -226,98 +235,137 @@ export default function StudentClasses() {
         });
 
         // Update individual student records in the students collection
-    if (students.length > 0) {
+        if (students.length > 0) {
           try {
-      for (const student of students.map(cleanStudentForFirestore)) {
-              const studentDocRef = doc(db, 'students', student.student_id);
-              await setDoc(studentDocRef, {
-                student_id: student.student_id,
-                first_name: student.first_name,
-                last_name: student.last_name,
-                email: student.email || null,
-                created_by: user.id,
-                class_id: editingClassId,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              }, { merge: true });
+            for (const student of students.map(cleanStudentForFirestore)) {
+              const studentDocRef = doc(db, "students", student.student_id);
+              await setDoc(
+                studentDocRef,
+                {
+                  student_id: student.student_id,
+                  first_name: student.first_name,
+                  last_name: student.last_name,
+                  email: student.email || null,
+                  created_by: user.id,
+                  class_id: editingClassId,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+                { merge: true },
+              );
             }
           } catch (error) {
-            console.error('Error updating students in Firestore:', error);
-            toast.error('Failed to save student records: ' + (error instanceof Error ? error.message : String(error)));
+            console.error("Error updating students in Firestore:", error);
+            toast.error(
+              "Failed to save student records: " +
+                (error instanceof Error ? error.message : String(error)),
+            );
           }
         }
 
         // Update the classes list in state
-        setClasses(classes.map(c => 
-          c.id === editingClassId 
-            ? { ...c, ...newClass, students: students.map(cleanStudentForFirestore) }
-            : c
-        ));
+        setClasses(
+          classes.map((c) =>
+            c.id === editingClassId
+              ? {
+                  ...c,
+                  ...newClass,
+                  students: students.map(cleanStudentForFirestore),
+                }
+              : c,
+          ),
+        );
 
         setEditingClassId(null);
-        toast.success('Class updated successfully');
+        toast.success("Class updated successfully");
       } else {
         // CREATE new class
-        console.log('User object:', user);
-        console.log('User.instructorId:', user?.instructorId);
-        
+        console.log("User object:", user);
+        console.log("User.instructorId:", user?.instructorId);
+
         if (!user?.instructorId) {
-          toast.error('Instructor ID not found. Please log out and log back in, or contact support.');
+          toast.error(
+            "Instructor ID not found. Please log out and log back in, or contact support.",
+          );
           return;
         }
-        
+
         const cleanedStudents = students.map(cleanStudentForFirestore);
-        const classToAdd: Omit<Class, 'id'> = {
+        const classToAdd: Omit<Class, "id"> = {
           ...newClass,
           students: cleanedStudents,
           created_at: new Date().toISOString(),
         };
 
         // Save to Firestore with instructorId
-        console.log('Creating class with instructorId:', user.instructorId);
-        const savedClass = await createClass(classToAdd, user.id, user.instructorId);
-        console.log('Class saved:', savedClass);
-        
+        console.log("Creating class with instructorId:", user.instructorId);
+        const savedClass = await createClass(
+          classToAdd,
+          user.id,
+          user.instructorId,
+        );
+        console.log("Class saved:", savedClass);
+
+        // Log class creation
+        await AuditLogger.logActivity(
+          user.id,
+          user.email || "unknown",
+          "class_created",
+          `Created class: ${savedClass.class_name}`,
+          {
+            entityId: savedClass.id,
+            entityType: "class",
+            entityName: savedClass.class_name,
+          },
+        );
+
         // CRITICAL: Also save individual student records to the students collection
-    if (students.length > 0) {
+        if (students.length > 0) {
           try {
-      for (const student of cleanedStudents) {
-              const studentDocRef = doc(db, 'students', student.student_id);
-              await setDoc(studentDocRef, {
-                student_id: student.student_id,
-                first_name: student.first_name,
-                last_name: student.last_name,
-                email: student.email || null,
-                created_by: user.id,
-                class_id: savedClass.id,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              }, { merge: true });
+            for (const student of cleanedStudents) {
+              const studentDocRef = doc(db, "students", student.student_id);
+              await setDoc(
+                studentDocRef,
+                {
+                  student_id: student.student_id,
+                  first_name: student.first_name,
+                  last_name: student.last_name,
+                  email: student.email || null,
+                  created_by: user.id,
+                  class_id: savedClass.id,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+                { merge: true },
+              );
             }
           } catch (error) {
-            console.error('Error saving students to Firestore:', error);
-            toast.error('Failed to save student records: ' + (error instanceof Error ? error.message : String(error)));
+            console.error("Error saving students to Firestore:", error);
+            toast.error(
+              "Failed to save student records: " +
+                (error instanceof Error ? error.message : String(error)),
+            );
           }
         }
-        
+
         setClasses([...classes, savedClass]);
-        toast.success('Class added and saved successfully');
+        toast.success("Class added and saved successfully");
       }
-      
+
       setShowAddDialog(false);
       setNewClass({
-        class_name: '',
-        course_subject: '',
-        section_block: '',
-        room: '',
+        class_name: "",
+        course_subject: "",
+        section_block: "",
+        room: "",
       });
       setStudents([]);
-      setCurrentTab('basic');
-      
-      toast.success('Class added and saved successfully');
+      setCurrentTab("basic");
+
+      toast.success("Class added and saved successfully");
     } catch (error) {
-      console.error('Error adding class:', error);
-      toast.error('Failed to add class');
+      console.error("Error adding class:", error);
+      toast.error("Failed to add class");
     }
   };
 
@@ -325,14 +373,31 @@ export default function StudentClasses() {
     if (!deleteId) return;
 
     try {
+      const classToDelete = classes.find((c) => c.id === deleteId);
       // Delete from Firestore
       await deleteClass(deleteId);
-      setClasses(classes.filter(c => c.id !== deleteId));
+
+      // Log class deletion
+      if (user && classToDelete) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email || "unknown",
+          "class_deleted",
+          `Deleted class: ${classToDelete.class_name}`,
+          {
+            entityId: deleteId,
+            entityName: classToDelete.class_name,
+            entityType: "class",
+          },
+        ).catch(console.error);
+      }
+
+      setClasses(classes.filter((c) => c.id !== deleteId));
       setDeleteId(null);
-      toast.success('Class deleted successfully');
+      toast.success("Class deleted successfully");
     } catch (error) {
-      console.error('Error deleting class:', error);
-      toast.error('Failed to delete class');
+      console.error("Error deleting class:", error);
+      toast.error("Failed to delete class");
     }
   };
 
@@ -340,42 +405,59 @@ export default function StudentClasses() {
     if (!archiveId) return;
 
     try {
+      const classToArchive = classes.find((c) => c.id === archiveId);
       await updateClass(archiveId, { isArchived: true });
-      setClasses(classes.filter(c => c.id !== archiveId));
-      setArchiveId(null);
-      toast.success('Class archived successfully');
+
+      // Log archiving
+      if (user && classToArchive) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email || "unknown",
+          "admin_action",
+          `Archived class: ${classToArchive.class_name}`,
+          {
+            entityId: archiveId,
+            entityName: classToArchive.class_name,
+            entityType: "class",
+          },
+        ).catch(console.error);
+      }
+
+      setClasses(classes.filter((c) => c.id !== archiveId));
+      setDeleteId(null);
+      toast.success("Class archived successfully");
     } catch (error) {
-      console.error('Error archiving class:', error);
-      toast.error('Failed to archive class');
+      console.error("Error archiving class:", error);
+      toast.error("Failed to archive class");
     }
   };
 
   const handleAddStudent = async () => {
     // Validation for First Name - letters only, more than 3 letters
     if (!newStudent.first_name.trim()) {
-      toast.error('First name is required');
+      toast.error("First name is required");
       return;
     }
     if (!/^[a-zA-Z\s]+$/.test(newStudent.first_name.trim())) {
-      toast.warning('First name must contain letters only');
+      toast.warning("First name must contain letters only");
       return;
     }
     if (newStudent.first_name.trim().length < 4) {
-      toast.warning('First name must be at least 4 characters');
+      toast.warning("First name must be at least 4 characters");
       return;
     }
 
     // Validation for Last Name - letters only, more than 3 letters
     if (!newStudent.last_name.trim()) {
-      toast.error('Last name is required');
+      toast.error("Last name is required");
       return;
     }
     if (!/^[a-zA-Z\s]+$/.test(newStudent.last_name.trim())) {
-      toast.warning('Last name must contain letters only');
+      toast.warning("Last name must contain letters only");
       return;
     }
     if (newStudent.last_name.trim().length < 4) {
-      toast.warning('Last name must be at least 4 characters');
+      toast.warning("Last name must be at least 4 characters");
       return;
     }
 
@@ -383,23 +465,26 @@ export default function StudentClasses() {
     if (newStudent.email.trim()) {
       const email = newStudent.email.trim();
       // Strict email validation regex
-      const strictEmailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-      
+      const strictEmailRegex =
+        /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
       if (!strictEmailRegex.test(email)) {
-        toast.warning('Please enter a valid email address (e.g., student@gmail.com)');
+        toast.warning(
+          "Please enter a valid email address (e.g., student@gmail.com)",
+        );
         return;
       }
-      
+
       // Check for consecutive dots
-      if (email.includes('..')) {
-        toast.warning('Email cannot contain consecutive dots');
+      if (email.includes("..")) {
+        toast.warning("Email cannot contain consecutive dots");
         return;
       }
-      
+
       // Check local part doesn't start/end with dot
-      const localPart = email.split('@')[0];
-      if (localPart.startsWith('.') || localPart.endsWith('.')) {
-        toast.warning('Email username cannot start or end with a dot');
+      const localPart = email.split("@")[0];
+      if (localPart.startsWith(".") || localPart.endsWith(".")) {
+        toast.warning("Email username cannot start or end with a dot");
         return;
       }
     }
@@ -411,27 +496,27 @@ export default function StudentClasses() {
     if (studentId) {
       // Must be exactly 9 digits
       if (!/^\d{9}$/.test(studentId)) {
-        toast.warning('Student ID must be exactly 9 digits (e.g., 202312264)');
+        toast.warning("Student ID must be exactly 9 digits (e.g., 202312264)");
         return;
       }
-      
+
       // Must start with valid year (20XX)
-      if (!studentId.startsWith('20')) {
-        toast.warning('Student ID must start with 20 (year format)');
+      if (!studentId.startsWith("20")) {
+        toast.warning("Student ID must start with 20 (year format)");
         return;
       }
-      
+
       // Year part must be valid (2000-2099)
       const yearPart = parseInt(studentId.substring(0, 4));
       if (yearPart < 2000 || yearPart > 2099) {
-        toast.warning('Student ID year must be between 2000 and 2099');
+        toast.warning("Student ID year must be between 2000 and 2099");
         return;
       }
-      
+
       // Sequence part must be valid (00001-99999)
       const sequencePart = parseInt(studentId.substring(4));
       if (sequencePart < 1 || sequencePart > 99999) {
-        toast.warning('Student ID sequence must be between 00001 and 99999');
+        toast.warning("Student ID sequence must be between 00001 and 99999");
         return;
       }
     }
@@ -440,7 +525,7 @@ export default function StudentClasses() {
     if (!studentId) {
       const generated = await StudentIDService.autoAssignIDs([
         {
-          student_id: '',
+          student_id: "",
           first_name: newStudent.first_name.trim(),
           last_name: newStudent.last_name.trim(),
           email: newStudent.email.trim() || undefined,
@@ -448,7 +533,7 @@ export default function StudentClasses() {
       ]);
 
       if (!generated.success || !generated.ids || generated.ids.length === 0) {
-        toast.error(generated.error || 'Failed to auto-generate student ID');
+        toast.error(generated.error || "Failed to auto-generate student ID");
         return;
       }
 
@@ -456,7 +541,7 @@ export default function StudentClasses() {
     }
 
     // Check for duplicate student ID
-    if (students.some(s => s.student_id === studentId)) {
+    if (students.some((s) => s.student_id === studentId)) {
       toast.error(`Student ID "${studentId}" already exists in this class`);
       return;
     }
@@ -472,11 +557,15 @@ export default function StudentClasses() {
     if (
       students.some(
         (s) =>
-          s.first_name.toLowerCase() === newStudent.first_name.trim().toLowerCase() &&
-          s.last_name.toLowerCase() === newStudent.last_name.trim().toLowerCase()
+          s.first_name.toLowerCase() ===
+            newStudent.first_name.trim().toLowerCase() &&
+          s.last_name.toLowerCase() ===
+            newStudent.last_name.trim().toLowerCase(),
       )
     ) {
-      toast.error(`Student "${newStudent.first_name.trim()} ${newStudent.last_name.trim()}" already exists in this class`);
+      toast.error(
+        `Student "${newStudent.first_name.trim()} ${newStudent.last_name.trim()}" already exists in this class`,
+      );
       return;
     }
 
@@ -488,40 +577,49 @@ export default function StudentClasses() {
     };
 
     setStudents([...students, student]);
-    
+
     // CRITICAL: Save individual student record to the students collection if we have a selected class
     if (user && selectedClass) {
       try {
-        const studentDocRef = doc(db, 'students', student.student_id);
-        await setDoc(studentDocRef, {
-          student_id: student.student_id,
-          first_name: student.first_name,
-          last_name: student.last_name,
-          email: student.email || null,
-          created_by: user.id,
-          class_id: selectedClass.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, { merge: true });
+        const studentDocRef = doc(db, "students", student.student_id);
+        await setDoc(
+          studentDocRef,
+          {
+            student_id: student.student_id,
+            first_name: student.first_name,
+            last_name: student.last_name,
+            email: student.email || null,
+            created_by: user.id,
+            class_id: selectedClass.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          { merge: true },
+        );
       } catch (error) {
-        console.error('Error saving student to Firestore:', error);
-        toast.error('Failed to save student to database: ' + (error instanceof Error ? error.message : String(error)));
+        console.error("Error saving student to Firestore:", error);
+        toast.error(
+          "Failed to save student to database: " +
+            (error instanceof Error ? error.message : String(error)),
+        );
       }
     }
-    
+
     // Mark as official when manually added
     if (user) {
       const isOfficial = await OfficialRecordService.markAsOfficial(
         student.student_id,
         user.id,
         user.email,
-        `${student.first_name} ${student.last_name}`
+        `${student.first_name} ${student.last_name}`,
       );
       if (!isOfficial) {
-        console.warn(`Failed to mark student ${student.student_id} as official`);
+        console.warn(
+          `Failed to mark student ${student.student_id} as official`,
+        );
       }
     }
-    
+
     // Log ID creation
     if (user && selectedClass) {
       await IDChangeLogger.logIDCreation(
@@ -530,42 +628,47 @@ export default function StudentClasses() {
         `${student.first_name} ${student.last_name}`,
         studentId,
         selectedClass.id,
-        selectedClass.class_name
+        selectedClass.class_name,
       );
     }
 
     setNewStudent({
-      student_id: '',
-      first_name: '',
-      last_name: '',
-      email: '',
+      student_id: "",
+      first_name: "",
+      last_name: "",
+      email: "",
     });
-    toast.success(`Student added to roster${!wasAutoGenerated ? '' : ` (ID: ${studentId})`}`);
+    toast.success(
+      `Student added to roster${!wasAutoGenerated ? "" : ` (ID: ${studentId})`}`,
+    );
   };
 
   const handleRemoveStudent = async (studentId: string) => {
-    const updatedStudents = students.filter(s => s.student_id !== studentId);
+    const updatedStudents = students.filter((s) => s.student_id !== studentId);
     setStudents(updatedStudents);
-    
+
     // CRITICAL: Update the class in Firestore with the removed student
     if (user && selectedClass) {
       try {
-        const { updateClass } = await import('@/services/classService');
+        const { updateClass } = await import("@/services/classService");
         await updateClass(selectedClass.id, {
           students: updatedStudents,
         });
       } catch (error) {
-        console.error('Error updating class after removing student:', error);
-        toast.warning('Student removed from roster but failed to save changes');
+        console.error("Error updating class after removing student:", error);
+        toast.warning("Student removed from roster but failed to save changes");
       }
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    event.target.value = '';
+    event.target.value = "";
 
+    setSelectedFile(file);
     setImporting(true);
 
     try {
@@ -573,50 +676,62 @@ export default function StudentClasses() {
       reader.onload = async (e) => {
         try {
           const data = e.target?.result;
-          const workbook = XLSX.read(data, { type: 'array' });
+          const workbook = XLSX.read(data, { type: "array" });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
 
           // IMPORTANT: Use AOA parsing so blank cells don't disappear or shift columns.
           const aoa = XLSX.utils.sheet_to_json(worksheet, {
             header: 1,
-            defval: '',
+            defval: "",
             blankrows: false,
           }) as unknown[][];
 
           if (aoa.length < 2) {
-            toast.error('No student rows detected. Please check the template format.');
+            toast.error(
+              "No student rows detected. Please check the template format.",
+            );
             setImporting(false);
             return;
           }
 
           const normalizeHeader = (h: unknown) =>
-            String(h ?? '')
+            String(h ?? "")
               .trim()
               .toLowerCase()
-              .replace(/\s+/g, ' ')
-              .replace(/[()]/g, '')
-              .replace(/[^a-z0-9 ]/g, '');
+              .replace(/\s+/g, " ")
+              .replace(/[()]/g, "")
+              .replace(/[^a-z0-9 ]/g, "");
 
           const headers = (aoa[0] || []).map(normalizeHeader);
           const findHeader = (aliases: string[]) =>
             headers.findIndex((h) => aliases.includes(h));
 
-          const colStudentId = findHeader(['student id', 'studentid', 'id']);
-          const colFirst = findHeader(['first name', 'firstname', 'first']);
-          const colLast = findHeader(['last name', 'lastname', 'last']);
-          const colEmail = findHeader(['email', 'email optional', 'e mail', 'e mail optional']);
+          const colStudentId = findHeader(["student id", "studentid", "id"]);
+          const colFirst = findHeader(["first name", "firstname", "first"]);
+          const colLast = findHeader(["last name", "lastname", "last"]);
+          const colEmail = findHeader([
+            "email",
+            "email optional",
+            "e mail",
+            "e mail optional",
+          ]);
 
-          const useFallback = colStudentId === -1 || colFirst === -1 || colLast === -1;
+          const useFallback =
+            colStudentId === -1 || colFirst === -1 || colLast === -1;
 
           const parsedStudents = aoa
             .slice(1)
             .map((row, idx) => {
-              const get = (i: number) => String((row?.[i] ?? '') as any).trim();
+              const get = (i: number) => String((row?.[i] ?? "") as any).trim();
               const student_id = useFallback ? get(0) : get(colStudentId);
               const first_name = useFallback ? get(1) : get(colFirst);
               const last_name = useFallback ? get(2) : get(colLast);
-              const email = useFallback ? get(3) : (colEmail >= 0 ? get(colEmail) : '');
+              const email = useFallback
+                ? get(3)
+                : colEmail >= 0
+                  ? get(colEmail)
+                  : "";
 
               return {
                 rowIndex: idx,
@@ -624,30 +739,33 @@ export default function StudentClasses() {
                 first_name,
                 last_name,
                 email,
-                year: '',
-                section: '',
+                year: "",
+                section: "",
               };
             })
             // ignore fully empty rows
-            .filter((r) => r.student_id || r.first_name || r.last_name || r.email);
+            .filter(
+              (r) => r.student_id || r.first_name || r.last_name || r.email,
+            );
 
           // Reject blanks: Student ID, First Name, Last Name are required
           const missingRequired = parsedStudents.filter(
-            (r) => !r.student_id || !r.first_name || !r.last_name
+            (r) => !r.student_id || !r.first_name || !r.last_name,
           );
           if (missingRequired.length > 0) {
             toast.error(
-              `Import failed: ${missingRequired.length} row(s) are missing required fields (Student ID / First Name / Last Name).`
+              `Import failed: ${missingRequired.length} row(s) are missing required fields (Student ID / First Name / Last Name).`,
             );
             setImporting(false);
             return;
           }
 
           // Keep existing validation logic (format checks, etc.)
-          const validationResult = StudentFieldValidationService.validateBulkRecords(parsedStudents);
+          const validationResult =
+            StudentFieldValidationService.validateBulkRecords(parsedStudents);
           if (validationResult.summary.invalid > 0) {
             toast.error(
-              `${validationResult.summary.invalid} of ${validationResult.summary.total} records have validation errors`
+              `${validationResult.summary.invalid} of ${validationResult.summary.total} records have validation errors`,
             );
             setImporting(false);
             return;
@@ -656,14 +774,30 @@ export default function StudentClasses() {
           const validStudents = validationResult.validRecords;
 
           if (validStudents.length === 0) {
-            toast.error('No valid student records found after validation.');
+            toast.error("No valid student records found after validation.");
             setImporting(false);
             return;
           }
 
           // Check for duplicates and inconsistencies
-          const qualityResult = DataQualityService.checkDataQuality(validStudents);
-          
+          const qualityResult =
+            DataQualityService.checkDataQuality(validStudents);
+
+          // Log quality check
+          if (user) {
+            await ValidationActionLogger.logQualityCheck(
+              user.id,
+              user.email,
+              validStudents.length,
+              {
+                duplicates: qualityResult.summary.duplicateCount,
+                inconsistencies: qualityResult.summary.inconsistencyCount,
+                total: qualityResult.totalIssues,
+              },
+              qualityResult.isClean,
+            );
+          }
+
           if (!qualityResult.isClean) {
             setDataQualityResult(qualityResult);
             setShowDataQualityDialog(true);
@@ -672,7 +806,9 @@ export default function StudentClasses() {
           }
 
           // Auto-assign IDs for students without them
-          const studentsNeedingIds = validStudents.filter((s) => !s.student_id || s.student_id.trim() === '') as Array<{
+          const studentsNeedingIds = validStudents.filter(
+            (s) => !s.student_id || s.student_id.trim() === "",
+          ) as Array<{
             rowIndex: number;
             student_id: string;
             first_name: string;
@@ -681,15 +817,22 @@ export default function StudentClasses() {
             [key: string]: any;
           }>;
           let idAssignmentResult = { success: true, ids: [] as string[] };
-          
+
           if (studentsNeedingIds.length > 0) {
-            const assignmentResult = await StudentIDService.autoAssignIDs(studentsNeedingIds);
+            const assignmentResult =
+              await StudentIDService.autoAssignIDs(studentsNeedingIds);
             if (!assignmentResult.success) {
-              toast.error(assignmentResult.error || 'Failed to auto-generate IDs for import');
+              toast.error(
+                assignmentResult.error ||
+                  "Failed to auto-generate IDs for import",
+              );
               setImporting(false);
               return;
             }
-            idAssignmentResult = { success: true, ids: assignmentResult.ids || [] };
+            idAssignmentResult = {
+              success: true,
+              ids: assignmentResult.ids || [],
+            };
           }
 
           let generatedIndex = 0;
@@ -706,7 +849,7 @@ export default function StudentClasses() {
 
             const generatedId = idAssignmentResult.ids?.[generatedIndex++];
             return {
-              student_id: generatedId || '',
+              student_id: generatedId || "",
               first_name: row.first_name,
               last_name: row.last_name,
               email: row.email || undefined,
@@ -714,7 +857,7 @@ export default function StudentClasses() {
           });
 
           if (studentsWithIds.some((s) => !s.student_id)) {
-            toast.error('Failed to assign IDs for one or more students.');
+            toast.error("Failed to assign IDs for one or more students.");
             setImporting(false);
             return;
           }
@@ -730,7 +873,9 @@ export default function StudentClasses() {
           }
 
           if (duplicateIdsInFile.size > 0) {
-            toast.error(`Duplicate IDs in file: ${Array.from(duplicateIdsInFile).join(', ')}`);
+            toast.error(
+              `Duplicate IDs in file: ${Array.from(duplicateIdsInFile).join(", ")}`,
+            );
             return;
           }
 
@@ -739,28 +884,36 @@ export default function StudentClasses() {
             .map((s) => s.student_id)
             .filter((id) => existingClassIds.has(id));
           if (localConflicts.length > 0) {
-            toast.error(`IDs already in this class: ${Array.from(new Set(localConflicts)).join(', ')}`);
+            toast.error(
+              `IDs already in this class: ${Array.from(new Set(localConflicts)).join(", ")}`,
+            );
             return;
           }
 
           const dbConflicts = await StudentIDService.checkForConflicts(
-            studentsWithIds.map((s) => s.student_id)
+            studentsWithIds.map((s) => s.student_id),
           );
           if (dbConflicts.length > 0) {
-            toast.error(`IDs already exist in database: ${Array.from(new Set(dbConflicts)).join(', ')}`);
+            toast.error(
+              `IDs already exist in database: ${Array.from(new Set(dbConflicts)).join(", ")}`,
+            );
             return;
           }
 
-          const generatedCount = parsedStudents.filter((s) => !s.student_id).length;
+          const generatedCount = parsedStudents.filter(
+            (s) => !s.student_id,
+          ).length;
           setImportPreview(studentsWithIds);
           setShowImportDialog(true);
           toast.success(
             `Ready to import ${studentsWithIds.length} student(s)` +
-              (generatedCount > 0 ? ` with ${generatedCount} auto-generated ID(s)` : '')
+              (generatedCount > 0
+                ? ` with ${generatedCount} auto-generated ID(s)`
+                : ""),
           );
         } catch (error) {
-          console.error('Error parsing import file:', error);
-          toast.error('Failed to parse the uploaded file');
+          console.error("Error parsing import file:", error);
+          toast.error("Failed to parse the uploaded file");
         } finally {
           setImporting(false);
         }
@@ -768,13 +921,13 @@ export default function StudentClasses() {
 
       reader.onerror = () => {
         setImporting(false);
-        toast.error('Failed to read file');
+        toast.error("Failed to read file");
       };
 
       reader.readAsArrayBuffer(file);
     } catch (error) {
-      console.error('Error importing students:', error);
-      toast.error('Failed to import students');
+      console.error("Error importing students:", error);
+      toast.error("Failed to import students");
       setImporting(false);
     }
   };
@@ -787,25 +940,31 @@ export default function StudentClasses() {
       .map((s) => s.student_id)
       .filter((id) => currentIds.has(id));
     if (idConflicts.length > 0) {
-      toast.error(`Import blocked. Duplicate IDs in class: ${Array.from(new Set(idConflicts)).join(', ')}`);
+      toast.error(
+        `Import blocked. Duplicate IDs in class: ${Array.from(new Set(idConflicts)).join(", ")}`,
+      );
       return;
     }
 
-    const dbConflicts = await StudentIDService.checkForConflicts(importPreview.map((s) => s.student_id));
+    const dbConflicts = await StudentIDService.checkForConflicts(
+      importPreview.map((s) => s.student_id),
+    );
     if (dbConflicts.length > 0) {
-      toast.error(`Import blocked. IDs already exist in database: ${Array.from(new Set(dbConflicts)).join(', ')}`);
+      toast.error(
+        `Import blocked. IDs already exist in database: ${Array.from(new Set(dbConflicts)).join(", ")}`,
+      );
       return;
     }
 
     const updatedStudents = [...students, ...importPreview];
     setStudents(updatedStudents);
-    
+
     // CRITICAL: Save the updated class with new students to Firestore
     if (user && selectedClass) {
       try {
         // Import updateClass from classService
-        const { updateClass } = await import('@/services/classService');
-        
+        const { updateClass } = await import("@/services/classService");
+
         // Update the class with the new students array
         await updateClass(selectedClass.id, {
           students: updatedStudents,
@@ -813,34 +972,41 @@ export default function StudentClasses() {
 
         // Also create individual student records in the students collection
         for (const student of importPreview) {
-          const studentDocRef = doc(db, 'students', student.student_id);
-          await setDoc(studentDocRef, {
-            student_id: student.student_id,
-            first_name: student.first_name,
-            last_name: student.last_name,
-            email: student.email || null,
-            created_by: user.id,
-            class_id: selectedClass.id,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }, { merge: true });
+          const studentDocRef = doc(db, "students", student.student_id);
+          await setDoc(
+            studentDocRef,
+            {
+              student_id: student.student_id,
+              first_name: student.first_name,
+              last_name: student.last_name,
+              email: student.email || null,
+              created_by: user.id,
+              class_id: selectedClass.id,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { merge: true },
+          );
         }
       } catch (error) {
-        console.error('Error saving students to Firestore:', error);
-        toast.error('Failed to save students to database: ' + (error instanceof Error ? error.message : String(error)));
+        console.error("Error saving students to Firestore:", error);
+        toast.error(
+          "Failed to save students to database: " +
+            (error instanceof Error ? error.message : String(error)),
+        );
         return;
       }
     }
-    
+
     // Log bulk ID import
     if (user && selectedClass) {
-      const idChangeRecords = importPreview.map(student => ({
+      const idChangeRecords = importPreview.map((student) => ({
         studentName: `${student.first_name} ${student.last_name}`,
         oldId: null as string | null,
         newId: student.student_id,
         classId: selectedClass.id,
         className: selectedClass.class_name,
-        changeType: 'import' as const,
+        changeType: "import" as const,
       }));
 
       await IDChangeLogger.logBulkIDChanges(
@@ -848,7 +1014,7 @@ export default function StudentClasses() {
         user.email,
         idChangeRecords,
         selectedClass.id,
-        selectedClass.class_name
+        selectedClass.class_name,
       );
     }
 
@@ -858,21 +1024,35 @@ export default function StudentClasses() {
       const markResult = await OfficialRecordService.markMultipleAsOfficial(
         studentIds,
         user.id,
-        user.email
+        user.email,
       );
-      
+
       if (markResult.success > 0) {
         toast.success(
-          `Imported ${importPreview.length} students and marked ${markResult.success} as official records`
+          `Imported ${importPreview.length} students and marked ${markResult.success} as official records`,
         );
       } else {
-        toast.warning(`Imported ${importPreview.length} students but failed to mark some as official`);
+        toast.warning(
+          `Imported ${importPreview.length} students but failed to mark some as official`,
+        );
       }
     } else {
       toast.success(`Imported ${importPreview.length} students`);
     }
 
+    // Log the import activity
+    if (user) {
+      await AuditLogger.logStudentImport(
+        user.id,
+        user.email,
+        selectedFile?.name || "student_import",
+        importPreview.length,
+        true,
+      );
+    }
+
     setImportPreview([]);
+    setSelectedFile(null);
     setShowImportDialog(false);
   };
 
@@ -880,29 +1060,30 @@ export default function StudentClasses() {
     const currentYear = new Date().getFullYear();
     const template = [
       {
-        student_id: '',
-        first_name: 'Juan',
-        last_name: 'Dela Cruz',
-        email: 'juan.delacruz@example.com',
+        student_id: "",
+        first_name: "Juan",
+        last_name: "Dela Cruz",
+        email: "juan.delacruz@example.com",
       },
       {
         student_id: `${currentYear}-0001`,
-        first_name: 'Maria',
-        last_name: 'Santos',
-        email: 'maria.santos@example.com',
+        first_name: "Maria",
+        last_name: "Santos",
+        email: "maria.santos@example.com",
       },
     ];
 
     const worksheet = XLSX.utils.json_to_sheet(template);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
-    XLSX.writeFile(workbook, 'student_classes_template.xlsx');
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
+    XLSX.writeFile(workbook, "student_classes_template.xlsx");
   };
 
-  const filteredClasses = classes.filter(c =>
-    c.class_name.toLowerCase().includes(search.toLowerCase()) ||
-    c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
-    c.section_block.toLowerCase().includes(search.toLowerCase())
+  const filteredClasses = classes.filter(
+    (c) =>
+      c.class_name.toLowerCase().includes(search.toLowerCase()) ||
+      c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
+      c.section_block.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -910,10 +1091,12 @@ export default function StudentClasses() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Class</h1>
-          <p className="text-muted-foreground mt-1">Manage student roster and information</p>
+          <p className="text-muted-foreground mt-1">
+            Manage student roster and information
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button 
+          <Button
             onClick={() => fileInputRef.current?.click()}
             variant="outline"
             className="gap-2 hover:bg-transparent hover:text-current"
@@ -928,7 +1111,10 @@ export default function StudentClasses() {
             onChange={handleFileUpload}
             className="hidden"
           />
-          <Button onClick={() => setShowAddDialog(true)} className="gradient-primary gap-2">
+          <Button
+            onClick={() => setShowAddDialog(true)}
+            className="gradient-primary gap-2"
+          >
             <Plus className="w-4 h-4" />
             Add Class
           </Button>
@@ -957,13 +1143,17 @@ export default function StudentClasses() {
         <div className="text-center py-12">
           <GraduationCap className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">
-            {search ? 'No classes found matching your search' : 'No classes yet'}
+            {search
+              ? "No classes found matching your search"
+              : "No classes yet"}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {filteredClasses.map((classItem) => (
-            <Card key={classItem.id} className="card-elevated hover:shadow-lg transition-shadow cursor-pointer"
+            <Card
+              key={classItem.id}
+              className="card-elevated hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => {
                 setSelectedClass(classItem);
                 setShowViewDialog(true);
@@ -976,7 +1166,9 @@ export default function StudentClasses() {
                       <GraduationCap className="w-6 h-6 text-yellow-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-lg text-foreground">{classItem.class_name}</h3>
+                      <h3 className="font-semibold text-lg text-foreground">
+                        {classItem.class_name}
+                      </h3>
                       <p className="text-sm text-muted-foreground">
                         {classItem.course_subject} - {classItem.section_block}
                       </p>
@@ -998,35 +1190,45 @@ export default function StudentClasses() {
                     </Button>
                   </div>
                 </div>
-                
+
                 <div className="mt-4 grid grid-cols-3 gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Total Students</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Total Students
+                    </p>
                     <p className="text-sm font-medium flex items-center gap-1">
                       <GraduationCap className="w-4 h-4 text-yellow-600" />
                       {classItem.students.length}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Scanned</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Scanned
+                    </p>
                     <p className="text-sm font-medium text-primary">
                       {classItem.students.length} / {classItem.students.length}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Average Score</p>
-                    <p className="text-sm font-medium text-muted-foreground">N/A</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Average Score
+                    </p>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      N/A
+                    </p>
                   </div>
                 </div>
-                
+
                 <div className="mt-4">
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full transition-all" 
-                      style={{ width: '100%' }}
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all"
+                      style={{ width: "100%" }}
                     />
                   </div>
-                  <p className="text-xs text-right text-muted-foreground mt-1">100%</p>
+                  <p className="text-xs text-right text-muted-foreground mt-1">
+                    100%
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -1038,14 +1240,21 @@ export default function StudentClasses() {
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
           <DialogHeader className="pb-6">
-            <DialogTitle className="text-2xl font-bold">Create New Class</DialogTitle>
+            <DialogTitle className="text-2xl font-bold">
+              Create New Class
+            </DialogTitle>
             <DialogDescription className="text-base">
-              Follow the steps below to create a new class. All required fields are marked with *.
-              You must add at least one valid student to complete the class creation.
+              Follow the steps below to create a new class. All required fields
+              are marked with *. You must add at least one valid student to
+              complete the class creation.
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+          <Tabs
+            value={currentTab}
+            onValueChange={setCurrentTab}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="basic" className="flex items-center gap-2">
                 Class Information
@@ -1062,105 +1271,161 @@ export default function StudentClasses() {
 
             <TabsContent value="basic" className="space-y-6 mt-4">
               <div className="bg-gray-50 p-6 rounded-lg border">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">Basic Information</h3>
+                <h3 className="text-lg font-semibold mb-4 text-gray-800">
+                  Basic Information
+                </h3>
                 <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label htmlFor="class_name" className="text-sm font-medium text-gray-700">Program *</Label>
-                  <Input
-                    id="class_name"
-                    value={newClass.class_name}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setNewClass({ ...newClass, class_name: value });
-                      
-                      // Show warning if length exceeds 0 but is less than 5
-                      if (value.trim().length > 0 && value.trim().length < 5) {
-                        setClassNameWarning(true);
-                        setTimeout(() => setClassNameWarning(false), 2000);
-                      } else {
-                        setClassNameWarning(false);
+                  <div className="space-y-3">
+                    <Label
+                      htmlFor="class_name"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Program *
+                    </Label>
+                    <Input
+                      id="class_name"
+                      value={newClass.class_name}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewClass({ ...newClass, class_name: value });
+
+                        // Show warning if length exceeds 0 but is less than 5
+                        if (
+                          value.trim().length > 0 &&
+                          value.trim().length < 5
+                        ) {
+                          setClassNameWarning(true);
+                          setTimeout(() => setClassNameWarning(false), 2000);
+                        } else {
+                          setClassNameWarning(false);
+                        }
+                      }}
+                      placeholder="e.g., Computer Science 101"
+                      className={
+                        !newClass.class_name.trim() ||
+                        !/^[a-zA-Z\s]+$/.test(newClass.class_name.trim()) ||
+                        newClass.class_name.trim().length < 5
+                          ? "border-red-300 focus:border-red-500"
+                          : "border-green-300 focus:border-green-500"
                       }
-                    }}
-                    placeholder="e.g., Computer Science 101"
-                    className={
-                      !newClass.class_name.trim() || !/^[a-zA-Z\s]+$/.test(newClass.class_name.trim()) || newClass.class_name.trim().length < 5 
-                        ? 'border-red-300 focus:border-red-500' 
-                        : 'border-green-300 focus:border-green-500'
-                    }
-                  />
-                  {newClass.class_name.trim() && newClass.class_name.trim().length >= 5 && /^[a-zA-Z\s]+$/.test(newClass.class_name.trim()) ? (
-                    <p className="text-xs text-green-600">Valid class name</p>
-                  ) : (
-                    <p className="text-xs text-gray-600">
-                      Letters and spaces only, minimum 5 characters
-                      {newClass.class_name.trim() && ` (${newClass.class_name.trim().length}/5)`}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <Label htmlFor="course_subject" className="text-sm font-medium text-gray-700">Course *</Label>
-                  <Input
-                    id="course_subject"
-                    value={newClass.course_subject}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setNewClass({ ...newClass, course_subject: value });
-                      
-                    }}
-                    placeholder="e.g., Introduction to Programming"
-                    className={!newClass.course_subject.trim() || newClass.course_subject.trim().length < 5 ? 'border-red-300 focus:border-red-500' : 'border-green-300 focus:border-green-500'}
-                  />
-                  {newClass.course_subject.trim() && newClass.course_subject.trim().length >= 5 ? (
-                    <p className="text-xs text-green-600">Valid course subject</p>
-                  ) : (
-                    <p className="text-xs text-gray-600">
-                      Required field, minimum 5 characters
-                      {newClass.course_subject.trim() && ` (${newClass.course_subject.trim().length}/5)`}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <Label htmlFor="section_block" className="text-sm font-medium text-gray-700">Section/Block *</Label>
-                  <Input
-                    id="section_block"
-                    value={newClass.section_block}
-                    onChange={(e) => setNewClass({ ...newClass, section_block: e.target.value })}
-                    placeholder="e.g., A, B1, CS-1A"
-                    className={!newClass.section_block.trim() ? 'border-red-300 focus:border-red-500' : 'border-green-300 focus:border-green-500'}
-                  />
-                  <p className="text-xs text-gray-600">Required field</p>
-                </div>
-                
-                <div className="space-y-3">
-                  <Label htmlFor="room" className="text-sm font-medium text-gray-700">Room *</Label>
-                  <Input
-                    id="room"
-                    type="number"
-                    value={newClass.room}
-                    onChange={(e) => {
-                      // Only allow exactly 3 numbers
-                      const inputValue = e.target.value.replace(/[^0-9]/g, '');
-                      if (inputValue.length > 3) {
-                        setRoomWarning(true);
-                        setTimeout(() => setRoomWarning(false), 3000);
-                        return;
+                    />
+                    {newClass.class_name.trim() &&
+                    newClass.class_name.trim().length >= 5 &&
+                    /^[a-zA-Z\s]+$/.test(newClass.class_name.trim()) ? (
+                      <p className="text-xs text-green-600">Valid class name</p>
+                    ) : (
+                      <p className="text-xs text-gray-600">
+                        Letters and spaces only, minimum 5 characters
+                        {newClass.class_name.trim() &&
+                          ` (${newClass.class_name.trim().length}/5)`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <Label
+                      htmlFor="course_subject"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Course *
+                    </Label>
+                    <Input
+                      id="course_subject"
+                      value={newClass.course_subject}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewClass({ ...newClass, course_subject: value });
+                      }}
+                      placeholder="e.g., Introduction to Programming"
+                      className={
+                        !newClass.course_subject.trim() ||
+                        newClass.course_subject.trim().length < 5
+                          ? "border-red-300 focus:border-red-500"
+                          : "border-green-300 focus:border-green-500"
                       }
-                      const value = inputValue.slice(0, 3);
-                      setNewClass({ ...newClass, room: value });
-                    }}
-                    placeholder="e.g., 101, 205, 312"
-                    className={!newClass.room.trim() || !/^[0-9]{3}$/.test(newClass.room.trim()) ? 'border-red-300 focus:border-red-500' : 'border-green-300 focus:border-green-500'}
-                  />
-                  <p className="text-xs text-gray-600">Room number (exactly 3 digits, e.g., 101, 205, 312)</p>
-                  {roomWarning && (
-                    <div className="flex items-center gap-2 text-xs text-red-600 animate-pulse">
-                      <div className="w-2 h-2 bg-red-500 rounded-full" />
-                      <span>Room number must be exactly 3 digits only</span>
-                    </div>
-                  )}
+                    />
+                    {newClass.course_subject.trim() &&
+                    newClass.course_subject.trim().length >= 5 ? (
+                      <p className="text-xs text-green-600">
+                        Valid course subject
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-600">
+                        Required field, minimum 5 characters
+                        {newClass.course_subject.trim() &&
+                          ` (${newClass.course_subject.trim().length}/5)`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <Label
+                      htmlFor="section_block"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Section/Block *
+                    </Label>
+                    <Input
+                      id="section_block"
+                      value={newClass.section_block}
+                      onChange={(e) =>
+                        setNewClass({
+                          ...newClass,
+                          section_block: e.target.value,
+                        })
+                      }
+                      placeholder="e.g., A, B1, CS-1A"
+                      className={
+                        !newClass.section_block.trim()
+                          ? "border-red-300 focus:border-red-500"
+                          : "border-green-300 focus:border-green-500"
+                      }
+                    />
+                    <p className="text-xs text-gray-600">Required field</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label
+                      htmlFor="room"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Room *
+                    </Label>
+                    <Input
+                      id="room"
+                      type="number"
+                      value={newClass.room}
+                      onChange={(e) => {
+                        // Only allow exactly 3 numbers
+                        const inputValue = e.target.value.replace(
+                          /[^0-9]/g,
+                          "",
+                        );
+                        if (inputValue.length > 3) {
+                          setRoomWarning(true);
+                          setTimeout(() => setRoomWarning(false), 3000);
+                          return;
+                        }
+                        const value = inputValue.slice(0, 3);
+                        setNewClass({ ...newClass, room: value });
+                      }}
+                      placeholder="e.g., 101, 205, 312"
+                      className={
+                        !newClass.room.trim() ||
+                        !/^[0-9]{3}$/.test(newClass.room.trim())
+                          ? "border-red-300 focus:border-red-500"
+                          : "border-green-300 focus:border-green-500"
+                      }
+                    />
+                    <p className="text-xs text-gray-600">
+                      Room number (exactly 3 digits, e.g., 101, 205, 312)
+                    </p>
+                    {roomWarning && (
+                      <div className="flex items-center gap-2 text-xs text-red-600 animate-pulse">
+                        <div className="w-2 h-2 bg-red-500 rounded-full" />
+                        <span>Room number must be exactly 3 digits only</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                
-              </div>
               </div>
             </TabsContent>
 
@@ -1173,9 +1438,13 @@ export default function StudentClasses() {
                   className="hover:!bg-transparent hover:!text-current hover:!border-current"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {importing ? 'Importing...' : 'Import CSV/Excel'}
+                  {importing ? "Importing..." : "Import CSV/Excel"}
                 </Button>
-                <Button variant="outline" onClick={downloadTemplate} className="hover:!bg-transparent hover:!text-current hover:!border-current">
+                <Button
+                  variant="outline"
+                  onClick={downloadTemplate}
+                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
+                >
                   <Download className="w-4 h-4 mr-2" />
                   Download Template
                 </Button>
@@ -1189,54 +1458,119 @@ export default function StudentClasses() {
               </div>
 
               <div className="bg-gray-50 p-6 rounded-lg border space-y-6">
-                <h4 className="text-lg font-semibold text-gray-800">Add Student Manually</h4>
+                <h4 className="text-lg font-semibold text-gray-800">
+                  Add Student Manually
+                </h4>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Student ID (Optional)</Label>
+                      <Label className="text-sm font-medium text-gray-700">
+                        Student ID (Optional)
+                      </Label>
                       <Input
                         placeholder="Auto-generated if empty"
                         value={newStudent.student_id}
-                        onChange={(e) => setNewStudent({ ...newStudent, student_id: e.target.value })}
-                        className={newStudent.student_id && (!/^\d{9}$/.test(newStudent.student_id) || !newStudent.student_id.startsWith('20')) ? 'border-red-300 focus:border-red-500' : ''}
+                        onChange={(e) =>
+                          setNewStudent({
+                            ...newStudent,
+                            student_id: e.target.value,
+                          })
+                        }
+                        className={
+                          newStudent.student_id &&
+                          (!/^\d{9}$/.test(newStudent.student_id) ||
+                            !newStudent.student_id.startsWith("20"))
+                            ? "border-red-300 focus:border-red-500"
+                            : ""
+                        }
                       />
-                      <p className="text-xs text-gray-600">9 digits, start with 20 (e.g., 202312345)</p>
+                      <p className="text-xs text-gray-600">
+                        9 digits, start with 20 (e.g., 202312345)
+                      </p>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">First Name *</Label>
+                      <Label className="text-sm font-medium text-gray-700">
+                        First Name *
+                      </Label>
                       <Input
                         placeholder="Enter first name"
                         value={newStudent.first_name}
-                        onChange={(e) => setNewStudent({ ...newStudent, first_name: e.target.value })}
-                        className={newStudent.first_name && (!/^[a-zA-Z\s]+$/.test(newStudent.first_name) || newStudent.first_name.length < 4) ? 'border-red-300 focus:border-red-500' : ''}
+                        onChange={(e) =>
+                          setNewStudent({
+                            ...newStudent,
+                            first_name: e.target.value,
+                          })
+                        }
+                        className={
+                          newStudent.first_name &&
+                          (!/^[a-zA-Z\s]+$/.test(newStudent.first_name) ||
+                            newStudent.first_name.length < 4)
+                            ? "border-red-300 focus:border-red-500"
+                            : ""
+                        }
                       />
-                      <p className="text-xs text-gray-600">Letters only, 4+ characters</p>
+                      <p className="text-xs text-gray-600">
+                        Letters only, 4+ characters
+                      </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Last Name *</Label>
+                      <Label className="text-sm font-medium text-gray-700">
+                        Last Name *
+                      </Label>
                       <Input
                         placeholder="Enter last name"
                         value={newStudent.last_name}
-                        onChange={(e) => setNewStudent({ ...newStudent, last_name: e.target.value })}
-                        className={newStudent.last_name && (!/^[a-zA-Z\s]+$/.test(newStudent.last_name) || newStudent.last_name.length < 4) ? 'border-red-300 focus:border-red-500' : ''}
+                        onChange={(e) =>
+                          setNewStudent({
+                            ...newStudent,
+                            last_name: e.target.value,
+                          })
+                        }
+                        className={
+                          newStudent.last_name &&
+                          (!/^[a-zA-Z\s]+$/.test(newStudent.last_name) ||
+                            newStudent.last_name.length < 4)
+                            ? "border-red-300 focus:border-red-500"
+                            : ""
+                        }
                       />
-                      <p className="text-xs text-gray-600">Letters only, 4+ characters</p>
+                      <p className="text-xs text-gray-600">
+                        Letters only, 4+ characters
+                      </p>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Email (Optional)</Label>
+                      <Label className="text-sm font-medium text-gray-700">
+                        Email (Optional)
+                      </Label>
                       <Input
                         placeholder="student@gmail.com"
                         value={newStudent.email}
-                        onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
-                        className={newStudent.email && !newStudent.email.includes('@gmail.com') ? 'border-red-300 focus:border-red-500' : ''}
+                        onChange={(e) =>
+                          setNewStudent({
+                            ...newStudent,
+                            email: e.target.value,
+                          })
+                        }
+                        className={
+                          newStudent.email &&
+                          !newStudent.email.includes("@gmail.com")
+                            ? "border-red-300 focus:border-red-500"
+                            : ""
+                        }
                       />
-                      <p className="text-xs text-gray-600">Must be @gmail.com (optional)</p>
+                      <p className="text-xs text-gray-600">
+                        Must be @gmail.com (optional)
+                      </p>
                     </div>
                   </div>
                   <div className="flex justify-end">
-                    <Button onClick={handleAddStudent} variant="default" className="bg-blue-600 hover:bg-blue-700">
+                    <Button
+                      onClick={handleAddStudent}
+                      variant="default"
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
                       <Plus className="w-4 h-4 mr-2" />
                       Add Student
                     </Button>
@@ -1257,31 +1591,71 @@ export default function StudentClasses() {
                     </TableHeader>
                     <TableBody>
                       {students.map((student, idx) => {
-                        const isValidStudentId = student.student_id && /^\d{9}$/.test(student.student_id) && student.student_id.startsWith('20');
-                        const isValidFirstName = student.first_name && /^[a-zA-Z\s]+$/.test(student.first_name) && student.first_name.length >= 4;
-                        const isValidLastName = student.last_name && /^[a-zA-Z\s]+$/.test(student.last_name) && student.last_name.length >= 4;
-                        const isValidEmail = !student.email || student.email.includes('@gmail.com');
-                        const isValidStudent = isValidStudentId && isValidFirstName && isValidLastName && isValidEmail;
-                        
+                        const isValidStudentId =
+                          student.student_id &&
+                          /^\d{9}$/.test(student.student_id) &&
+                          student.student_id.startsWith("20");
+                        const isValidFirstName =
+                          student.first_name &&
+                          /^[a-zA-Z\s]+$/.test(student.first_name) &&
+                          student.first_name.length >= 4;
+                        const isValidLastName =
+                          student.last_name &&
+                          /^[a-zA-Z\s]+$/.test(student.last_name) &&
+                          student.last_name.length >= 4;
+                        const isValidEmail =
+                          !student.email ||
+                          student.email.includes("@gmail.com");
+                        const isValidStudent =
+                          isValidStudentId &&
+                          isValidFirstName &&
+                          isValidLastName &&
+                          isValidEmail;
+
                         return (
-                          <TableRow key={`new-student-${idx}`} className={!isValidStudent ? 'bg-red-50 border-red-200' : ''}>
-                            <TableCell className={!isValidStudentId ? 'text-red-600' : ''}>
+                          <TableRow
+                            key={`new-student-${idx}`}
+                            className={
+                              !isValidStudent ? "bg-red-50 border-red-200" : ""
+                            }
+                          >
+                            <TableCell
+                              className={
+                                !isValidStudentId ? "text-red-600" : ""
+                              }
+                            >
                               {student.student_id}
-                              {!isValidStudentId && <span className="ml-1 text-red-500">!</span>}
+                              {!isValidStudentId && (
+                                <span className="ml-1 text-red-500">!</span>
+                              )}
                             </TableCell>
-                            <TableCell className={(!isValidFirstName || !isValidLastName) ? 'text-red-600' : ''}>
+                            <TableCell
+                              className={
+                                !isValidFirstName || !isValidLastName
+                                  ? "text-red-600"
+                                  : ""
+                              }
+                            >
                               {`${student.first_name} ${student.last_name}`}
-                              {(!isValidFirstName || !isValidLastName) && <span className="ml-1 text-red-500">!</span>}
+                              {(!isValidFirstName || !isValidLastName) && (
+                                <span className="ml-1 text-red-500">!</span>
+                              )}
                             </TableCell>
-                            <TableCell className={!isValidEmail ? 'text-red-600' : ''}>
-                              {student.email || '-'}
-                              {!isValidEmail && <span className="ml-1 text-red-500">!</span>}
+                            <TableCell
+                              className={!isValidEmail ? "text-red-600" : ""}
+                            >
+                              {student.email || "-"}
+                              {!isValidEmail && (
+                                <span className="ml-1 text-red-500">!</span>
+                              )}
                             </TableCell>
                             <TableCell className="text-right">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleRemoveStudent(student.student_id)}
+                                onClick={() =>
+                                  handleRemoveStudent(student.student_id)
+                                }
                                 className="hover:bg-transparent hover:text-current"
                               >
                                 <X className="w-4 h-4 text-destructive" />
@@ -1299,36 +1673,72 @@ export default function StudentClasses() {
                 <div className="text-center py-8 text-muted-foreground">
                   <AlertCircle className="w-8 h-8 mx-auto mb-2" />
                   <p>No students added yet</p>
-                  <p className="text-xs mt-1">At least one student is required to create a class</p>
+                  <p className="text-xs mt-1">
+                    At least one student is required to create a class
+                  </p>
                 </div>
               ) : (
                 <div className="mt-4 p-3 bg-muted rounded-lg">
                   <div className="flex items-center justify-between text-sm">
-                    <span>Total Students: <strong>{students.length}</strong></span>
+                    <span>
+                      Total Students: <strong>{students.length}</strong>
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       {(() => {
-                        const invalidStudents = students.filter(student => {
-                          const isValidStudentId = student.student_id && /^\d{9}$/.test(student.student_id) && student.student_id.startsWith('20');
-                          const isValidFirstName = student.first_name && /^[a-zA-Z\s]+$/.test(student.first_name) && student.first_name.length >= 4;
-                          const isValidLastName = student.last_name && /^[a-zA-Z\s]+$/.test(student.last_name) && student.last_name.length >= 4;
-                          const isValidEmail = !student.email || student.email.includes('@gmail.com');
-                          return !(isValidStudentId && isValidFirstName && isValidLastName && isValidEmail);
+                        const invalidStudents = students.filter((student) => {
+                          const isValidStudentId =
+                            student.student_id &&
+                            /^\d{9}$/.test(student.student_id) &&
+                            student.student_id.startsWith("20");
+                          const isValidFirstName =
+                            student.first_name &&
+                            /^[a-zA-Z\s]+$/.test(student.first_name) &&
+                            student.first_name.length >= 4;
+                          const isValidLastName =
+                            student.last_name &&
+                            /^[a-zA-Z\s]+$/.test(student.last_name) &&
+                            student.last_name.length >= 4;
+                          const isValidEmail =
+                            !student.email ||
+                            student.email.includes("@gmail.com");
+                          return !(
+                            isValidStudentId &&
+                            isValidFirstName &&
+                            isValidLastName &&
+                            isValidEmail
+                          );
                         });
-                        return invalidStudents.length > 0 
-                          ? `${invalidStudents.length} student(s) with validation errors!` 
-                          : 'All students valid';
+                        return invalidStudents.length > 0
+                          ? `${invalidStudents.length} student(s) with validation errors!`
+                          : "All students valid";
                       })()}
                     </span>
                   </div>
-                  {students.some(student => {
-                    const isValidStudentId = student.student_id && /^\d{9}$/.test(student.student_id) && student.student_id.startsWith('20');
-                    const isValidFirstName = student.first_name && /^[a-zA-Z\s]+$/.test(student.first_name) && student.first_name.length >= 4;
-                    const isValidLastName = student.last_name && /^[a-zA-Z\s]+$/.test(student.last_name) && student.last_name.length >= 4;
-                    const isValidEmail = !student.email || student.email.includes('@gmail.com');
-                    return !(isValidStudentId && isValidFirstName && isValidLastName && isValidEmail);
+                  {students.some((student) => {
+                    const isValidStudentId =
+                      student.student_id &&
+                      /^\d{9}$/.test(student.student_id) &&
+                      student.student_id.startsWith("20");
+                    const isValidFirstName =
+                      student.first_name &&
+                      /^[a-zA-Z\s]+$/.test(student.first_name) &&
+                      student.first_name.length >= 4;
+                    const isValidLastName =
+                      student.last_name &&
+                      /^[a-zA-Z\s]+$/.test(student.last_name) &&
+                      student.last_name.length >= 4;
+                    const isValidEmail =
+                      !student.email || student.email.includes("@gmail.com");
+                    return !(
+                      isValidStudentId &&
+                      isValidFirstName &&
+                      isValidLastName &&
+                      isValidEmail
+                    );
                   }) && (
                     <p className="text-xs text-amber-600 mt-2">
-                      Students with validation errors (highlighted in red) must be fixed before creating the class
+                      Students with validation errors (highlighted in red) must
+                      be fixed before creating the class
                     </p>
                   )}
                 </div>
@@ -1337,36 +1747,60 @@ export default function StudentClasses() {
           </Tabs>
 
           <DialogFooter className="pt-6 border-t">
-            <Button variant="outline" onClick={() => setShowAddDialog(false)} className="hover:bg-transparent hover:text-current">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddDialog(false)}
+              className="hover:bg-transparent hover:text-current"
+            >
               Cancel
             </Button>
-            <Button 
-              onClick={handleAddClass} 
+            <Button
+              onClick={handleAddClass}
               className="bg-blue-600 hover:bg-blue-700 text-white"
               disabled={(() => {
                 // Disable if basic fields are invalid
-                if (!newClass.class_name.trim() || !newClass.course_subject.trim() || !newClass.section_block.trim() || !newClass.room.trim()) {
+                if (
+                  !newClass.class_name.trim() ||
+                  !newClass.course_subject.trim() ||
+                  !newClass.section_block.trim() ||
+                  !newClass.room.trim()
+                ) {
                   return true;
                 }
-                
+
                 // Disable if no students for new classes
                 if (!editingClassId && students.length === 0) {
                   return true;
                 }
-                
+
                 // Disable if any student has validation errors
-                const hasInvalidStudents = students.some(student => {
-                  const isValidStudentId = student.student_id && /^\d{9}$/.test(student.student_id) && student.student_id.startsWith('20');
-                  const isValidFirstName = student.first_name && /^[a-zA-Z\s]+$/.test(student.first_name) && student.first_name.length >= 4;
-                  const isValidLastName = student.last_name && /^[a-zA-Z\s]+$/.test(student.last_name) && student.last_name.length >= 4;
-                  const isValidEmail = !student.email || student.email.includes('@gmail.com');
-                  return !(isValidStudentId && isValidFirstName && isValidLastName && isValidEmail);
+                const hasInvalidStudents = students.some((student) => {
+                  const isValidStudentId =
+                    student.student_id &&
+                    /^\d{9}$/.test(student.student_id) &&
+                    student.student_id.startsWith("20");
+                  const isValidFirstName =
+                    student.first_name &&
+                    /^[a-zA-Z\s]+$/.test(student.first_name) &&
+                    student.first_name.length >= 4;
+                  const isValidLastName =
+                    student.last_name &&
+                    /^[a-zA-Z\s]+$/.test(student.last_name) &&
+                    student.last_name.length >= 4;
+                  const isValidEmail =
+                    !student.email || student.email.includes("@gmail.com");
+                  return !(
+                    isValidStudentId &&
+                    isValidFirstName &&
+                    isValidLastName &&
+                    isValidEmail
+                  );
                 });
-                
+
                 return hasInvalidStudents;
               })()}
             >
-              {editingClassId ? 'Update Class' : 'Create Class'}
+              {editingClassId ? "Update Class" : "Create Class"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1378,7 +1812,8 @@ export default function StudentClasses() {
           <DialogHeader>
             <DialogTitle>Import Class Roster</DialogTitle>
             <DialogDescription>
-              Upload an Excel file (.xls, .xlsx) containing student information to create a new class or update an existing one.
+              Upload an Excel file (.xls, .xlsx) containing student information
+              to create a new class or update an existing one.
             </DialogDescription>
           </DialogHeader>
 
@@ -1393,13 +1828,13 @@ export default function StudentClasses() {
                     <p className="font-medium text-sm">students.xlsx</p>
                     <p className="text-xs text-muted-foreground">164 KB</p>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     className="ml-auto"
                     onClick={() => {
                       setImportPreview([]);
-                      if (fileInputRef.current) fileInputRef.current.value = '';
+                      if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                   >
                     Remove
@@ -1409,30 +1844,60 @@ export default function StudentClasses() {
 
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Total Rows</p>
-                  <p className="text-2xl font-bold text-green-600">{importPreview.length}</p>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Total Rows
+                  </p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {importPreview.length}
+                  </p>
                 </div>
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Valid Students</p>
-                  <p className="text-2xl font-bold text-green-600">{importPreview.length}</p>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Valid Students
+                  </p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {importPreview.length}
+                  </p>
                 </div>
               </div>
 
               <div className="mb-4">
-                <h4 className="font-medium mb-2 text-sm">Detected Student Information Fields</h4>
+                <h4 className="font-medium mb-2 text-sm">
+                  Detected Student Information Fields
+                </h4>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
                     </div>
                     <span>Student Name</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
                     </div>
                     <span>Student ID</span>
@@ -1454,7 +1919,7 @@ export default function StudentClasses() {
                       <TableRow key={`import-${idx}`}>
                         <TableCell>{student.student_id}</TableCell>
                         <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                        <TableCell>{student.email || '-'}</TableCell>
+                        <TableCell>{student.email || "-"}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1466,9 +1931,13 @@ export default function StudentClasses() {
               <div className="w-16 h-16 bg-yellow-100 rounded-lg mx-auto mb-4 flex items-center justify-center">
                 <Upload className="w-8 h-8 text-yellow-600" />
               </div>
-              <p className="font-medium mb-2">Click to upload or drag and drop</p>
-              <p className="text-sm text-muted-foreground mb-4">Excel files only (.xls, .xlsx)</p>
-              <Button 
+              <p className="font-medium mb-2">
+                Click to upload or drag and drop
+              </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Excel files only (.xls, .xlsx)
+              </p>
+              <Button
                 variant="outline"
                 onClick={() => fileInputRef.current?.click()}
                 className="hover:bg-transparent hover:text-current"
@@ -1479,10 +1948,14 @@ export default function StudentClasses() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowImportDialog(false);
-              setImportPreview([]);
-            }} className="hover:bg-transparent hover:text-current">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportDialog(false);
+                setImportPreview([]);
+              }}
+              className="hover:bg-transparent hover:text-current"
+            >
               Cancel
             </Button>
             {importPreview.length > 0 && (
@@ -1495,20 +1968,24 @@ export default function StudentClasses() {
       </Dialog>
 
       {/* Data Quality Check Dialog */}
-      <Dialog open={showDataQualityDialog} onOpenChange={setShowDataQualityDialog}>
+      <Dialog
+        open={showDataQualityDialog}
+        onOpenChange={setShowDataQualityDialog}
+      >
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Data Quality Issues Detected</DialogTitle>
             <DialogDescription>
-              Review duplicates and inconsistencies before proceeding with the import
+              Review duplicates and inconsistencies before proceeding with the
+              import
             </DialogDescription>
           </DialogHeader>
 
           {dataQualityResult && (
             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
               <p className="text-sm text-yellow-800 mb-2">
-                Data quality check found {dataQualityResult.issues?.length || 0} potential issues.
-                Review and proceed with caution.
+                Data quality check found {dataQualityResult.issues?.length || 0}{" "}
+                potential issues. Review and proceed with caution.
               </p>
               <div className="flex gap-2">
                 <Button
@@ -1525,34 +2002,44 @@ export default function StudentClasses() {
                 <Button
                   onClick={async () => {
                     // Proceed with import despite quality issues
-                    const idAssignmentResult = await StudentIDService.bulkImportStudents(importPreview, true);
+                    const idAssignmentResult =
+                      await StudentIDService.bulkImportStudents(
+                        importPreview,
+                        true,
+                      );
                     if (!idAssignmentResult.success) {
-                      toast.error(idAssignmentResult.error || 'Failed to auto-generate IDs for import');
+                      toast.error(
+                        idAssignmentResult.error ||
+                          "Failed to auto-generate IDs for import",
+                      );
                       setShowDataQualityDialog(false);
                       return;
                     }
 
                     // Continue with rest of import logic
                     let generatedIndex = 0;
-                    const studentsWithIds: Student[] = importPreview.map((row) => {
-                      const existingId = row.student_id.trim();
-                      if (existingId) {
+                    const studentsWithIds: Student[] = importPreview.map(
+                      (row) => {
+                        const existingId = row.student_id.trim();
+                        if (existingId) {
+                          return {
+                            student_id: existingId,
+                            first_name: row.first_name,
+                            last_name: row.last_name,
+                            email: row.email || undefined,
+                          };
+                        }
+
+                        const generatedId =
+                          idAssignmentResult.ids?.[generatedIndex++];
                         return {
-                          student_id: existingId,
+                          student_id: generatedId || "",
                           first_name: row.first_name,
                           last_name: row.last_name,
                           email: row.email || undefined,
                         };
-                      }
-
-                      const generatedId = idAssignmentResult.ids?.[generatedIndex++];
-                      return {
-                        student_id: generatedId || '',
-                        first_name: row.first_name,
-                        last_name: row.last_name,
-                        email: row.email || undefined,
-                      };
-                    });
+                      },
+                    );
 
                     setStudents([...students, ...studentsWithIds]);
                     setImportPreview([]);
@@ -1561,22 +2048,29 @@ export default function StudentClasses() {
 
                     // Mark validated students as official
                     if (user) {
-                      const studentIds = studentsWithIds.map((s) => s.student_id);
-                      const markResult = await OfficialRecordService.markMultipleAsOfficial(
-                        studentIds,
-                        user.id,
-                        user.email
+                      const studentIds = studentsWithIds.map(
+                        (s) => s.student_id,
                       );
-                      
+                      const markResult =
+                        await OfficialRecordService.markMultipleAsOfficial(
+                          studentIds,
+                          user.id,
+                          user.email,
+                        );
+
                       if (markResult.success > 0) {
                         toast.success(
-                          `Imported ${studentsWithIds.length} students and marked ${markResult.success} as official records`
+                          `Imported ${studentsWithIds.length} students and marked ${markResult.success} as official records`,
                         );
                       } else {
-                        toast.warning(`Imported ${studentsWithIds.length} students but failed to mark some as official`);
+                        toast.warning(
+                          `Imported ${studentsWithIds.length} students but failed to mark some as official`,
+                        );
                       }
                     } else {
-                      toast.success(`Imported ${studentsWithIds.length} students`);
+                      toast.success(
+                        `Imported ${studentsWithIds.length} students`,
+                      );
                     }
                   }}
                   className="gradient-primary"
@@ -1595,7 +2089,8 @@ export default function StudentClasses() {
           <DialogHeader>
             <DialogTitle>{selectedClass?.class_name}</DialogTitle>
             <DialogDescription>
-              {selectedClass?.course_subject} - Section {selectedClass?.section_block}
+              {selectedClass?.course_subject} - Section{" "}
+              {selectedClass?.section_block}
             </DialogDescription>
           </DialogHeader>
           {selectedClass && (
@@ -1608,12 +2103,14 @@ export default function StudentClasses() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Room</p>
-                  <p className="font-medium">{selectedClass.room || '-'}</p>
+                  <p className="font-medium">{selectedClass.room || "-"}</p>
                 </div>
               </div>
 
               <div>
-                <h4 className="font-medium mb-3">Students ({selectedClass.students.length})</h4>
+                <h4 className="font-medium mb-3">
+                  Students ({selectedClass.students.length})
+                </h4>
                 {selectedClass.students.length > 0 ? (
                   <div className="border rounded-lg overflow-hidden">
                     <Table>
@@ -1629,20 +2126,22 @@ export default function StudentClasses() {
                           <TableRow key={`${selectedClass.id}-student-${idx}`}>
                             <TableCell>{student.student_id}</TableCell>
                             <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                            <TableCell>{student.email || '-'}</TableCell>
+                            <TableCell>{student.email || "-"}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-4">No students enrolled</p>
+                  <p className="text-muted-foreground text-center py-4">
+                    No students enrolled
+                  </p>
                 )}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button 
+            <Button
               variant="outline"
               onClick={() => {
                 if (selectedClass) {
@@ -1657,14 +2156,19 @@ export default function StudentClasses() {
                   setEditingClassId(selectedClass.id);
                   setShowViewDialog(false);
                   setShowAddDialog(true);
-                  setCurrentTab('basic');
+                  setCurrentTab("basic");
                 }
               }}
               className="hover:bg-transparent hover:text-current"
             >
               Edit Class
             </Button>
-            <Button onClick={() => setShowViewDialog(false)} className="hover:bg-transparent hover:text-current">Close</Button>
+            <Button
+              onClick={() => setShowViewDialog(false)}
+              className="hover:bg-transparent hover:text-current"
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1675,12 +2179,13 @@ export default function StudentClasses() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this class and all associated data. This action cannot be undone.
+              This will permanently delete this class and all associated data.
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -1696,12 +2201,13 @@ export default function StudentClasses() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive Class</AlertDialogTitle>
             <AlertDialogDescription>
-              This will move the class to the archive. You can restore it later from the Archive section.
+              This will move the class to the archive. You can restore it later
+              from the Archive section.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleArchive}
               className="bg-amber-600 text-white hover:bg-amber-700"
             >

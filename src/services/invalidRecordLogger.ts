@@ -15,12 +15,12 @@ import {
   serverTimestamp,
   limit,
   QueryConstraint,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export interface InvalidRecordLog {
   id?: string;
-  record_type: 'grade' | 'attendance' | 'report'; // Type of record that was rejected
+  record_type: "grade" | "attendance" | "report"; // Type of record that was rejected
   entity_id: string; // Student ID, class ID, or exam ID
   user_id: string; // User who attempted to save the record
   user_email?: string;
@@ -42,7 +42,7 @@ export interface InvalidRecordLog {
 }
 
 export interface InvalidRecordQuery {
-  record_type?: 'grade' | 'attendance' | 'report';
+  record_type?: "grade" | "attendance" | "report";
   entity_id?: string;
   user_id?: string;
   from_date?: string;
@@ -66,7 +66,7 @@ export interface InvalidRecordSummary {
   affected_entities: string[];
 }
 
-const INVALID_RECORDS_COLLECTION = 'invalidRecordLogs';
+const INVALID_RECORDS_COLLECTION = "invalidRecordLogs";
 const LOG_RETENTION_DAYS = 90; // Keep logs for 90 days
 
 export class InvalidRecordLogger {
@@ -74,7 +74,7 @@ export class InvalidRecordLogger {
    * Log an invalid record attempt
    */
   static async logInvalidRecord(
-    recordType: 'grade' | 'attendance' | 'report',
+    recordType: "grade" | "attendance" | "report",
     recordData: Record<string, any>,
     validationErrors: Array<{ field: string; message: string; value?: any }>,
     userId: string,
@@ -84,7 +84,7 @@ export class InvalidRecordLogger {
       ip_address?: string;
       user_agent?: string;
       metadata?: Record<string, any>;
-    }
+    },
   ): Promise<InvalidRecordLog | null> {
     try {
       // Calculate expiry date (90 days from now)
@@ -92,26 +92,42 @@ export class InvalidRecordLogger {
       expiresAt.setDate(expiresAt.getDate() + LOG_RETENTION_DAYS);
 
       // Determine entity ID based on record type
-      let entityId = options?.entity_id || '';
+      let entityId = options?.entity_id || "";
       if (!entityId) {
-        if (recordType === 'grade') {
-          entityId = recordData.student_id || '';
-        } else if (recordType === 'attendance') {
-          entityId = recordData.student_id || '';
-        } else if (recordType === 'report') {
-          entityId = recordData.entity_id || '';
+        if (recordType === "grade") {
+          entityId = recordData.student_id || "";
+        } else if (recordType === "attendance") {
+          entityId = recordData.student_id || "";
+        } else if (recordType === "report") {
+          entityId = recordData.entity_id || "";
         }
       }
 
       // Generate rejection reason
-      const rejectionReason = this.generateRejectionReason(recordType, validationErrors);
+      const rejectionReason = this.generateRejectionReason(
+        recordType,
+        validationErrors,
+      );
+
+      // Helper to remove undefined values for Firestore
+      const sanitize = (obj: any) => {
+        if (!obj || typeof obj !== "object") return obj;
+        const result: any = Array.isArray(obj) ? [] : {};
+        Object.keys(obj).forEach((key) => {
+          if (obj[key] !== undefined) {
+            result[key] =
+              typeof obj[key] === "object" ? sanitize(obj[key]) : obj[key];
+          }
+        });
+        return result;
+      };
 
       const logData = {
         record_type: recordType,
         entity_id: entityId,
         user_id: userId,
         ...(options?.user_email && { user_email: options.user_email }),
-        record_data: recordData,
+        record_data: sanitize(recordData),
         validation_errors: validationErrors,
         error_count: validationErrors.length,
         warning_count: 0, // Could be extracted from validation result if warnings are tracked
@@ -119,12 +135,15 @@ export class InvalidRecordLogger {
         attempted_at: new Date().toISOString(),
         ...(options?.ip_address && { ip_address: options.ip_address }),
         ...(options?.user_agent && { user_agent: options.user_agent }),
-        ...(options?.metadata && { metadata: options.metadata }),
+        ...(options?.metadata && { metadata: sanitize(options.metadata) }),
         createdAt: serverTimestamp(),
         expiresAt: Timestamp.fromDate(expiresAt),
       };
 
-      const docRef = await addDoc(collection(db, INVALID_RECORDS_COLLECTION), logData);
+      const docRef = await addDoc(
+        collection(db, INVALID_RECORDS_COLLECTION),
+        logData,
+      );
 
       return {
         id: docRef.id,
@@ -144,7 +163,7 @@ export class InvalidRecordLogger {
         createdAt: new Date().toISOString(),
       };
     } catch (error) {
-      console.error('Error logging invalid record:', error);
+      console.error("Error logging invalid record:", error);
       // Don't throw - logging failure shouldn't crash the app
       return null;
     }
@@ -153,9 +172,7 @@ export class InvalidRecordLogger {
   /**
    * Query invalid records by various criteria
    */
-  static async queryInvalidRecords(
-    queryOptions: InvalidRecordQuery
-  ): Promise<{
+  static async queryInvalidRecords(queryOptions: InvalidRecordQuery): Promise<{
     success: boolean;
     data?: InvalidRecordLog[];
     error?: string;
@@ -164,38 +181,37 @@ export class InvalidRecordLogger {
       const constraints: QueryConstraint[] = [];
 
       if (queryOptions.record_type) {
-        constraints.push(where('record_type', '==', queryOptions.record_type));
+        constraints.push(where("record_type", "==", queryOptions.record_type));
       }
 
       if (queryOptions.entity_id) {
-        constraints.push(where('entity_id', '==', queryOptions.entity_id));
+        constraints.push(where("entity_id", "==", queryOptions.entity_id));
       }
 
       if (queryOptions.user_id) {
-        constraints.push(where('user_id', '==', queryOptions.user_id));
+        constraints.push(where("user_id", "==", queryOptions.user_id));
       }
 
       // Add date range filters if provided
       if (queryOptions.from_date) {
-        constraints.push(
-          where('attempted_at', '>=', queryOptions.from_date)
-        );
+        constraints.push(where("attempted_at", ">=", queryOptions.from_date));
       }
 
       if (queryOptions.to_date) {
-        constraints.push(
-          where('attempted_at', '<=', queryOptions.to_date)
-        );
+        constraints.push(where("attempted_at", "<=", queryOptions.to_date));
       }
 
       // Always order by most recent first
-      constraints.push(orderBy('attempted_at', 'desc'));
+      constraints.push(orderBy("attempted_at", "desc"));
 
       // Add limit
       const limitValue = queryOptions.limit_results || 100;
       constraints.push(limit(limitValue));
 
-      const q = query(collection(db, INVALID_RECORDS_COLLECTION), ...constraints);
+      const q = query(
+        collection(db, INVALID_RECORDS_COLLECTION),
+        ...constraints,
+      );
       const snapshot = await getDocs(q);
 
       const records = snapshot.docs.map((doc) => {
@@ -209,7 +225,7 @@ export class InvalidRecordLogger {
 
       return { success: true, data: records };
     } catch (error) {
-      console.error('Error querying invalid records:', error);
+      console.error("Error querying invalid records:", error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -219,7 +235,7 @@ export class InvalidRecordLogger {
    */
   static async getInvalidRecordsByEntity(
     entityId: string,
-    recordType?: 'grade' | 'attendance' | 'report'
+    recordType?: "grade" | "attendance" | "report",
   ): Promise<{
     success: boolean;
     data?: InvalidRecordLog[];
@@ -237,7 +253,7 @@ export class InvalidRecordLogger {
    */
   static async getInvalidRecordsByUser(
     userId: string,
-    recordType?: 'grade' | 'attendance' | 'report'
+    recordType?: "grade" | "attendance" | "report",
   ): Promise<{
     success: boolean;
     data?: InvalidRecordLog[];
@@ -253,7 +269,9 @@ export class InvalidRecordLogger {
   /**
    * Get invalid records - simplified wrapper that returns array directly
    */
-  static async getInvalidRecords(query: InvalidRecordQuery): Promise<InvalidRecordLog[]> {
+  static async getInvalidRecords(
+    query: InvalidRecordQuery,
+  ): Promise<InvalidRecordLog[]> {
     const result = await this.queryInvalidRecords(query);
     return result.data || [];
   }
@@ -264,7 +282,7 @@ export class InvalidRecordLogger {
   static async getInvalidRecordsByDateRange(
     startDate: string,
     endDate: string,
-    recordType?: 'grade' | 'attendance' | 'report'
+    recordType?: "grade" | "attendance" | "report",
   ): Promise<{
     success: boolean;
     data?: InvalidRecordLog[];
@@ -292,7 +310,7 @@ export class InvalidRecordLogger {
       });
 
       if (!allRecordsResult.success || !allRecordsResult.data) {
-        return { success: false, error: 'Failed to fetch invalid records' };
+        return { success: false, error: "Failed to fetch invalid records" };
       }
 
       const records = allRecordsResult.data;
@@ -316,9 +334,10 @@ export class InvalidRecordLogger {
 
       // Count by type
       const byType = {
-        grade: records.filter((r) => r.record_type === 'grade').length,
-        attendance: records.filter((r) => r.record_type === 'attendance').length,
-        report: records.filter((r) => r.record_type === 'report').length,
+        grade: records.filter((r) => r.record_type === "grade").length,
+        attendance: records.filter((r) => r.record_type === "attendance")
+          .length,
+        report: records.filter((r) => r.record_type === "report").length,
       };
 
       // Count by error field
@@ -340,7 +359,9 @@ export class InvalidRecordLogger {
         .slice(0, 10);
 
       // Get affected entities
-      const affectedEntities = Array.from(new Set(records.map((r) => r.entity_id).filter(Boolean)));
+      const affectedEntities = Array.from(
+        new Set(records.map((r) => r.entity_id).filter(Boolean)),
+      );
 
       return {
         success: true,
@@ -353,7 +374,7 @@ export class InvalidRecordLogger {
         },
       };
     } catch (error) {
-      console.error('Error generating invalid records summary:', error);
+      console.error("Error generating invalid records summary:", error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -361,7 +382,9 @@ export class InvalidRecordLogger {
   /**
    * Delete invalid records older than specified days
    */
-  static async cleanupOldRecords(daysOld: number = LOG_RETENTION_DAYS): Promise<{
+  static async cleanupOldRecords(
+    daysOld: number = LOG_RETENTION_DAYS,
+  ): Promise<{
     success: boolean;
     deleted_count?: number;
     error?: string;
@@ -372,7 +395,7 @@ export class InvalidRecordLogger {
 
       const q = query(
         collection(db, INVALID_RECORDS_COLLECTION),
-        where('attempted_at', '<', cutoffDate.toISOString())
+        where("attempted_at", "<", cutoffDate.toISOString()),
       );
 
       const snapshot = await getDocs(q);
@@ -386,7 +409,7 @@ export class InvalidRecordLogger {
 
       // Note: In production, batch delete should be used for large datasets
       console.warn(
-        `Found ${snapshot.size} records to delete. Consider using batch delete for large datasets.`
+        `Found ${snapshot.size} records to delete. Consider using batch delete for large datasets.`,
       );
 
       return {
@@ -394,7 +417,7 @@ export class InvalidRecordLogger {
         deleted_count: snapshot.size,
       };
     } catch (error) {
-      console.error('Error cleaning up old records:', error);
+      console.error("Error cleaning up old records:", error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -404,12 +427,13 @@ export class InvalidRecordLogger {
    */
   private static generateRejectionReason(
     recordType: string,
-    errors: Array<{ field: string; message: string }>
+    errors: Array<{ field: string; message: string }>,
   ): string {
-    if (errors.length === 0) return 'Unknown validation error';
+    if (errors.length === 0) return "Unknown validation error";
 
-    const recordTypeLabel = recordType.charAt(0).toUpperCase() + recordType.slice(1);
-    const errorFields = errors.map((e) => e.field).join(', ');
+    const recordTypeLabel =
+      recordType.charAt(0).toUpperCase() + recordType.slice(1);
+    const errorFields = errors.map((e) => e.field).join(", ");
 
     if (errors.length === 1) {
       return `${recordTypeLabel} record rejected: ${errors[0].message}`;
@@ -421,16 +445,19 @@ export class InvalidRecordLogger {
   /**
    * Helper: Format error details for display
    */
-  static formatErrorDetails(errors: Array<{ field: string; message: string }>): string {
-    return errors.map((e) => `- ${e.field}: ${e.message}`).join('\n');
+  static formatErrorDetails(
+    errors: Array<{ field: string; message: string }>,
+  ): string {
+    return errors.map((e) => `- ${e.field}: ${e.message}`).join("\n");
   }
 
   /**
    * Helper: Get error summary by category
    */
-  static getErrorSummary(
-    errors: Array<{ field: string; message: string }>
-  ): { field_errors: number; count: number } {
+  static getErrorSummary(errors: Array<{ field: string; message: string }>): {
+    field_errors: number;
+    count: number;
+  } {
     return {
       field_errors: errors.length,
       count: errors.length,
