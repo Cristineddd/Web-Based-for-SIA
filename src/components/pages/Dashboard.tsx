@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { X, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   FileText,
@@ -21,6 +23,7 @@ import {
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
 import { toast } from "sonner";
 import { createExam, type ExamFormData } from "@/services/examService";
+import { getClasses, type Class } from "@/services/classService";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -77,6 +80,10 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [showClassPicker, setShowClassPicker] = useState(false);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [classSearch, setClassSearch] = useState("");
 
   // Use ref to prevent double fetching
   const hasFetched = useRef(false);
@@ -228,6 +235,25 @@ export default function Dashboard() {
     fetchStats();
   }, [user?.id]);
 
+  const handleManageStudentsClick = async () => {
+    setClassSearch("");
+    setLoadingClasses(true);
+    try {
+      const fetched = await getClasses(user?.id);
+      setClasses(fetched.filter((c) => !c.isArchived));
+    } catch {
+      toast.error("Failed to load classes");
+    } finally {
+      setLoadingClasses(false);
+    }
+    setShowClassPicker(true);
+  };
+
+  const handleClassSelect = (classId: string) => {
+    setShowClassPicker(false);
+    router.push(`/classes/edit/${classId}`);
+  };
+
   const handleCreateExam = async (formData: ExamFormData) => {
     try {
       if (!user?.id) { toast.error("You must be logged in to create an exam"); return; }
@@ -308,6 +334,7 @@ export default function Dashboard() {
             <p className="text-xs text-gray-500 mt-0.5">
               Here&apos;s what&apos;s happening with your classes today.
             </p>
+<<<<<<< HEAD
           </div>
           <div className="flex gap-2">
             <Link href="/classes">
@@ -316,6 +343,53 @@ export default function Dashboard() {
                 New Class
               </Button>
             </Link>
+=======
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+        {statCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Card
+              key={stat.title}
+              className={`stat-card animate-slide-up border-2 ${stat.borderColor} hover:border-[#B38B00] transition-colors duration-200`}
+            >
+              <CardContent className="p-4 md:p-6">
+                <div className="flex items-center justify-between gap-2 sm:gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[#166534] truncate">
+                      {stat.title}
+                    </p>
+                    <p className="text-2xl md:text-3xl font-bold mt-2 text-[#166534] font-mono tabular-nums">
+                      {loading ? "-" : stat.value}
+                    </p>
+                  </div>
+                  <div
+                    className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}
+                  >
+                    <Icon
+                      className={`w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 ${stat.color}`}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
+        <Card className="card-elevated border-2 border-[#166534] hover:border-[#B38B00] transition-colors duration-200">
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-[#166534]">
+              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-[#B38B00]" />
+              Quick Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-0">
+>>>>>>> 07138f37b34966e62f2cef33e57679a8294057ac
             <Button
               size="sm"
               onClick={() => setShowCreateModal(true)}
@@ -327,6 +401,7 @@ export default function Dashboard() {
           </div>
         </div>
 
+<<<<<<< HEAD
         {!userRole && (
           <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center gap-2 text-yellow-800 text-xs">
             <Clock className="w-3.5 h-3.5 flex-shrink-0" />
@@ -374,6 +449,77 @@ export default function Dashboard() {
               <Link href="/classes">
                 <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2">
                   View All
+=======
+            <Button
+              className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
+              variant="outline"
+              onClick={handleManageStudentsClick}
+            >
+              <Users className="w-4 h-4 text-[#B38B00]" />
+              {loadingClasses ? "Loading classes…" : "Manage Students"}
+            </Button>
+
+            <Link href="/exams" className="block">
+              <Button
+                className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
+                variant="outline"
+              >
+                <FileText className="w-4 h-4 text-[#B38B00]" />
+                View All Exams
+              </Button>
+            </Link>
+
+            <Link href="/audit-logs" className="block">
+              <Button
+                className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
+                variant="outline"
+              >
+                <History className="w-4 h-4 text-[#B38B00]" />
+                Template and Log History
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="card-elevated border-2 border-[#166534] hover:border-[#B38B00] transition-colors duration-200">
+          <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
+            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-[#166534]">
+              <Clock className="w-4 h-4 md:w-5 md:h-5 text-[#B38B00]" />
+              Recent Exams
+            </CardTitle>
+            <Link href="/exams">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs md:text-sm border-2 border-transparent hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
+              >
+                View all
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {loading ? (
+              <div className="space-y-2 md:space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-14 md:h-16 bg-[#B38B00]/10 rounded-lg animate-pulse border-2 border-[#166534]"
+                  />
+                ))}
+              </div>
+            ) : stats.recentExams.length === 0 ? (
+              <div className="text-center py-6 md:py-8 text-[#166534] border-2 border-dashed border-[#166534] rounded-lg">
+                <FileText className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 opacity-50 text-[#B38B00]" />
+                <p className="text-sm md:text-base text-[#166534]">
+                  No exams created yet
+                </p>
+                <Button
+                  variant="link"
+                  className="mt-2 text-sm text-[#B38B00] hover:text-[#166534]"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  Create your first exam
+>>>>>>> 07138f37b34966e62f2cef33e57679a8294057ac
                 </Button>
               </Link>
             </CardHeader>
@@ -522,6 +668,110 @@ export default function Dashboard() {
         onClose={() => setShowCreateModal(false)}
         onCreateExam={handleCreateExam}
       />
+
+      {/* Class Picker Modal */}
+      {showClassPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setShowClassPicker(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-[#166534]/5 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#166534]/10 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-[#166534]" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[#166534]">Manage Students</h2>
+                  <p className="text-xs text-gray-500">Select a class to open</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowClassPicker(false)}
+                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="px-6 py-3 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search classes…"
+                  value={classSearch}
+                  onChange={(e) => setClassSearch(e.target.value)}
+                  className="pl-9 h-9 text-sm border-gray-200 focus:border-[#166534] focus:ring-[#166534]/20"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Class list */}
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+              {loadingClasses ? (
+                <div className="flex items-center justify-center py-10 text-gray-400 text-sm">
+                  Loading classes…
+                </div>
+              ) : classes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2">
+                  <Users className="w-8 h-8 opacity-30" />
+                  <p className="text-sm">No classes found.</p>
+                </div>
+              ) : (() => {
+                const filtered = classes.filter((cls) => {
+                  const q = classSearch.toLowerCase();
+                  return (
+                    cls.class_name.toLowerCase().includes(q) ||
+                    (cls.course_subject || "").toLowerCase().includes(q) ||
+                    (cls.section_block || "").toLowerCase().includes(q)
+                  );
+                });
+                return filtered.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-gray-400">No classes match "{classSearch}"</div>
+                ) : (
+                  filtered.map((cls) => (
+                    <button
+                      key={cls.id}
+                      onClick={() => handleClassSelect(cls.id)}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-100 hover:border-[#166534] hover:bg-[#166534]/5 transition-all duration-150 group"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 group-hover:text-[#166534] truncate">
+                            {cls.class_name}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate mt-0.5">
+                            {[cls.course_subject, cls.section_block].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs bg-[#166534]/10 text-[#166534] px-2 py-0.5 rounded-full font-medium">
+                            {cls.students?.length ?? 0} students
+                          </span>
+                          <span className="text-gray-300 group-hover:text-[#B38B00] text-lg leading-none">›</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50">
+              <p className="text-xs text-gray-400 text-center">
+                {classes.length} class{classes.length !== 1 ? "es" : ""} available
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

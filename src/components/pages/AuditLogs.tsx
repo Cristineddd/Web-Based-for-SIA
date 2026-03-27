@@ -130,7 +130,6 @@ export default function AuditLogsViewer() {
   const [filteredLogs, setFilteredLogs] = useState<AuditLog[]>([]);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportType, setExportType] = useState<"csv" | "xlsx">("xlsx");
-  const [selectedReviewer, setSelectedReviewer] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -149,13 +148,6 @@ export default function AuditLogsViewer() {
   const [tplExportType, setTplExportType] = useState<"csv" | "xlsx">("xlsx");
   const [tplLoading, setTplLoading] = useState(false);
 
-  const uniqueReviewers = React.useMemo(() => {
-    const reviewers = new Set(
-      logs.map((log) => log.adminEmail).filter(Boolean),
-    );
-    return Array.from(reviewers).sort();
-  }, [logs]);
-
   const uniqueTplUsers = React.useMemo(() => {
     const users = new Set(
       templateLogs.map((t) => t.createdByName || t.createdBy).filter(Boolean),
@@ -166,12 +158,13 @@ export default function AuditLogsViewer() {
   useEffect(() => {
     loadLogs();
     loadTemplateLogs();
-  }, [user?.instructorId]);
+  }, [user?.id, user?.instructorId]);
 
   const loadLogs = async () => {
+    if (!user?.id) return;
     try {
       setLoading(true);
-      const allLogs = await AuditLogger.getLogs({ limit: 500 });
+      const allLogs = await AuditLogger.getLogs({ limit: 500, adminId: user.id });
       setLogs(allLogs.filter((l) => l.activity !== "template_generated"));
     } catch (error) {
       console.error("Error loading audit logs:", error);
@@ -351,10 +344,6 @@ export default function AuditLogsViewer() {
       filtered = filtered.filter((log) => log.status === selectedStatus);
     }
 
-    if (selectedReviewer !== "all") {
-      filtered = filtered.filter((log) => log.adminEmail === selectedReviewer);
-    }
-
     if (dateFilter) {
       filtered = filtered.filter((log) => {
         const logDate = new Date(log.timestamp);
@@ -372,7 +361,6 @@ export default function AuditLogsViewer() {
     searchQuery,
     selectedActivity,
     selectedStatus,
-    selectedReviewer,
     dateFilter,
   ]);
 
@@ -1002,23 +990,6 @@ export default function AuditLogsViewer() {
                   </SelectContent>
                 </Select>
 
-                <Select
-                  value={selectedReviewer}
-                  onValueChange={setSelectedReviewer}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Reviewer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Reviewer</SelectItem>
-                    {uniqueReviewers.map((reviewer) => (
-                      <SelectItem key={reviewer} value={reviewer}>
-                        {reviewer}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
                 <div className="flex gap-2">
                   <Input
                     type="date"
@@ -1035,7 +1006,6 @@ export default function AuditLogsViewer() {
                     setSearchQuery("");
                     setSelectedActivity("all");
                     setSelectedStatus("all");
-                    setSelectedReviewer("all");
                     setDateFilter("");
                   }}
                   className="text-muted-foreground hover:text-foreground"

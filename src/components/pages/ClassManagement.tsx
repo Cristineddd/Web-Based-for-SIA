@@ -74,7 +74,8 @@ export default function ClassManagement() {
   const [search, setSearch] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
-  const [importing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [, setSelectedFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [roomWarning, setRoomWarning] = useState(false);
@@ -480,6 +481,7 @@ export default function ClassManagement() {
     const file = event.target.files?.[0];
     if (!file) return;
     setSelectedFile(file);
+    setImporting(true);
 
     try {
       const reader = new FileReader();
@@ -718,12 +720,17 @@ export default function ClassManagement() {
         } catch (error) {
           console.error("Error parsing Excel:", error);
           toast.error("Failed to parse Excel file");
+        } finally {
+          setImporting(false);
+          setSelectedFile(null);
         }
       };
       reader.readAsArrayBuffer(file);
     } catch (error) {
       console.error("Error reading file:", error);
       toast.error("Failed to read file");
+      setImporting(false);
+      setSelectedFile(null);
     }
   };
 
