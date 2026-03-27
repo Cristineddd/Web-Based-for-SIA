@@ -9,11 +9,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   FileText,
   Users,
-  ClipboardList,
+  BookOpen,
   Plus,
   TrendingUp,
   Clock,
-  History,
+  ChevronRight,
+  Hash,
+  CalendarDays,
+  Tag,
 } from "lucide-react";
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
 import { toast } from "sonner";
@@ -34,17 +37,31 @@ interface Exam {
   [key: string]: any; // For other properties
 }
 
+interface ClassItem {
+  id: string;
+  class_name: string;
+  course_subject: string;
+  section_block?: string;
+  year?: string;
+  room?: string;
+  students: any[];
+}
+
 interface DashboardStats {
   totalExams: number;
   totalStudents: number;
-  totalSheets: number;
+  totalClasses: number;
+  averageScore: number;
   recentExams: Array<{
     id: string;
     title: string;
     subject: string;
     num_items: number;
     created_at: string;
+    classCount?: number;
+    examCode?: string;
   }>;
+  recentClasses: ClassItem[];
 }
 
 export default function Dashboard() {
@@ -53,8 +70,10 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalExams: 0,
     totalStudents: 0,
-    totalSheets: 0,
+    totalClasses: 0,
+    averageScore: 0,
     recentExams: [],
+    recentClasses: [],
   });
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -74,33 +93,23 @@ export default function Dashboard() {
 
     async function fetchStats() {
       try {
-        // OPTIMIZATION 1: Simplified query without orderBy to avoid needing composite index
+        // Fetch exams
         const examsRef = collection(db, "exams");
-        const q = query(examsRef, where("createdBy", "==", user.id));
-
-        let querySnapshot;
+        const examsQuery = query(examsRef, where("createdBy", "==", user.id));
+        let examsSnapshot: any;
         try {
-          // Reduce timeout to 3 seconds
-          querySnapshot = (await Promise.race([
-            getDocs(q),
-            new Promise((_, reject) => {
-              setTimeout(() => reject(new Error("Query timeout")), 3000);
-            }),
+          examsSnapshot = (await Promise.race([
+            getDocs(examsQuery),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Query timeout")), 3000)
+            ),
           ])) as any;
-        } catch (queryError: any) {
-          console.warn("Dashboard query timed out:", queryError.message);
-          // Fallback: set empty stats instead of failing
-          setStats({
-            totalExams: 0,
-            totalStudents: 0,
-            totalSheets: 0,
-            recentExams: [],
-          });
-          return; // Exit early
+        } catch {
+          setStats({ totalExams: 0, totalStudents: 0, totalClasses: 0, averageScore: 0, recentExams: [], recentClasses: [] });
+          return;
         }
 
-        // Calculate all stats from this single query
-        const exams = querySnapshot.docs
+        const exams: Exam[] = examsSnapshot.docs
           .map((doc: any) => {
             const data = doc.data();
             return {
@@ -111,150 +120,136 @@ export default function Dashboard() {
               created_at: data.created_at,
               generated_sheets: data.generated_sheets || [],
               isArchived: data.isArchived || false,
+              examCode: data.examCode || data.id || doc.id,
             } as Exam;
           })
-          // Filter out archived exams (client-side to avoid needing composite index)
           .filter((exam: any) => !exam.isArchived);
 
-        // Count only active exams
         const totalExams = exams.length;
-
-        // Get recent exams (sorted and limited to 5)
         const recentExams = exams
           .sort((a, b) => {
             const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
             return dateB - dateA;
           })
-          .slice(0, 5);
+          .slice(0, 3);
 
-        // OPTIMIZATION 2: Compute total sheets from exam data
-        const totalSheets = exams.reduce((sum, exam) => {
-          // Check if generated_sheets exists and is an array
-          if (exam.generated_sheets && Array.isArray(exam.generated_sheets)) {
-            return (
-              sum +
-              exam.generated_sheets.reduce(
-                (sheetSum, sheet) => sheetSum + (sheet.sheet_count || 0),
-                0,
-              )
-            );
-          }
-          return sum;
-        }, 0);
-
-        // OPTIMIZATION 3: Get actual student count from classes
+        // Fetch classes
         let totalStudents = 0;
+        let recentClasses: ClassItem[] = [];
+        let totalClasses = 0;
         try {
           const classesRef = collection(db, "classes");
-          const classesQuery = query(
-            classesRef,
-            where("createdBy", "==", user.id),
-          );
+          const classesQuery = query(classesRef, where("createdBy", "==", user.id));
           const classesSnapshot = await getDocs(classesQuery);
 
-          totalStudents = classesSnapshot.docs.reduce((sum, doc) => {
-            const data = doc.data();
-            const students = data.students || [];
-            // Only count students from non-archived classes
-            if (!data.isArchived) {
-              return sum + students.length;
-            }
-            return sum;
-          }, 0);
+          const classes = classesSnapshot.docs
+            .map((doc) => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                class_name: data.class_name || "",
+                course_subject: data.course_subject || "",
+                section_block: data.section_block || "",
+                year: data.year || "",
+                room: data.room || "",
+                students: data.students || [],
+                isArchived: data.isArchived || false,
+                created_at: data.created_at,
+              };
+            })
+            .filter((c) => !c.isArchived);
 
-          console.log("Total students counted:", totalStudents);
-        } catch (studentError) {
-          console.warn("Could not fetch student count:", studentError);
-          totalStudents = 0;
+          totalClasses = classes.length;
+          totalStudents = classes.reduce((sum, c) => sum + (c.students?.length || 0), 0);
+          recentClasses = classes
+            .sort((a, b) => {
+              const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+              const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+              return dateB - dateA;
+            })
+            .slice(0, 3) as ClassItem[];
+        } catch (e) {
+          console.warn("Could not fetch classes:", e);
         }
 
-        console.log("Dashboard data fetched successfully:", {
-          totalExams,
-          recentExams: exams.length,
-          totalStudents,
-          totalSheets,
-        });
+        // Fetch average score across all scanned results for this instructor's exams
+        let averageScore = 0;
+        try {
+          if (exams.length > 0) {
+            const examIds = exams.map((e) => e.id);
+            // Query in batches of 10 (Firestore 'in' limit)
+            const allScores: number[] = [];
+            for (let i = 0; i < examIds.length; i += 10) {
+              const batch = examIds.slice(i, i + 10);
+              const scoresQuery = query(
+                collection(db, "scanned_results"),
+                where("examId", "in", batch),
+                where("isNullId", "==", false)
+              );
+              const scoresSnap = await getDocs(scoresQuery);
+              scoresSnap.docs.forEach((d) => {
+                const s = d.data().score;
+                if (typeof s === "number") allScores.push(s);
+              });
+            }
+            if (allScores.length > 0) {
+              const sum = allScores.reduce((a, b) => a + b, 0);
+              averageScore = Math.round((sum / allScores.length) * 10) / 10;
+            }
+          }
+        } catch (e) {
+          console.warn("Could not fetch average score:", e);
+        }
 
         setStats({
           totalExams,
           totalStudents,
-          totalSheets,
+          totalClasses,
+          averageScore,
           recentExams: recentExams.map((exam) => ({
             id: exam.id,
             title: exam.title,
             subject: exam.subject,
             num_items: exam.num_items,
             created_at: exam.created_at,
+            examCode: exam.examCode,
           })),
+          recentClasses,
         });
       } catch (error) {
         console.error("Error fetching stats:", error);
-        // Set empty stats on error instead of showing error toast
-        setStats({
-          totalExams: 0,
-          totalStudents: 0,
-          totalSheets: 0,
-          recentExams: [],
-        });
+        setStats({ totalExams: 0, totalStudents: 0, totalClasses: 0, averageScore: 0, recentExams: [], recentClasses: [] });
       } finally {
         setLoading(false);
       }
     }
 
     fetchStats();
-  }, [user?.id]); // Only depend on user.id
+  }, [user?.id]);
 
   const handleCreateExam = async (formData: ExamFormData) => {
     try {
-      if (!user?.id) {
-        toast.error("You must be logged in to create an exam");
-        return;
-      }
+      if (!user?.id) { toast.error("You must be logged in to create an exam"); return; }
+      if (!user?.instructorId) { toast.error("Instructor ID not found. Please log out and log back in."); return; }
 
-      console.log("[SEARCH] User object:", user);
-      console.log("[SEARCH] User.instructorId:", user?.instructorId);
-
-      if (!user?.instructorId) {
-        toast.error(
-          "[WARNING] Instructor ID not found. Please log out and log back in, or contact support.",
-        );
-        return;
-      }
-
-      // Pass instructorId when creating exam
-      console.log(
-        "[CREATE] Creating exam with instructorId:",
-        user.instructorId,
-      );
       const newExam = await createExam(formData, user.id, user.instructorId);
-      console.log("[SUCCESS] Exam saved:", newExam);
 
-      // OPTIMIZATION 4: Update stats without refetching
       setStats((prev) => {
-        // Check if exam already exists in recentExams to prevent duplicates
         const exists = prev.recentExams.some((exam) => exam.id === newExam.id);
         if (exists) return prev;
-
         return {
           ...prev,
           totalExams: prev.totalExams + 1,
           recentExams: [
-            {
-              id: newExam.id,
-              title: newExam.title,
-              subject: newExam.subject,
-              num_items: newExam.num_items,
-              created_at: newExam.created_at,
-            },
-            ...prev.recentExams.slice(0, 4),
+            { id: newExam.id, title: newExam.title, subject: newExam.subject, num_items: newExam.num_items, created_at: newExam.created_at },
+            ...prev.recentExams.slice(0, 2),
           ],
         };
       });
 
       toast.success(`Exam "${formData.name}" created successfully`);
       setShowCreateModal(false);
-
       router.push(`/exams/${newExam.id}`);
     } catch (error) {
       console.error("Error creating exam:", error);
@@ -262,213 +257,264 @@ export default function Dashboard() {
     }
   };
 
+  const displayName = user?.displayName || user?.email?.split("@")[0] || "Instructor";
+
   const statCards = [
+    {
+      title: "Total Classes",
+      value: stats.totalClasses,
+      icon: BookOpen,
+      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-50",
+      sub: "Active classes",
+    },
+    {
+      title: "Total Students",
+      value: stats.totalStudents,
+      icon: Users,
+      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-50",
+      sub: null,
+      badge: stats.totalStudents > 0 ? null : null,
+    },
     {
       title: "Total Exams",
       value: stats.totalExams,
       icon: FileText,
-      color: "text-[#B38B00]",
-      bgColor: "bg-[#B38B00]/10",
-      borderColor: "border-[#166534]",
+      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-50",
+      sub: "Created this semester",
     },
     {
-      title: "Students",
-      value: stats.totalStudents,
-      icon: Users,
-      color: "text-[#166534]",
-      bgColor: "bg-[#166534]/10",
-      borderColor: "border-[#166534]",
-    },
-    {
-      title: "Answer Sheets",
-      value: stats.totalSheets,
-      icon: ClipboardList,
-      color: "text-[#B38B00]",
-      bgColor: "bg-[#B38B00]/10",
-      borderColor: "border-[#166534]",
+      title: "Average Score",
+      value: stats.averageScore > 0 ? `${stats.averageScore}%` : "N/A",
+      icon: TrendingUp,
+      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-50",
+      sub: stats.averageScore > 0 ? "Across all exams" : "No scores yet",
     },
   ];
 
   return (
-    <div className="page-container">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#166534]">
-            Dashboard
-          </h1>
-          <p className="text-sm sm:text-base text-[#B38B00] mt-1">
-            Welcome back! Here's an overview of your exam management system.
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
 
-      {!userRole && (
-        <Card className="mb-6 border-[#B38B00]/30 bg-[#B38B00]/5">
-          <CardContent className="py-4">
-            <p className="text-sm text-[#B38B00] flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              Your account is pending role assignment. Please contact an
-              administrator.
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+              Welcome back, {displayName}
+            </h1>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Here&apos;s what&apos;s happening with your classes today.
             </p>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card
-              key={stat.title}
-              className={`stat-card animate-slide-up border-2 ${stat.borderColor} hover:border-[#B38B00] transition-colors duration-200`}
-            >
-              <CardContent className="p-4 md:p-6">
-                <div className="flex items-center justify-between gap-2 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#166534] truncate">
-                      {stat.title}
-                    </p>
-                    <p className="text-2xl md:text-3xl font-bold mt-2 text-[#166534] font-mono tabular-nums">
-                      {loading ? "-" : stat.value}
-                    </p>
-                  </div>
-                  <div
-                    className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}
-                  >
-                    <Icon
-                      className={`w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 ${stat.color}`}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-        <Card className="card-elevated border-2 border-[#166534] hover:border-[#B38B00] transition-colors duration-200">
-          <CardHeader className="pb-3 md:pb-6">
-            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-[#166534]">
-              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-[#B38B00]" />
-              Quick Actions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6 pt-0">
+          </div>
+          <div className="flex gap-2">
+            <Link href="/classes">
+              <Button variant="outline" size="sm" className="flex items-center gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-100 text-xs h-8 px-3">
+                <Plus className="w-3.5 h-3.5" />
+                New Class
+              </Button>
+            </Link>
             <Button
-              className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-              variant="outline"
+              size="sm"
               onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs h-8 px-3"
             >
-              <Plus className="w-4 h-4 text-[#B38B00]" />
-              Create New Exam
+              <Plus className="w-3.5 h-3.5" />
+              New Exam
             </Button>
+          </div>
+        </div>
 
-            <Link href="/students">
-              <Button
-                className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-                variant="outline"
-              >
-                <Users className="w-4 h-4 text-[#B38B00]" />
-                Manage Students
-              </Button>
-            </Link>
+        {!userRole && (
+          <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center gap-2 text-yellow-800 text-xs">
+            <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+            Your account is pending role assignment. Please contact an administrator.
+          </div>
+        )}
 
-            <Link href="/exams">
-              <Button
-                className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-                variant="outline"
-              >
-                <FileText className="w-4 h-4 text-[#B38B00]" />
-                View All Exams
-              </Button>
-            </Link>
-
-            <Link href="/audit-logs">
-              <Button
-                className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-                variant="outline"
-              >
-                <History className="w-4 h-4 text-[#B38B00]" />
-                Template and Log History
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="card-elevated border-2 border-[#166534] hover:border-[#B38B00] transition-colors duration-200">
-          <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
-            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-[#166534]">
-              <Clock className="w-4 h-4 md:w-5 md:h-5 text-[#B38B00]" />
-              Recent Exams
-            </CardTitle>
-            <Link href="/exams">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs md:text-sm border-2 border-transparent hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-              >
-                View all
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {loading ? (
-              <div className="space-y-2 md:space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-14 md:h-16 bg-[#B38B00]/10 rounded-lg animate-pulse border-2 border-[#166534]"
-                  />
-                ))}
-              </div>
-            ) : stats.recentExams.length === 0 ? (
-              <div className="text-center py-6 md:py-8 text-[#166534] border-2 border-dashed border-[#166534] rounded-lg">
-                <FileText className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 opacity-50 text-[#B38B00]" />
-                <p className="text-sm md:text-base text-[#166534]">
-                  No exams created yet
-                </p>
-                <Button
-                  variant="link"
-                  className="mt-2 text-sm text-[#B38B00] hover:text-[#166534]"
-                  onClick={() => setShowCreateModal(true)}
-                >
-                  Create your first exam
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2 md:space-y-3">
-                {stats.recentExams.map((exam) => (
-                  <Link
-                    key={exam.id}
-                    href={`/exams/${exam.id}`}
-                    className="block p-2.5 md:p-3 rounded-lg border-2 border-[#166534] hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm md:text-base text-[#166534] truncate">
-                          {exam.title}
-                        </p>
-                        <p className="text-xs md:text-sm text-[#B38B00] truncate">
-                          {exam.subject}
-                        </p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-xs md:text-sm font-medium text-[#166534]">
-                          {exam.num_items} items
-                        </p>
-                        <p className="text-xs text-[#B38B00]">
-                          {new Date(exam.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
+        {/* Stat Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Card key={stat.title} className="bg-white border border-gray-200 shadow-sm rounded-xl">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-col min-w-0">
+                      <p className="text-xs text-gray-500 font-medium">{stat.title}</p>
+                      <p className="text-2xl font-bold text-gray-900 mt-0.5 leading-none">
+                        {loading ? <span className="inline-block w-8 h-6 bg-gray-100 animate-pulse rounded" /> : stat.value}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-1 min-h-[14px]">
+                        {stat.sub ?? ""}
+                      </p>
                     </div>
+                    <div className={`w-9 h-9 rounded-lg ${stat.iconBg} flex items-center justify-center flex-shrink-0`}>
+                      <Icon className={`w-[18px] h-[18px] ${stat.iconColor}`} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Recent Classes + Recent Exams */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Recent Classes */}
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
+              <CardTitle className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-green-600" />
+                Recent Classes
+              </CardTitle>
+              <Link href="/classes">
+                <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2">
+                  View All
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              {loading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-14 bg-gray-100 rounded-lg animate-pulse" />
+                  ))}
+                </div>
+              ) : stats.recentClasses.length === 0 ? (
+                <div className="text-center py-7 border-2 border-dashed border-gray-200 rounded-xl">
+                  <BookOpen className="w-6 h-6 mx-auto mb-1.5 text-gray-300" />
+                  <p className="text-xs text-gray-400">No classes yet</p>
+                  <Link href="/classes">
+                    <Button variant="link" className="mt-1 text-xs text-green-600 h-auto p-0">
+                      Create your first class
+                    </Button>
                   </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {stats.recentClasses.map((cls) => (
+                    <Link key={cls.id} href={`/classes`}>
+                      <div className="p-3 rounded-lg border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-colors duration-150 cursor-pointer">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-xs text-gray-800 truncate">
+                                {cls.class_name}
+                              </p>
+                              {cls.year && (
+                                <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                                  {cls.year}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{cls.course_subject}</p>
+                            <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
+                              {cls.section_block && (
+                                <span className="flex items-center gap-0.5">
+                                  <Users className="w-2.5 h-2.5" />
+                                  {cls.section_block}
+                                </span>
+                              )}
+                              {cls.room && (
+                                <span className="flex items-center gap-0.5">
+                                  <Tag className="w-2.5 h-2.5" />
+                                  {cls.room}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-0.5">
+                                <Users className="w-2.5 h-2.5" />
+                                {cls.students?.length || 0} students
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Exams */}
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
+              <CardTitle className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-green-600" />
+                Recent Exams
+              </CardTitle>
+              <Link href="/exams">
+                <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2">
+                  View All
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+              {loading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-14 bg-gray-100 rounded-lg animate-pulse" />
+                  ))}
+                </div>
+              ) : stats.recentExams.length === 0 ? (
+                <div className="text-center py-7 border-2 border-dashed border-gray-200 rounded-xl">
+                  <FileText className="w-6 h-6 mx-auto mb-1.5 text-gray-300" />
+                  <p className="text-xs text-gray-400">No exams created yet</p>
+                  <Button
+                    variant="link"
+                    className="mt-1 text-xs text-green-600 h-auto p-0"
+                    onClick={() => setShowCreateModal(true)}
+                  >
+                    Create your first exam
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {stats.recentExams.map((exam) => (
+                    <Link key={exam.id} href={`/exams/${exam.id}`}>
+                      <div className="p-3 rounded-lg border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-colors duration-150 cursor-pointer">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-xs text-gray-800 truncate">
+                                {exam.title}
+                              </p>
+                              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                                {exam.num_items} Items
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{exam.subject}</p>
+                            <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
+                              {exam.examCode && (
+                                <span className="flex items-center gap-0.5">
+                                  <Hash className="w-2.5 h-2.5" />
+                                  {exam.examCode}
+                                </span>
+                              )}
+                              {exam.created_at && (
+                                <span className="flex items-center gap-0.5">
+                                  <CalendarDays className="w-2.5 h-2.5" />
+                                  {new Date(exam.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+        </div>
       </div>
 
       <CreateExamModal

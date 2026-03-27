@@ -1,12 +1,11 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Footer from '@/components/layout/Footer';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { PageLoadingSkeleton } from '@/components/LoadingSkeleton';
 import Image from 'next/image';
 import { 
@@ -66,38 +65,50 @@ export default function Landing() {
   ];
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
       <nav className="border-b bg-white sticky top-0 z-50 shadow-sm">
-        <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-14 sm:h-16">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center flex-shrink-0">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
                 <Image
                   src="/gclogo.png"
                   alt="GC Logo"
-                  width={28}
-                  height={28}
-                  className="object-contain sm:w-8 sm:h-8"
+                  width={32}
+                  height={32}
+                  className="object-contain"
                 />
               </div>
               <div className="min-w-0">
-                <h1 className="text-sm sm:text-lg font-bold text-[#166534] truncate">GC SMART CHECK</h1>
-                <p className="text-xs text-gray-600 hidden sm:block">Exam & Quiz Builder</p>
+                <h1 className="text-base sm:text-lg font-bold text-[#166534] truncate">GC SMART CHECK</h1>
+                <p className="text-xs text-gray-500 hidden sm:block">Exam &amp; Quiz Builder</p>
               </div>
             </div>
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm text-sm"
+            >
+              Sign In
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-green-50 to-white">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-green-50 to-gray-50">
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left Content */}
             <div>
+              <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
+                <Sparkles className="w-3.5 h-3.5" />
+                Smart Paper-Based Exam Checking
+              </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
-                GC SMART CHECK
+                GC SMART<br />
+                <span className="text-green-600">CHECK</span>
               </h1>
               
               <p className="text-lg text-gray-600 mb-8 leading-relaxed">
@@ -107,14 +118,15 @@ export default function Landing() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <button 
                   onClick={() => setShowAuthModal(true)}
-                  className="px-8 py-4 rounded-lg font-semibold transition-all bg-[#166534] hover:bg-[#1a7a3e] text-white shadow-lg hover:shadow-xl"
+                  className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold transition-all bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl"
                 >
                   Get Started
+                  <ArrowRight className="w-4 h-4" />
                 </button>
                 
                 <button 
                   onClick={() => document.getElementById('benefits')?.scrollIntoView({ behavior: 'smooth' })}
-                  className="px-8 py-4 rounded-lg font-semibold transition-all border-2 border-gray-300 hover:border-[#166534] text-gray-700 hover:text-[#166534]"
+                  className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold transition-all border-2 border-gray-300 hover:border-green-600 bg-white text-gray-700 hover:text-green-700"
                 >
                   Learn More
                 </button>
@@ -123,15 +135,24 @@ export default function Landing() {
 
             {/* Right Content - Feature Highlight */}
             <div className="relative">
-              <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-100">
-                <div className="space-y-6">
+              <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  </div>
+                  <h3 className="font-bold text-gray-900">Why GC Smart Check?</h3>
+                </div>
+                <div className="space-y-5">
                   {benefits.map((benefit, index) => {
+                    const Icon = benefit.icon;
                     return (
                       <div key={index} className="flex items-start gap-4">
-                        <div className="w-2 h-2 rounded-full bg-[#166534] flex-shrink-0 mt-2"></div>
+                        <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
+                          <Icon className="w-5 h-5 text-green-600" />
+                        </div>
                         <div>
-                          <h3 className="font-bold text-lg text-gray-900 mb-1">{benefit.title}</h3>
-                          <p className="text-gray-600">{benefit.description}</p>
+                          <h3 className="font-bold text-gray-900 mb-0.5">{benefit.title}</h3>
+                          <p className="text-sm text-gray-500">{benefit.description}</p>
                         </div>
                       </div>
                     );
@@ -144,22 +165,25 @@ export default function Landing() {
       </section>
 
       {/* Benefits Section */}
-      <section id="benefits" className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      <section id="benefits" className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
         <div className="w-full max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-              Why Choose GC Scan?
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Built for Educators
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-500 max-w-2xl mx-auto">
               Minimize manual work. Maximize accuracy. Save precious time.
             </p>
           </div>
 
           {/* Key Features Grid */}
-          <div className="grid md:grid-cols-2 gap-8 mb-16">
-            <Card className="p-8 bg-white border border-gray-200 hover:shadow-lg transition-shadow">
-              <div className="mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">Key Capabilities</h3>
+          <div className="grid md:grid-cols-2 gap-6 mb-16">
+            <Card className="p-8 bg-gray-50 border border-gray-200 hover:border-green-300 hover:shadow-lg transition-all rounded-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900">Key Capabilities</h3>
               </div>
               
               <div className="grid gap-3">
@@ -169,17 +193,22 @@ export default function Landing() {
                   'Multi-format export (Excel, CSV, PDF)',
                   'Faculty dashboard with detailed analytics'
                 ].map((feature, idx) => (
-                  <div key={idx} className="flex items-start gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#166534] flex-shrink-0 mt-2"></div>
-                    <span className="text-gray-700">{feature}</span>
+                  <div key={idx} className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <div className="w-2 h-2 rounded-full bg-green-600"></div>
+                    </div>
+                    <span className="text-gray-700 text-sm">{feature}</span>
                   </div>
                 ))}
               </div>
             </Card>
 
-            <Card className="p-8 bg-white border border-gray-200 hover:shadow-lg transition-shadow">
-              <div className="mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">Advanced Features</h3>
+            <Card className="p-8 bg-gray-50 border border-gray-200 hover:border-green-300 hover:shadow-lg transition-all rounded-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-green-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900">Advanced Features</h3>
               </div>
               
               <div className="grid gap-3">
@@ -189,9 +218,11 @@ export default function Landing() {
                   'Unrecognized ID flagging',
                   'Institutional branding support'
                 ].map((feature, idx) => (
-                  <div key={idx} className="flex items-start gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#166534] flex-shrink-0 mt-2"></div>
-                    <span className="text-gray-700">{feature}</span>
+                  <div key={idx} className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <div className="w-2 h-2 rounded-full bg-green-600"></div>
+                    </div>
+                    <span className="text-gray-700 text-sm">{feature}</span>
                   </div>
                 ))}
               </div>
@@ -201,19 +232,20 @@ export default function Landing() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-[#166534]">
+      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-green-600">
         <div className="w-full max-w-4xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
             Streamline Your Grading Process
           </h2>
           <p className="text-lg text-green-100 mb-8">
-            Focus on teaching. Let GC Scan handle the grading.
+            Focus on teaching. Let GC Smart Check handle the rest.
           </p>
           <button 
             onClick={() => setShowAuthModal(true)}
-            className="px-8 py-4 rounded-lg font-semibold transition-all bg-white hover:bg-gray-100 text-[#166534] shadow-lg"
+            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold transition-all bg-white hover:bg-gray-100 text-green-700 shadow-lg"
           >
-            Get Started
+            Get Started for Free
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </section>
@@ -226,7 +258,7 @@ export default function Landing() {
               onClick={() => setShowAuthModal(false)}
               className="absolute top-4 right-4 p-2 rounded-lg hover:bg-gray-100 transition-colors z-10"
             >
-              <X className="w-5 h-5 text-gray-600" />
+              <X className="w-5 h-5 text-gray-500" />
             </button>
             <div className="p-6 sm:p-8">
               <AuthPage />

@@ -40,18 +40,18 @@ async function generateInstructorId(): Promise<string> {
     
     if (counterDoc.exists()) {
       nextNumber = (counterDoc.data().lastNumber || 0) + 1;
-      console.log('📊 Last instructor number:', counterDoc.data().lastNumber);
+      console.log('Last instructor number:', counterDoc.data().lastNumber);
     } else {
-      console.log('📊 No counter found, starting with 1');
+      console.log('No counter found, starting with 1');
     }
     
     // Update the counter
     await setDoc(counterRef, { lastNumber: nextNumber }, { merge: true });
-    console.log('📊 Updated counter to:', nextNumber);
+    console.log(' Updated counter to:', nextNumber);
     
     // Format as INSTRUCTOR-001, INSTRUCTOR-002, etc.
     const instructorId = `INSTRUCTOR-${String(nextNumber).padStart(3, '0')}`;
-    console.log('✅ Generated instructor ID:', instructorId);
+    console.log(' Generated instructor ID:', instructorId);
     
     return instructorId;
   } catch (error) {

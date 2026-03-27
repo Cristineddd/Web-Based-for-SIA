@@ -29,7 +29,7 @@ import {
   Search,
   Filter,
   RotateCcw,
-  Archive,
+  FolderArchive,
   Loader2,
   Table2,
 } from "lucide-react";
@@ -499,7 +499,7 @@ export default function Results() {
   const [showSendPanel, setShowSendPanel] = useState(false);
   const [viewingStudent, setViewingStudent] = useState<StudentResult | null>(null);
   const [answerDetails, setAnswerDetails] = useState<AnswerDetail[]>([]);
-  const [loadingAnswerDetails, setLoadingAnswerDetails] = useState(false);
+  const [loadingAnswerDetails, ] = useState(false);
 
   // ── Batch export state (SS4 2.5) ────────────────────────────────────────
   const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(
@@ -1336,15 +1336,15 @@ export default function Results() {
     return (
       <div className="page-container">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-            Results & Analytics
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            Results &amp; Analytics
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             View and export grading results by class
           </p>
         </div>
         <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-4 border-[#1a472a] border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     );
@@ -1357,10 +1357,10 @@ export default function Results() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-              Results & Analytics
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Results &amp; Analytics
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-gray-500 mt-1">
               View and export grading results by class
             </p>
           </div>
@@ -1432,7 +1432,7 @@ export default function Results() {
                     onClick={() => setBatchFormatPicker((v) => !v)}
                     disabled={batchExporting}
                   >
-                    <Archive className="w-4 h-4 mr-2" />
+                    <FolderArchive className="w-4 h-4 mr-2" />
                     Export {selectedExamIds.size} Exam
                     {selectedExamIds.size > 1 ? "s" : ""} as ZIP
                   </Button>
@@ -1693,8 +1693,8 @@ export default function Results() {
         {/* Header with Export Buttons aligned to the right */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-[#1a472a]">
-              Results & Analytics
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Results &amp; Analytics
             </h1>
             <p className="text-sm text-gray-500 mt-1">
               View and export grading results by class
@@ -1981,10 +1981,10 @@ export default function Results() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-            Results & Analytics
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            Results &amp; Analytics
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             View and export grading results by class
           </p>
         </div>

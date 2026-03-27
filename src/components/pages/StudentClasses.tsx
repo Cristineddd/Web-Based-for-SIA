@@ -36,12 +36,8 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { StudentIDService } from "@/services/studentIDService";
 import { useAuth } from "@/contexts/AuthContext";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import * as XLSX from "xlsx";
-import { StudentIDService } from "@/services/studentIDService";
-import { useAuth } from "@/contexts/AuthContext";
+import { AuditLogger } from "@/services/auditLogger";
+import { ValidationActionLogger } from "@/services/validationActionLogger";
 import type { Class, Student } from "@/services/classService";
 import {
   createClass,
@@ -64,7 +60,7 @@ import {
   Download,
   AlertCircle,
   X,
-  Archive,
+  FolderArchive,
 } from "lucide-react";
 
 export default function StudentClasses() {
@@ -89,7 +85,7 @@ export default function StudentClasses() {
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [roomWarning, setRoomWarning] = useState(false);
-  const [classNameWarning, setClassNameWarning] = useState(false);
+  const [, setClassNameWarning] = useState(false);
   const [currentTab, setCurrentTab] = useState("basic");
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
@@ -1090,8 +1086,8 @@ export default function StudentClasses() {
     <div className="page-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Class</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Class</h1>
+          <p className="text-sm text-gray-500 mt-1">
             Manage student roster and information
           </p>
         </div>
@@ -1099,7 +1095,7 @@ export default function StudentClasses() {
           <Button
             onClick={() => fileInputRef.current?.click()}
             variant="outline"
-            className="gap-2 hover:bg-transparent hover:text-current"
+            className="gap-2 border-gray-300 text-gray-700 hover:bg-gray-100"
           >
             <Upload className="w-4 h-4" />
             Import Excel
@@ -1185,7 +1181,7 @@ export default function StudentClasses() {
                       }}
                       title="Archive this class"
                     >
-                      <Archive className="w-4 h-4 mr-2" />
+                      <FolderArchive className="w-4 h-4 mr-2" />
                       Archive
                     </Button>
                   </div>

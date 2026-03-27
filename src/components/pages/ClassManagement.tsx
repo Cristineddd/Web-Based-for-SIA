@@ -32,7 +32,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -50,7 +49,7 @@ import {
   Download,
   AlertCircle,
   X,
-  Archive,
+  FolderArchive,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import * as XLSX from "xlsx"; // Added import here
@@ -79,6 +78,7 @@ export default function ClassManagement() {
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [roomWarning, setRoomWarning] = useState(false);
+  const [, setSelectedFile] = useState<File | null>(null);
   const [uploadSummary, setUploadSummary] = useState<{
     total: number;
     successful: number;
@@ -868,14 +868,15 @@ export default function ClassManagement() {
     <div className="page-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Classes
           </h1>
+          <p className="text-sm text-gray-500 mt-1">Manage your classes and student rosters</p>
         </div>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-3">
           <Button
             onClick={() => setShowAddDialog(true)}
-            className="gradient-primary gap-2"
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
           >
             <Plus className="w-4 h-4" />
             Add Class
@@ -1016,7 +1017,7 @@ export default function ClassManagement() {
                       }}
                       className="p-1 h-auto text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                     >
-                      <Archive className="w-4 h-4" />
+                      <FolderArchive className="w-4 h-4" />
                     </Button>
                   </div>
                   <div>
@@ -1093,537 +1094,326 @@ export default function ClassManagement() {
           }
         }}
       >
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto border-2 border-gray-200 rounded-xl">
-          <DialogHeader className="bg-gradient-to-r from-gray-50 to-slate-50 -m-6 mb-6 p-6 rounded-t-xl border-b border-gray-200">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Plus className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <DialogTitle className="text-2xl font-bold text-foreground">
-                  Add New Class
-                </DialogTitle>
-                <DialogDescription className="text-muted-foreground text-base">
-                  Create a new class and add students to the roster
-                </DialogDescription>
-              </div>
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto bg-white border border-gray-200 rounded-xl p-0 shadow-lg">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-gray-100">
+            <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Plus className="w-5 h-5 text-green-600" />
             </div>
-          </DialogHeader>
+            <div>
+              <DialogTitle className="text-base font-semibold text-gray-900 leading-tight">
+                Add New Class
+              </DialogTitle>
+              <DialogDescription className="text-xs text-gray-500 mt-0.5">
+                Create a new class and add students to the roster
+              </DialogDescription>
+            </div>
+          </div>
 
-          <Tabs
-            value={currentTab}
-            onValueChange={setCurrentTab}
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-2 bg-muted border border-border">
-              <TabsTrigger
-                value="basic"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium"
-              >
-                Class Information
-              </TabsTrigger>
-              <TabsTrigger
-                value="students"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium"
-              >
-                Student Roster
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent
-              value="basic"
-              className="space-y-6 mt-6 p-3 sm:p-6 bg-gradient-to-br from-muted/30 to-muted/50 rounded-lg border border-border"
+          {/* Tabs */}
+          <div className="px-6 pt-4">
+            <Tabs
+              value={currentTab}
+              onValueChange={setCurrentTab}
+              className="w-full"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <div className="space-y-3">
-                  <Label
-                    htmlFor="class_name"
-                    className="text-sm font-semibold text-gray-700 flex items-center gap-2"
-                  >
-                    Program <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="relative">
+              <TabsList className="grid w-full grid-cols-2 bg-gray-100 rounded-lg p-1 h-9">
+                <TabsTrigger
+                  value="basic"
+                  className="text-xs font-medium rounded-md data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm"
+                >
+                  Class Information
+                </TabsTrigger>
+                <TabsTrigger
+                  value="students"
+                  className="text-xs font-medium rounded-md data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm"
+                >
+                  Student Roster
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Class Information Tab */}
+              <TabsContent value="basic" className="mt-4 space-y-4 pb-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Program */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      PROGRAM <span className="text-red-500">*</span>
+                    </label>
                     <Input
                       id="class_name"
                       value={newClass.class_name}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setNewClass({ ...newClass, class_name: value });
-                      }}
-                      placeholder="Enter program name"
-                      className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.class_name.trim() &&
+                      onChange={(e) =>
+                        setNewClass({ ...newClass, class_name: e.target.value })
+                      }
+                      placeholder="e.g. BSIT, BSCS"
+                      className={`h-9 text-sm border rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors ${
                         newClass.class_name.trim().length >= 3
-                          ? "border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5"
-                          : newClass.class_name.trim() &&
-                              newClass.class_name.trim().length < 3
-                            ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30"
-                            : "border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
+                          ? "border-green-400 bg-green-50/40"
+                          : newClass.class_name.trim().length > 0
+                            ? "border-red-300 bg-red-50/30"
+                            : "border-gray-200"
                       }`}
                     />
-                    {newClass.class_name.trim() &&
-                      newClass.class_name.trim().length >= 3 && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">
-                              &#x2713;
-                            </span>
-                          </div>
-                        </div>
+                    {newClass.class_name.trim().length > 0 &&
+                      newClass.class_name.trim().length < 3 && (
+                        <p className="text-xs text-red-500">Minimum 3 characters</p>
                       )}
                   </div>
-                  {newClass.class_name.trim() &&
-                    newClass.class_name.trim().length >= 3 && (
-                      <div className="flex items-center gap-2 text-xs text-primary">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                        <span>Valid class name</span>
-                      </div>
-                    )}
-                  {newClass.class_name.trim() &&
-                    newClass.class_name.trim().length < 3 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                        <span>
-                          Letters only, {newClass.class_name.trim().length}/3
-                          characters minimum
-                        </span>
-                      </div>
-                    )}
-                  {!newClass.class_name.trim() && (
-                    <div className="text-xs text-gray-400">
-                      Letters only, minimum 3 characters
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <Label
-                    htmlFor="course_subject"
-                    className="text-sm font-semibold text-gray-700 flex items-center gap-2"
-                  >
-                    Course <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="relative">
+
+                  {/* Course */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      COURSE CODE <span className="text-red-500">*</span>
+                    </label>
                     <Input
                       id="course_subject"
                       value={newClass.course_subject}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setNewClass({
-                          ...newClass,
-                          course_subject: value,
-                        });
-                      }}
-                      placeholder="Enter course subject"
-                      className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.course_subject.trim() &&
+                      onChange={(e) =>
+                        setNewClass({ ...newClass, course_subject: e.target.value })
+                      }
+                      placeholder="Course Code"
+                      className={`h-9 text-sm border rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors ${
                         newClass.course_subject.trim().length >= 4
-                          ? "border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5"
-                          : newClass.course_subject.trim() &&
-                              newClass.course_subject.trim().length < 4
-                            ? "border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30"
-                            : "border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
+                          ? "border-green-400 bg-green-50/40"
+                          : newClass.course_subject.trim().length > 0
+                            ? "border-red-300 bg-red-50/30"
+                            : "border-gray-200"
                       }`}
                     />
-                    {newClass.course_subject.trim() &&
-                      newClass.course_subject.trim().length >= 4 && (
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">
-                              &#x2713;
-                            </span>
-                          </div>
-                        </div>
+                    {newClass.course_subject.trim().length > 0 &&
+                      newClass.course_subject.trim().length < 4 && (
+                        <p className="text-xs text-red-500">Minimum 4 characters</p>
                       )}
                   </div>
-                  {newClass.course_subject.trim() &&
-                    newClass.course_subject.trim().length >= 4 && (
-                      <div className="flex items-center gap-2 text-xs text-primary">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                        <span>Valid course subject</span>
-                      </div>
-                    )}
-                  {newClass.course_subject.trim() &&
-                    newClass.course_subject.trim().length < 4 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                        <span>
-                          Letters only, {newClass.course_subject.trim().length}
-                          /4 characters minimum
-                        </span>
-                      </div>
-                    )}
-                  {!newClass.course_subject.trim() && (
-                    <div className="text-xs text-gray-400">
-                      Letters only, minimum 4 characters
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <Label
-                    htmlFor="year"
-                    className="text-sm font-semibold text-gray-700"
-                  >
-                    Year <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={newClass.year || ""}
-                    onValueChange={(value) =>
-                      setNewClass({
-                        ...newClass,
-                        year: value,
-                      })
-                    }
-                  >
-                    <SelectTrigger
-                      className={`transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                        newClass.year
-                          ? "border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/10 bg-primary/5"
-                          : "border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
-                      }`}
+
+                  {/* Year */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      YEAR LEVEL <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      value={newClass.year || ""}
+                      onValueChange={(value) =>
+                        setNewClass({ ...newClass, year: value })
+                      }
                     >
-                      <SelectValue placeholder="Select year level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1st Year</SelectItem>
-                      <SelectItem value="2">2nd Year</SelectItem>
-                      <SelectItem value="3">3rd Year</SelectItem>
-                      <SelectItem value="4">4th Year</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {newClass.year.trim() && (
-                    <div className="flex items-center gap-2 text-xs text-primary">
-                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                      <span>Year level selected</span>
-                    </div>
-                  )}
-                  {!newClass.year.trim() && (
-                    <div className="text-xs text-gray-400">
-                      Select a year level
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <Label
-                    htmlFor="room"
-                    className="text-sm font-semibold text-gray-700"
-                  >
-                    Room{" "}
-                    <span className="text-gray-400 text-xs">(Optional)</span>
-                  </Label>
-                  <div className="relative">
+                      <SelectTrigger
+                        className={`h-9 text-sm border rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors ${
+                          newClass.year ? "border-green-400 bg-green-50/40" : "border-gray-200"
+                        }`}
+                      >
+                        <SelectValue placeholder="Select year level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1" className="focus:bg-green-50 focus:text-green-700">1st Year</SelectItem>
+                        <SelectItem value="2" className="focus:bg-green-50 focus:text-green-700">2nd Year</SelectItem>
+                        <SelectItem value="3" className="focus:bg-green-50 focus:text-green-700">3rd Year</SelectItem>
+                        <SelectItem value="4" className="focus:bg-green-50 focus:text-green-700">4th Year</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Room */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      ROOM{" "}
+                      <span className="text-gray-400 text-xs normal-case font-normal">(optional)</span>
+                    </label>
                     <Input
                       id="room"
                       type="number"
                       value={newClass.room}
                       onChange={(e) => {
-                        // Only allow exactly 3 numbers
-                        const inputValue = e.target.value.replace(
-                          /[^0-9]/g,
-                          "",
-                        );
+                        const inputValue = e.target.value.replace(/[^0-9]/g, "");
                         if (inputValue.length > 3) {
                           setRoomWarning(true);
                           setTimeout(() => setRoomWarning(false), 3000);
                           return;
                         }
-                        const value = inputValue.slice(0, 3);
-                        setNewClass({ ...newClass, room: value });
+                        setNewClass({ ...newClass, room: inputValue.slice(0, 3) });
                       }}
-                      placeholder="Enter room number (exactly 3 digits)"
-                      className="transition-all duration-200 border-2 border-gray-200 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-lg px-4 py-3"
+                      placeholder="3-digit room number"
+                      className="h-9 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors"
                     />
-                    {newClass.room.trim() && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">
-                            &#x2713;
-                          </span>
-                        </div>
-                      </div>
+                    {roomWarning && (
+                      <p className="text-xs text-red-500">Room number must be exactly 3 digits</p>
                     )}
                   </div>
-                  {newClass.room.trim() && (
-                    <div className="flex items-center gap-2 text-xs text-primary">
-                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                      <span>Room specified</span>
-                    </div>
-                  )}
-                  {roomWarning && (
-                    <div className="flex items-center gap-2 text-xs text-red-600 animate-pulse">
-                      <div className="w-2 h-2 bg-red-500 rounded-full" />
-                      <span>Room number must be exactly 3 digits only</span>
-                    </div>
-                  )}
                 </div>
-              </div>
+              </TabsContent>
 
-              {/* Progress Indicator */}
-              <div className="bg-white border-2 border-border rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Form Progress:
-                  </span>
-                  <span className="text-sm font-semibold text-foreground">
-                    {
-                      [
-                        newClass.class_name.trim(),
-                        newClass.course_subject.trim(),
-                      ].filter(Boolean).length
-                    }
-                    /2 Required
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-primary/80 to-primary h-2 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${[newClass.class_name.trim(), newClass.course_subject.trim()].filter(Boolean).length * 50}%`,
-                    }}
+              {/* Student Roster Tab */}
+              <TabsContent value="students" className="mt-4 space-y-4 pb-2">
+                {/* Import buttons */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={importing}
+                    className="h-8 text-xs border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <Upload className="w-3.5 h-3.5 mr-1.5" />
+                    {importing ? "Importing..." : "Import CSV/Excel"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={downloadTemplate}
+                    className="h-8 text-xs border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                    Download Template
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={handleFileUpload}
+                    className="hidden"
                   />
                 </div>
-              </div>
-            </TabsContent>
 
-            <TabsContent value="students" className="space-y-4 mt-4">
-              <div className="flex flex-wrap gap-2 mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importing}
-                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {importing ? "Importing..." : "Import CSV/Excel"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={downloadTemplate}
-                  className="hover:!bg-transparent hover:!text-current hover:!border-current"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download Template
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </div>
-
-              <div className="bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-6 space-y-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-primary" />
+                {/* Manual add student form */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    ADD STUDENT MANUALLY
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-gray-600 font-medium">
+                        Student ID <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        placeholder="Enter student ID"
+                        value={newStudent.student_id}
+                        onChange={(e) =>
+                          setNewStudent({ ...newStudent, student_id: e.target.value })
+                        }
+                        className="h-8 text-sm border-gray-200 focus:border-green-500 focus:ring-green-500/20"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-gray-600 font-medium">
+                        First Name <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        placeholder="Enter first name"
+                        value={newStudent.first_name}
+                        onChange={(e) =>
+                          setNewStudent({ ...newStudent, first_name: e.target.value })
+                        }
+                        className="h-8 text-sm border-gray-200 focus:border-green-500 focus:ring-green-500/20"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-gray-600 font-medium">
+                        Last Name <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        placeholder="Enter last name"
+                        value={newStudent.last_name}
+                        onChange={(e) =>
+                          setNewStudent({ ...newStudent, last_name: e.target.value })
+                        }
+                        className="h-8 text-sm border-gray-200 focus:border-green-500 focus:ring-green-500/20"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-gray-600 font-medium">
+                        Email{" "}
+                        <span className="text-gray-400 font-normal">(optional)</span>
+                      </label>
+                      <Input
+                        placeholder="Enter email address"
+                        type="email"
+                        value={newStudent.email}
+                        onChange={(e) =>
+                          setNewStudent({ ...newStudent, email: e.target.value })
+                        }
+                        className="h-8 text-sm border-gray-200 focus:border-green-500 focus:ring-green-500/20"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground">
-                      Add Student Manually
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      Enter student information below
-                    </p>
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      size="sm"
+                      onClick={handleAddStudent}
+                      disabled={
+                        !newStudent.student_id.trim() ||
+                        !newStudent.first_name.trim() ||
+                        !newStudent.last_name.trim()
+                      }
+                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white px-4"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1.5" />
+                      Add Student
+                    </Button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                      Student ID
-                      <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      placeholder="Enter student ID"
-                      value={newStudent.student_id}
-                      onChange={(e) =>
-                        setNewStudent({
-                          ...newStudent,
-                          student_id: e.target.value,
-                        })
-                      }
-                      className={`transition-all duration-200 ${
-                        newStudent.student_id.trim()
-                          ? "border-primary/50 focus:border-primary focus:ring-primary/20"
-                          : "focus:border-primary focus:ring-primary/20"
-                      }`}
-                    />
-                    {newStudent.student_id.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-primary">
-                        <div className="w-2 h-2 bg-primary rounded-full" />
-                        Valid student ID
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                      First Name
-                      <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      placeholder="Enter first name"
-                      value={newStudent.first_name}
-                      onChange={(e) =>
-                        setNewStudent({
-                          ...newStudent,
-                          first_name: e.target.value,
-                        })
-                      }
-                      className={`transition-all duration-200 ${
-                        newStudent.first_name.trim()
-                          ? "border-primary/50 focus:border-primary focus:ring-primary/20"
-                          : "focus:border-primary focus:ring-primary/20"
-                      }`}
-                    />
-                    {newStudent.first_name.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-primary">
-                        <div className="w-2 h-2 bg-primary rounded-full" />
-                        Valid first name
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                      Last Name
-                      <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      placeholder="Enter last name"
-                      value={newStudent.last_name}
-                      onChange={(e) =>
-                        setNewStudent({
-                          ...newStudent,
-                          last_name: e.target.value,
-                        })
-                      }
-                      className={`transition-all duration-200 ${
-                        newStudent.last_name.trim()
-                          ? "border-primary/50 focus:border-primary focus:ring-primary/20"
-                          : "focus:border-primary focus:ring-primary/20"
-                      }`}
-                    />
-                    {newStudent.last_name.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-primary">
-                        <div className="w-2 h-2 bg-primary rounded-full" />
-                        Valid last name
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground">
-                      Email
-                      <span className="text-muted-foreground text-xs">
-                        (Optional)
-                      </span>
-                    </label>
-                    <Input
-                      placeholder="Enter email address"
-                      type="email"
-                      value={newStudent.email}
-                      onChange={(e) =>
-                        setNewStudent({ ...newStudent, email: e.target.value })
-                      }
-                      className="focus:border-primary focus:ring-primary/20 transition-all duration-200"
-                    />
-                    {newStudent.email.trim() && (
-                      <div className="flex items-center gap-1 text-xs text-primary">
-                        <div className="w-2 h-2 bg-primary rounded-full" />
-                        Email provided
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-border">
-                  <div className="text-sm text-muted-foreground">
-                    <span className="font-medium">
-                      {newStudent.student_id.trim() &&
-                      newStudent.first_name.trim() &&
-                      newStudent.last_name.trim()
-                        ? "Ready to add"
-                        : "Fill required fields"}
-                    </span>
-                  </div>
-                  <Button
-                    onClick={handleAddStudent}
-                    disabled={
-                      !newStudent.student_id.trim() ||
-                      !newStudent.first_name.trim() ||
-                      !newStudent.last_name.trim()
-                    }
-                    className="bg-primary hover:bg-primary/90 min-w-[120px]"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Student
-                  </Button>
-                </div>
-              </div>
-
-              {students.length > 0 && (
-                <div className="border rounded-lg overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[100px]">
-                          Student ID
-                        </TableHead>
-                        <TableHead className="min-w-[120px]">Name</TableHead>
-                        <TableHead className="hidden sm:table-cell min-w-[150px]">
-                          Email
-                        </TableHead>
-                        <TableHead className="text-right min-w-[80px]">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {students.map((student, idx) => (
-                        <TableRow key={`add-class-${idx}`}>
-                          <TableCell className="min-w-[100px]">
-                            {student.student_id}
-                          </TableCell>
-                          <TableCell className="min-w-[120px]">{`${student.first_name} ${student.last_name}`}</TableCell>
-                          <TableCell className="hidden sm:table-cell min-w-[150px]">
-                            {student.email || "---"}
-                          </TableCell>
-                          <TableCell className="text-right min-w-[80px]">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleRemoveStudent(student.student_id)
-                              }
-                            >
-                              <X className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </TableCell>
+                {/* Students table */}
+                {students.length > 0 ? (
+                  <div className="border border-gray-200 rounded-lg overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead className="text-xs text-gray-500 min-w-[100px]">Student ID</TableHead>
+                          <TableHead className="text-xs text-gray-500 min-w-[120px]">Name</TableHead>
+                          <TableHead className="text-xs text-gray-500 hidden sm:table-cell min-w-[150px]">Email</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right min-w-[60px]">Remove</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+                      </TableHeader>
+                      <TableBody>
+                        {students.map((student, idx) => (
+                          <TableRow key={`add-class-${idx}`} className="text-sm">
+                            <TableCell className="py-2">{student.student_id}</TableCell>
+                            <TableCell className="py-2">{`${student.first_name} ${student.last_name}`}</TableCell>
+                            <TableCell className="py-2 hidden sm:table-cell">{student.email || "—"}</TableCell>
+                            <TableCell className="py-2 text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveStudent(student.student_id)}
+                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-gray-400">
+                    <AlertCircle className="w-7 h-7 mx-auto mb-1.5 text-gray-300" />
+                    <p className="text-sm">No students added yet</p>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
 
-              {students.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <AlertCircle className="w-8 h-8 mx-auto mb-2" />
-                  <p>No students added yet</p>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseAddDialog}>
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCloseAddDialog}
+              className="h-8 text-xs border-gray-200 text-gray-600 hover:bg-gray-50"
+            >
               Cancel
             </Button>
-            <Button onClick={handleAddClass} className="gradient-primary">
+            <Button
+              size="sm"
+              onClick={handleAddClass}
+              className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white px-5"
+            >
               Add Class
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

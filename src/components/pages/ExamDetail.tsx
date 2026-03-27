@@ -239,8 +239,8 @@ export default function ExamDetail() {
 
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{exam.title}</h1>
-            <p className="text-muted-foreground mt-1">{exam.subject}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{exam.title}</h1>
+            <p className="text-sm text-gray-500 mt-1">{exam.subject}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-accent/10 text-accent">

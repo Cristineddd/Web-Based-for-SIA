@@ -19,7 +19,7 @@ import {
   Search,
   FileText,
   Eye,
-  Archive,
+  FolderArchive,
   Pencil,
   RefreshCw,
 } from "lucide-react";
@@ -519,13 +519,14 @@ export default function Exams() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Exams
           </h1>
+          <p className="text-sm text-gray-500 mt-1">Create and manage your exams</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors"
         >
           <Plus className="w-4 h-4" />
           Create New Exam
@@ -660,7 +661,7 @@ export default function Exams() {
                         }}
                         title="Archive Exam"
                       >
-                        <Archive className="w-4 h-4" />
+                        <FolderArchive className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>
@@ -894,7 +895,7 @@ export default function Exams() {
         <AlertDialogContent className="border-2 border-warning">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-warning">
-              <Archive className="w-5 h-5" />
+              <FolderArchive className="w-5 h-5" />
               Duplicate Batch Detected
             </AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">

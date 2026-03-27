@@ -843,10 +843,10 @@ export default function AuditLogsViewer() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Template and Log History
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             Monitor all upload, administrative, and grade modification
             activities
           </p>
@@ -905,9 +905,9 @@ export default function AuditLogsViewer() {
         onValueChange={(v) => setActiveTab(v as "activity" | "templates")}
       >
         <div className="flex items-center justify-between mb-4">
-          <TabsList>
-            <TabsTrigger value="activity">Activity Log</TabsTrigger>
-            <TabsTrigger value="templates">Template History</TabsTrigger>
+          <TabsList className="bg-gray-100">
+            <TabsTrigger value="activity" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">Activity Log</TabsTrigger>
+            <TabsTrigger value="templates" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">Template History</TabsTrigger>
           </TabsList>
           <div className="flex gap-2">
             {activeTab === "activity" && (

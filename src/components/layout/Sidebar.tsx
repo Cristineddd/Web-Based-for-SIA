@@ -15,7 +15,7 @@ import {
   Menu,
   X,
   AlertTriangle,
-  Archive,
+  FolderArchive,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebarContext } from "@/contexts/SidebarContext";
@@ -28,7 +28,7 @@ const navItems = [
   { path: "/exams", label: "Exams", icon: FileText },
   { path: "/results", label: "Results", icon: BarChart3 },
   { path: "/templates", label: "Templates", icon: FileText },
-  { path: "/archive", label: "Archive", icon: Archive },
+  { path: "/archive", label: "Archive", icon: FolderArchive },
 ];
 
 export function Sidebar() {
@@ -68,285 +68,203 @@ export function Sidebar() {
 
   return (
     <>
-      <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-[#166534] border-b z-50 flex items-center px-3 gap-2">
+      {/* Mobile top bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 z-50 flex items-center px-3 gap-2 shadow-sm">
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="p-1.5 hover:bg-[#1a7a3e] rounded-md text-white transition-colors"
+          className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition-colors"
         >
-          {mobileOpen ? (
-            <X className="w-4 h-4" />
-          ) : (
-            <Menu className="w-4 h-4" />
-          )}
+          {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </button>
         <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
-          <Image
-            src="/gclogo.png"
-            alt="GC Logo"
-            width={24}
-            height={24}
-            className="object-contain"
-          />
+          <Image src="/gclogo.png" alt="GC Logo" width={24} height={24} className="object-contain" />
         </div>
-        <h1 className="font-bold text-white text-sm">GC SMART CHECK</h1>
+        <h1 className="font-bold text-green-700 text-sm">GC SMART CHECK</h1>
       </div>
 
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 bg-black/30 z-30 pointer-events-none" />
+        <div className="md:hidden fixed inset-0 bg-black/20 z-30 pointer-events-none" />
       )}
 
+      {/* Desktop sidebar */}
       <aside
         className={cn(
-          "bg-[#166534] flex flex-col transition-all duration-300 fixed left-0 z-40 border-r border-[#F0E6D2]",
-          // Desktop
+          "bg-white flex flex-col transition-all duration-300 fixed left-0 z-40 border-r border-gray-200 shadow-sm",
           "hidden md:flex",
           "top-0 bottom-0",
           collapsed ? "md:w-16" : "md:w-64",
         )}
       >
-        <div className="p-5 border-b border-[#F0E6D2]">
+        {/* Logo */}
+        <div className="px-5 py-5 border-b border-gray-100">
           {!collapsed ? (
-            <div className="overflow-hidden flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-                <Image
-                  src="/gclogo.png"
-                  alt="GC Logo"
-                  width={32}
-                  height={32}
-                  className="object-contain"
-                />
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-green-50 rounded-xl">
+                <Image src="/gclogo.png" alt="GC Logo" width={30} height={30} className="object-contain" />
               </div>
-              <div>
-                <h1 className="font-bold text-white text-sm">GC SMART CHECK</h1>
-                <p className="text-xs text-white/60 break-words">
-                  Exam & Quiz Builder
-                </p>
+              <div className="min-w-0">
+                <h1 className="font-bold text-gray-900 text-sm leading-tight">GC SMART CHECK</h1>
+                <p className="text-xs text-gray-400 mt-0.5">Exam &amp; Quiz Builder</p>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-                <Image
-                  src="/gclogo.png"
-                  alt="GC Logo"
-                  width={24}
-                  height={24}
-                  className="object-contain"
-                />
+              <div className="w-10 h-10 flex items-center justify-center bg-green-50 rounded-xl">
+                <Image src="/gclogo.png" alt="GC Logo" width={26} height={26} className="object-contain" />
               </div>
             </div>
           )}
         </div>
 
-        <nav className="flex-1 p-2 space-y-0.5">
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
               pathname === item.path || pathname.startsWith(item.path + "/");
-
             return (
               <Link
                 key={item.path}
                 href={item.path}
                 className={cn(
-                  "sidebar-item text-white/80 hover:text-white hover:bg-[#1a7a3e] transition-colors",
-                  isActive &&
-                    "bg-[#B38B00] text-white border-r-4 border-[#F0E6D2]",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                  isActive
+                    ? "bg-green-50 text-green-700 border-l-[3px] border-green-600 pl-[9px]"
+                    : "text-gray-500 hover:bg-gray-100 hover:text-gray-800",
                 )}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
+                <Icon className={cn("w-[18px] h-[18px] flex-shrink-0", isActive ? "text-green-600" : "text-gray-400")} />
                 {!collapsed && <span>{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
-        <div className="flex-shrink-0 p-2 border-t border-[#F0E6D2] bg-[#166534]">
+        {/* Footer */}
+        <div className="flex-shrink-0 px-3 py-4 border-t border-gray-100 space-y-1">
           {!collapsed && user && (
-            <div className="px-2 py-2 mb-2 flex items-center gap-3">
-              <div className="w-8 h-8 bg-[#B38B00] rounded-md flex items-center justify-center text-white font-bold text-sm">
+            <div className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-lg bg-gray-50">
+              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 {getEmailInitial()}
               </div>
-              <p className="text-sm font-medium text-white/80 truncate">
+              <p className="text-xs font-medium text-gray-600 truncate">
                 {user.email}
               </p>
             </div>
           )}
-          <div className="w-full px-1">
-            <button
-              onClick={() => setShowSignOutModal(true)}
-              className={cn(
-                "w-full h-10 flex items-center text-white/80 border-2 rounded-lg hover:text-white hover:bg-emerald-700 hover:border-emerald-500 transition-all duration-200 active:scale-95",
-                collapsed ? "justify-center px-2" : "justify-start px-3",
-              )}
-              style={{
-                borderColor: "#F0E6D2",
-                backgroundColor: "transparent",
-                color: "white",
-                minHeight: "40px",
-                touchAction: "manipulation",
-              }}
-            >
-              <LogOut
-                className="w-4 h-4 flex-shrink-0"
-                style={{ color: "#B38B00" }}
-              />
-              {!collapsed && (
-                <span className="text-sm ml-2 font-medium">Sign out</span>
-              )}
-            </button>
-          </div>
+          {collapsed && user && (
+            <div className="flex justify-center mb-1">
+              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                {getEmailInitial()}
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => setShowSignOutModal(true)}
+            className={cn(
+              "w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-150",
+              collapsed && "justify-center",
+            )}
+          >
+            <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
+            {!collapsed && <span>Sign out</span>}
+          </button>
         </div>
 
+        {/* Collapse toggle */}
         <Button
           variant="ghost"
           size="icon"
-          className="absolute -right-2.5 top-16 w-5 h-5 rounded-full border bg-white shadow-sm hover:bg-emerald-50 p-0 text-emerald-700"
+          className="absolute -right-2.5 top-16 w-5 h-5 rounded-full border border-gray-200 bg-white shadow-sm hover:bg-green-50 p-0 text-green-700"
           onClick={() => setCollapsed(!collapsed)}
         >
-          {collapsed ? (
-            <ChevronRight className="w-2.5 h-2.5" />
-          ) : (
-            <ChevronLeft className="w-2.5 h-2.5" />
-          )}
+          {collapsed ? <ChevronRight className="w-2.5 h-2.5" /> : <ChevronLeft className="w-2.5 h-2.5" />}
         </Button>
       </aside>
 
+      {/* Mobile sidebar */}
       <aside
         className={cn(
-          "md:hidden fixed left-0 top-12 bg-[#166534] flex flex-col border-r border-[#F0E6D2] w-56 z-40 transition-transform duration-300",
+          "md:hidden fixed left-0 top-12 bg-white flex flex-col border-r border-gray-200 w-56 z-40 transition-transform duration-300 shadow-lg",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
-        style={{
-          height: "calc(100vh - 3rem)",
-          minHeight: "calc(100vh - 3rem)",
-        }}
+        style={{ height: "calc(100vh - 3rem)" }}
       >
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto min-h-0">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
               pathname === item.path || pathname.startsWith(item.path + "/");
-
             return (
               <Link
                 key={item.path}
                 href={item.path}
                 onClick={handleNavClick}
                 className={cn(
-                  "sidebar-item text-white/80 hover:text-white hover:bg-[#1a7a3e] transition-colors",
-                  isActive &&
-                    "bg-[#B38B00] text-white border-r-4 border-[#F0E6D2]",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                  isActive
+                    ? "bg-green-50 text-green-700 border-l-[3px] border-green-600 pl-[9px]"
+                    : "text-gray-500 hover:bg-gray-100 hover:text-gray-800",
                 )}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
+                <Icon className={cn("w-[18px] h-[18px] flex-shrink-0", isActive ? "text-green-600" : "text-gray-400")} />
                 <span>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="flex-shrink-0 p-3 border-t border-[#F0E6D2] bg-[#166534] mt-auto">
+        <div className="flex-shrink-0 px-3 py-4 border-t border-gray-100 mt-auto space-y-1">
           {user && (
-            <div className="px-3 py-2 mb-3 flex items-center gap-3">
-              <div className="w-8 h-8 bg-[#B38B00] rounded-md flex items-center justify-center text-white font-bold text-sm">
+            <div className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-lg bg-gray-50">
+              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 {getEmailInitial()}
               </div>
-              <p className="text-sm font-medium text-white/80 truncate">
-                {user.email}
-              </p>
+              <p className="text-xs font-medium text-gray-600 truncate">{user.email}</p>
             </div>
           )}
-          <div className="w-full">
-            <button
-              onClick={() => setShowSignOutModal(true)}
-              className="w-full h-12 flex items-center justify-start text-left border-2 rounded-lg hover:text-white hover:bg-emerald-700 hover:border-emerald-500 active:bg-emerald-800 transition-all duration-200 px-4 py-3"
-              style={{
-                borderColor: "#10b981",
-                backgroundColor: "#f0fdf4",
-                color: "#166534",
-                minHeight: "48px",
-                touchAction: "manipulation",
-              }}
-            >
-              <LogOut
-                className="w-5 h-5 flex-shrink-0 mr-3"
-                style={{ color: "#10b981" }}
-              />
-              <span className="font-medium text-base">Sign out</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setShowSignOutModal(true)}
+            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-150"
+          >
+            <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
+            <span>Sign out</span>
+          </button>
         </div>
       </aside>
 
+      {/* Sign out modal */}
       {showSignOutModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={(e) =>
-            e.target === e.currentTarget && setShowSignOutModal(false)
-          }
+          onClick={(e) => e.target === e.currentTarget && setShowSignOutModal(false)}
         >
           <div
-            className="absolute inset-0 bg-black/50 cursor-pointer"
+            className="absolute inset-0 bg-black/40 cursor-pointer"
             onClick={() => setShowSignOutModal(false)}
-            style={{ touchAction: "manipulation" }}
           />
           <div
-            className="relative w-full max-w-sm sm:max-w-md rounded-2xl p-6 sm:p-8"
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderColor: "#F0E6D2",
-              borderWidth: "1px",
-              boxShadow: "0 20px 40px -12px rgba(22, 101, 52, 0.3)",
-              touchAction: "manipulation",
-            }}
+            className="relative w-full max-w-sm bg-white rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-100"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-center">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#B38B00]/10 flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle
-                  className="w-6 h-6 sm:w-8 sm:h-8"
-                  style={{ color: "#B38B00" }}
-                />
+              <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-7 h-7 text-red-500" />
               </div>
-
-              <h2
-                className="text-xl sm:text-2xl font-bold mb-2"
-                style={{ color: "#166534" }}
-              >
-                Sign Out
-              </h2>
-              <p
-                className="text-sm sm:text-base mb-6"
-                style={{ color: "#B38B00" }}
-              >
-                Are you sure you want to sign out? You'll need to log in again
-                to access your exams and data.
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Sign Out</h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Are you sure you want to sign out? You&apos;ll need to log in again to access your exams and data.
               </p>
-
-              <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex gap-3">
                 <button
                   onClick={() => setShowSignOutModal(false)}
-                  className="w-full h-12 px-4 py-2 rounded-xl font-medium transition-all duration-200 border-2 text-sm sm:text-base active:scale-95"
-                  style={{
-                    borderColor: "#F0E6D2",
-                    color: "#166534",
-                    backgroundColor: "transparent",
-                    touchAction: "manipulation",
-                    minHeight: "48px",
-                  }}
+                  className="flex-1 h-11 rounded-xl border border-gray-200 text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSignOut}
-                  className="w-full h-12 px-4 py-2 text-white hover:opacity-90 active:scale-95 rounded-xl font-medium transition-all duration-200 text-sm sm:text-base"
-                  style={{
-                    backgroundColor: "#166534",
-                    boxShadow: "0 4px 8px -2px rgba(22, 101, 52, 0.2)",
-                    touchAction: "manipulation",
-                    minHeight: "48px",
-                  }}
+                  className="flex-1 h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-medium text-sm transition-colors"
                 >
                   Sign Out
                 </button>

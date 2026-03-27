@@ -28,7 +28,7 @@ import {
   Trash2,
   Search,
   Filter,
-  Archive,
+  FolderArchive,
   ChevronLeft,
   ChevronRight,
   X,
@@ -482,14 +482,14 @@ export default function Templates() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="page-container space-y-6">
       {/* Header */}
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Answer Sheet Templates
           </h1>
+          <p className="text-sm text-gray-500 mt-1">Generate and manage answer sheet templates</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -497,7 +497,7 @@ export default function Templates() {
             size="sm"
             onClick={() => setShowArchived(!showArchived)}
           >
-            <Archive className="w-4 h-4 mr-2" />
+            <FolderArchive className="w-4 h-4 mr-2" />
             {showArchived ? "Viewing Archived" : "View Archived"}
           </Button>
         </div>
@@ -796,7 +796,7 @@ export default function Templates() {
                       className="flex-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                       onClick={() => confirmArchive(template)}
                     >
-                      <Archive className="w-4 h-4 mr-1" />
+                      <FolderArchive className="w-4 h-4 mr-1" />
                       Archive
                     </Button>
                   ) : (
@@ -807,7 +807,7 @@ export default function Templates() {
                         className="flex-1 text-green-600 hover:text-green-700 hover:bg-green-50"
                         onClick={() => handleRestore(template)}
                       >
-                        <Archive className="w-4 h-4 mr-1" />
+                        <FolderArchive className="w-4 h-4 mr-1" />
                         Restore
                       </Button>
                       <Button
@@ -1246,7 +1246,7 @@ export default function Templates() {
               onClick={handleArchive}
               className="bg-amber-600 hover:bg-amber-700 text-white"
             >
-              <Archive className="w-4 h-4 mr-2" />
+              <FolderArchive className="w-4 h-4 mr-2" />
               Archive
             </Button>
           </DialogFooter>

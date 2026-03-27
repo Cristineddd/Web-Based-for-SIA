@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  ArrowLeft,
   FileText,
   Search,
   ChevronUp,
@@ -390,11 +389,11 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
       <div className="flex items-center gap-3 sm:gap-4">
         <BackButton href={`/exams/${examId}`} asLink />
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
-            <FileText className="w-6 h-6 flex-shrink-0" />
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <FileText className="w-6 h-6 flex-shrink-0 text-green-600" />
             Review Papers
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Exam: {exam.title}</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">Exam: {exam.title}</p>
         </div>
       </div>
 

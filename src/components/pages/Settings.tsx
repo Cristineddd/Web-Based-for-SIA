@@ -58,11 +58,11 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="page-container space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Settings</h1>
+        <p className="text-sm text-gray-500 mt-1">
           Configure system preferences and account settings.
         </p>
       </div>
@@ -141,7 +141,7 @@ export default function Settings() {
           <button
             onClick={handleSaveSettings}
             disabled={isSaving || loading}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold disabled:opacity-50 transition-colors"
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Save Settings

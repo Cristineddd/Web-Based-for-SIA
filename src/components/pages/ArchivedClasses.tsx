@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  Archive as ArchiveIcon,
+  FolderArchive as ArchiveIcon,
   Search,
   GraduationCap,
   Trash2,
@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { getArchivedClasses, Class } from "@/services/classService";
+import { AuditLogger } from "@/services/auditLogger";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -137,10 +138,10 @@ export default function ArchivedClasses() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Archived Classes
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             View, restore, and manage archived classes
           </p>
         </div>

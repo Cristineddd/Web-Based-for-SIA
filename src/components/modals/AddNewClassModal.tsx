@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -10,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { createClass, type Class } from '@/services/classService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,7 +26,6 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
   const [loading, setLoading] = useState(false);
   const [roomWarning, setRoomWarning] = useState(false);
   const [classNameWarning, setClassNameWarning] = useState(false);
-  const [courseSubjectWarning, setCourseSubjectWarning] = useState(false);
   const [formData, setFormData] = useState({
     class_name: '',
     course_subject: '',
@@ -38,54 +36,28 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
   });
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Validation
+  const handleSubmit = async () => {
     if (!formData.class_name.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Class Name is required',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Class Name is required', variant: 'destructive' });
       return;
     }
-
     if (formData.class_name.trim().length < 4) {
-      toast({
-        title: 'Error',
-        description: 'Class Name must be at least 4 characters long',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Class Name must be at least 4 characters long', variant: 'destructive' });
       return;
     }
-
     if (!formData.course_subject.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Course Subject is required',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Course Subject is required', variant: 'destructive' });
       return;
     }
-
     if (formData.course_subject.trim().length < 5) {
-      toast({
-        title: 'Error',
-        description: 'Course Subject must be at least 5 characters long',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Course Subject must be at least 5 characters long', variant: 'destructive' });
       return;
     }
 
     setLoading(true);
-
     try {
       const newClass = await createClass(
         {
@@ -99,15 +71,11 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
           created_at: new Date().toISOString(),
         },
         user?.id || '',
-        user?.instructorId // Pass instructorId
+        user?.instructorId
       );
 
-      toast({
-        title: 'Success',
-        description: `Class "${newClass.class_name}" created successfully`,
-      });
+      toast({ title: 'Success', description: `Class "${newClass.class_name}" created successfully` });
 
-      // Reset form and call callback
       setFormData({
         class_name: '',
         course_subject: '',
@@ -121,11 +89,7 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
       onClose();
     } catch (error) {
       console.error('Error creating class:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create class. Please try again.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to create class. Please try again.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -133,336 +97,186 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
 
   if (!isOpen) return null;
 
+  const isFormValid = formData.class_name.trim().length >= 4 && formData.course_subject.trim().length >= 5;
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-background rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg w-full max-h-[90vh] overflow-y-auto border border-gray-200">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[88vh]">
+
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-gray-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Plus className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Add New Class</h2>
-              <p className="text-sm text-gray-700">Create a new class for your students</p>
-            </div>
+        <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Add New Class</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Create a new class for your students</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-2 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 text-gray-500" />
           </button>
         </div>
 
-        {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 bg-white">
-          {/* Class Name */}
-          <div className="space-y-3">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              Program 
-              <span className="text-red-500">*</span>
+        {/* Scrollable Fields */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+          {/* Program / Class Name */}
+          <div className="space-y-1.5">
+            <label className="block text-sm font-semibold text-gray-700">
+              Program <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="Enter class name"
-                value={formData.class_name}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  handleInputChange('class_name', value);
-                  
-                  // Show warning if length exceeds 0 but is less than 5
-                  if (value.trim().length > 0 && value.trim().length < 5) {
-                    setClassNameWarning(true);
-                    setTimeout(() => setClassNameWarning(false), 2000);
-                  } else {
-                    setClassNameWarning(false);
-                  }
-                }}
-                disabled={loading}
-                className={`w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                  formData.class_name.trim() && formData.class_name.trim().length >= 4
-                    ? 'border-blue-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 bg-blue-50/20' 
-                    : formData.class_name.trim() && formData.class_name.trim().length < 4
-                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
-                    : 'border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100'
-                }`}
-              />
-              {formData.class_name.trim() && formData.class_name.trim().length >= 4 && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">✓</span>
-                  </div>
-                </div>
-              )}
-            </div>
-            {formData.class_name.trim() && formData.class_name.trim().length >= 4 && (
-              <div className="flex items-center gap-2 text-xs text-blue-600">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                <span>Valid class name</span>
-              </div>
-            )}
+            <Input
+              type="text"
+              placeholder="Enter class name"
+              value={formData.class_name}
+              onChange={(e) => {
+                const value = e.target.value;
+                handleInputChange('class_name', value);
+                if (value.trim().length > 0 && value.trim().length < 4) {
+                  setClassNameWarning(true);
+                  setTimeout(() => setClassNameWarning(false), 2000);
+                } else {
+                  setClassNameWarning(false);
+                }
+              }}
+              disabled={loading}
+              className={`text-sm transition-all ${
+                formData.class_name.trim().length >= 4
+                  ? 'border-green-500 focus-visible:ring-green-500/20'
+                  : formData.class_name.trim().length > 0
+                  ? 'border-red-400 focus-visible:ring-red-400/20'
+                  : ''
+              }`}
+            />
             {classNameWarning && (
-              <div className="flex items-center gap-2 text-xs text-red-600 animate-fade-in">
-                <span className="text-red-500">⚠</span>
-                <span>Class Name must be at least 4 characters long</span>
-              </div>
+              <p className="text-xs text-red-500">Class Name must be at least 4 characters</p>
             )}
           </div>
 
           {/* Course Subject */}
-          <div className="space-y-3">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              Course 
-              <span className="text-red-500">*</span>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-semibold text-gray-700">
+              Course <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="Enter course subject"
-                value={formData.course_subject}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  handleInputChange('course_subject', value);
-                }}
-                disabled={loading}
-                className={`w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 ${
-                  formData.course_subject.trim() && formData.course_subject.trim().length >= 5
-                    ? 'border-blue-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 bg-blue-50/20' 
-                    : formData.course_subject.trim() && formData.course_subject.trim().length < 5
-                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/30'
-                    : 'border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100'
-                }`}
-              />
-              {formData.course_subject.trim() && formData.course_subject.trim().length >= 5 && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">✓</span>
-                  </div>
-                </div>
-              )}
-            </div>
-            {formData.course_subject.trim() && formData.course_subject.trim().length >= 5 && (
-              <div className="flex items-center gap-2 text-xs text-blue-600">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                <span>Valid course subject</span>
-              </div>
-            )}
-
+            <Input
+              type="text"
+              placeholder="Enter course subject"
+              value={formData.course_subject}
+              onChange={(e) => handleInputChange('course_subject', e.target.value)}
+              disabled={loading}
+              className={`text-sm transition-all ${
+                formData.course_subject.trim().length >= 5
+                  ? 'border-green-500 focus-visible:ring-green-500/20'
+                  : formData.course_subject.trim().length > 0
+                  ? 'border-red-400 focus-visible:ring-red-400/20'
+                  : ''
+              }`}
+            />
           </div>
 
           {/* Year */}
-          <div className="space-y-3">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              Year 
-              <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-semibold text-gray-700">
+              Year <span className="text-xs text-gray-400 font-normal">(Optional)</span>
             </label>
-            <div className="relative">
-              <Select
-                value={formData.year}
-                onValueChange={(value) => handleInputChange('year', value)}
-                disabled={loading}
-              >
-                <SelectTrigger className="w-full transition-all duration-200 border-2 rounded-lg px-4 py-3 border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100">
-                  <SelectValue placeholder="Enter year" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1st Year</SelectItem>
-                  <SelectItem value="2">2nd Year</SelectItem>
-                  <SelectItem value="3">3rd Year</SelectItem>
-                  <SelectItem value="4">4th Year</SelectItem>
-                </SelectContent>
-              </Select>
-              {formData.year && (
-                <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
-                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">✓</span>
-                  </div>
-                </div>
-              )}
-            </div>
-            {formData.year && (
-              <div className="flex items-center gap-2 text-xs text-blue-600">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                <span>Year level selected</span>
-              </div>
-            )}
+            <Select
+              value={formData.year}
+              onValueChange={(value) => handleInputChange('year', value)}
+              disabled={loading}
+            >
+              <SelectTrigger className="w-full text-sm border border-gray-200 rounded-lg h-10">
+                <SelectValue placeholder="Select year level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1st Year</SelectItem>
+                <SelectItem value="2">2nd Year</SelectItem>
+                <SelectItem value="3">3rd Year</SelectItem>
+                <SelectItem value="4">4th Year</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Room */}
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             <label className="block text-sm font-semibold text-gray-700">
-              Room 
-              <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+              Room <span className="text-xs text-gray-400 font-normal">(Optional, 3 digits)</span>
             </label>
-            <div className="relative">
-              <Input
-                type="number"
-                placeholder="Enter room number (exactly 3 digits)"
-                value={formData.room}
-                onChange={(e) => {
-                  // Only allow exactly 3 numbers
-                  const inputValue = e.target.value.replace(/[^0-9]/g, '');
-                  if (inputValue.length > 3) {
-                    setRoomWarning(true);
-                    setTimeout(() => setRoomWarning(false), 3000);
-                    return;
-                  }
-                  const value = inputValue.slice(0, 3);
-                  handleInputChange('room', value);
-                }}
-                disabled={loading}
-                className="w-full transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
-              />
-              {formData.room.trim() && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">&#x2713;</span>
-                  </div>
-                </div>
-              )}
-            </div>
-            {formData.room.trim() && (
-              <div className="flex items-center gap-2 text-xs text-green-600">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span>Room specified</span>
-              </div>
-            )}
+            <Input
+              type="number"
+              placeholder="e.g. 101"
+              value={formData.room}
+              onChange={(e) => {
+                const inputValue = e.target.value.replace(/[^0-9]/g, '');
+                if (inputValue.length > 3) {
+                  setRoomWarning(true);
+                  setTimeout(() => setRoomWarning(false), 3000);
+                  return;
+                }
+                handleInputChange('room', inputValue.slice(0, 3));
+              }}
+              disabled={loading}
+              className="text-sm"
+            />
             {roomWarning && (
-              <div className="flex items-center gap-2 text-xs text-red-600 animate-pulse">
-                <div className="w-2 h-2 bg-red-500 rounded-full" />
-                <span>Room number must be exactly 3 digits only</span>
-              </div>
+              <p className="text-xs text-red-500">Room number must be exactly 3 digits</p>
             )}
           </div>
 
           {/* Semester */}
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             <label className="block text-sm font-semibold text-gray-700">
-              Semester
-              <span className="text-gray-400 text-xs font-normal">(Optional)</span>
+              Semester <span className="text-xs text-gray-400 font-normal">(Optional)</span>
             </label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="Enter semester (e.g., 1st Semester, 2nd Semester)"
-                value={formData.semester}
-                onChange={(e) => handleInputChange('semester', e.target.value)}
-                disabled={loading}
-                className="w-full transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
-              />
-            </div>
+            <Input
+              type="text"
+              placeholder="e.g. 1st Semester, 2nd Semester"
+              value={formData.semester}
+              onChange={(e) => handleInputChange('semester', e.target.value)}
+              disabled={loading}
+              className="text-sm"
+            />
           </div>
 
           {/* School Year */}
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             <label className="block text-sm font-semibold text-gray-700">
-              School Year
-              <span className="text-gray-400 text-xs font-normal">(Auto-populated)</span>
+              School Year <span className="text-xs text-gray-400 font-normal">(Auto-populated)</span>
             </label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="School year (e.g., 2023-2024)"
-                value={formData.school_year}
-                onChange={(e) => handleInputChange('school_year', e.target.value)}
-                disabled={loading}
-                className="w-full transition-all duration-200 border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-100 rounded-lg px-4 py-3"
-              />
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">✓</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-green-600">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
-              <span>Auto-generated for current academic year</span>
-            </div>
-          </div>
-
-          {/* Form Progress */}
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-5">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-blue-600 text-lg font-bold">✓</span>
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-gray-900 mb-2">Form Progress</h4>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Required fields completed:</span>
-                    <div className="flex items-center gap-2">
-                    <div className={`w-4 h-4 rounded-full transition-all ${
-                      formData.class_name.trim().length >= 4 && formData.course_subject.trim().length >= 5
-                        ? 'bg-blue-500 scale-110'
-                        : 'bg-gray-300'
-                    }`} />
-                    <span className={`text-sm font-medium ${
-                      formData.class_name.trim().length >= 4 && formData.course_subject.trim().length >= 5
-                        ? 'text-blue-600'
-                        : 'text-gray-500'
-                    }`}>
-                      {formData.class_name.trim().length >= 4 && formData.course_subject.trim().length >= 5
-                        ? 'Complete'
-                        : 'Incomplete'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-blue-400 to-blue-600 h-2 rounded-full transition-all duration-500 ease-out"
-                      style={{ 
-                        width: `${[
-                          formData.class_name.trim().length >= 4,
-                          formData.course_subject.trim().length >= 5
-                        ].filter(Boolean).length * 50}%` 
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-600">
-                    Fields marked with <span className="text-red-500 font-semibold">*</span> are required
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-4 justify-end pt-4 border-t border-gray-100">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
+            <Input
+              type="text"
+              value={formData.school_year}
+              onChange={(e) => handleInputChange('school_year', e.target.value)}
               disabled={loading}
-              className="min-w-[100px] border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading || !formData.class_name.trim() || !formData.course_subject.trim()}
-              className={`min-w-[140px] transition-all duration-200 ${
-                loading || !formData.class_name.trim() || !formData.course_subject.trim()
-                  ? 'bg-gray-300 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transform hover:scale-105'
-              }`}
-            >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Creating...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Create Class
-                </div>
-              )}
-            </Button>
+              className="text-sm bg-gray-50"
+            />
           </div>
-        </form>
+
+        </div>
+
+        {/* Footer */}
+        <div className="flex-shrink-0 flex gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading || !isFormValid}
+            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" />Creating...</>
+            ) : (
+              <><Plus className="w-4 h-4" />Create Class</>
+            )}
+          </button>
+        </div>
+
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import "./globals.css";
 import { RootProviders } from "@/components/providers/RootProviders";
 
 const poppins = Poppins({
-  weight: ["500", "700"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-poppins",
   subsets: ["latin"],
 });

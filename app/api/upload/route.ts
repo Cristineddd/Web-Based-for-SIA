@@ -4,17 +4,23 @@ import { AuditLogger } from "@/services/auditLogger";
 
 // This function handles POST requests to /api/upload
 export async function POST(request: NextRequest) {
+  // Parse form data once, outside the try block so it's accessible in catch
+  let file: File | null = null;
+  let adminId: string | null = null;
+  let adminEmail: string | null = null;
+  let requestMetadata: ReturnType<typeof AuditLogger.getRequestMetadata>;
+
   try {
     //  Parse the incoming form data
     const formData = await request.formData();
 
     // Gets the file from the form data (must match the key used in frontend)
-    const file = formData.get("file") as File | null;
+    file = formData.get("file") as File | null;
 
     // Get admin ID from headers (sent from frontend)
-    const adminId = request.headers.get("x-admin-id");
-    const adminEmail = request.headers.get("x-admin-email");
-    const requestMetadata = AuditLogger.getRequestMetadata(request);
+    adminId = request.headers.get("x-admin-id");
+    adminEmail = request.headers.get("x-admin-email");
+    requestMetadata = AuditLogger.getRequestMetadata(request);
 
     // Checks if the file is valid before uploading
     if (!file) {
@@ -96,12 +102,6 @@ export async function POST(request: NextRequest) {
       message: "File uploaded successfully",
     });
   } catch (error) {
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-    const adminId = request.headers.get("x-admin-id");
-    const adminEmail = request.headers.get("x-admin-email");
-    const requestMetadata = AuditLogger.getRequestMetadata(request);
-
     // Log error
     if (adminId && adminEmail && file) {
       await AuditLogger.logFileUpload(

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  Archive as ArchiveIcon,
+  FolderArchive as ArchiveIcon,
   Search,
   FileText,
   Eye,
@@ -17,6 +17,7 @@ import {
   type Exam,
   deleteExam,
 } from "@/services/examService";
+import { AuditLogger } from "@/services/auditLogger";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -124,10 +125,10 @@ export default function ArchivedExams() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Archived Exams
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             View, restore, and manage archived exams
           </p>
         </div>
