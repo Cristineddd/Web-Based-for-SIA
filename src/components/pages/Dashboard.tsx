@@ -324,7 +324,6 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
@@ -334,62 +333,18 @@ export default function Dashboard() {
             <p className="text-xs text-gray-500 mt-0.5">
               Here&apos;s what&apos;s happening with your classes today.
             </p>
-<<<<<<< HEAD
           </div>
           <div className="flex gap-2">
             <Link href="/classes">
-              <Button variant="outline" size="sm" className="flex items-center gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-100 text-xs h-8 px-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-100 text-xs h-8 px-3"
+              >
                 <Plus className="w-3.5 h-3.5" />
                 New Class
               </Button>
             </Link>
-=======
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card
-              key={stat.title}
-              className={`stat-card animate-slide-up border-2 ${stat.borderColor} hover:border-[#B38B00] transition-colors duration-200`}
-            >
-              <CardContent className="p-4 md:p-6">
-                <div className="flex items-center justify-between gap-2 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#166534] truncate">
-                      {stat.title}
-                    </p>
-                    <p className="text-2xl md:text-3xl font-bold mt-2 text-[#166534] font-mono tabular-nums">
-                      {loading ? "-" : stat.value}
-                    </p>
-                  </div>
-                  <div
-                    className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-lg ${stat.bgColor} flex items-center justify-center flex-shrink-0`}
-                  >
-                    <Icon
-                      className={`w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 ${stat.color}`}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-        <Card className="card-elevated border-2 border-[#166534] hover:border-[#B38B00] transition-colors duration-200">
-          <CardHeader className="pb-3 md:pb-6">
-            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-[#166534]">
-              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-[#B38B00]" />
-              Quick Actions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-0">
->>>>>>> 07138f37b34966e62f2cef33e57679a8294057ac
             <Button
               size="sm"
               onClick={() => setShowCreateModal(true)}
@@ -401,7 +356,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-<<<<<<< HEAD
+        {/* Pending role notice */}
         {!userRole && (
           <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center gap-2 text-yellow-800 text-xs">
             <Clock className="w-3.5 h-3.5 flex-shrink-0" />
@@ -414,20 +369,33 @@ export default function Dashboard() {
           {statCards.map((stat) => {
             const Icon = stat.icon;
             return (
-              <Card key={stat.title} className="bg-white border border-gray-200 shadow-sm rounded-xl">
+              <Card
+                key={stat.title}
+                className="bg-white border border-gray-200 shadow-sm rounded-xl"
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-col min-w-0">
-                      <p className="text-xs text-gray-500 font-medium">{stat.title}</p>
+                      <p className="text-xs text-gray-500 font-medium">
+                        {stat.title}
+                      </p>
                       <p className="text-2xl font-bold text-gray-900 mt-0.5 leading-none">
-                        {loading ? <span className="inline-block w-8 h-6 bg-gray-100 animate-pulse rounded" /> : stat.value}
+                        {loading ? (
+                          <span className="inline-block w-8 h-6 bg-gray-100 animate-pulse rounded" />
+                        ) : (
+                          stat.value
+                        )}
                       </p>
                       <p className="text-[10px] text-gray-400 mt-1 min-h-[14px]">
                         {stat.sub ?? ""}
                       </p>
                     </div>
-                    <div className={`w-9 h-9 rounded-lg ${stat.iconBg} flex items-center justify-center flex-shrink-0`}>
-                      <Icon className={`w-[18px] h-[18px] ${stat.iconColor}`} />
+                    <div
+                      className={`w-9 h-9 rounded-lg ${stat.iconBg} flex items-center justify-center flex-shrink-0`}
+                    >
+                      <Icon
+                        className={`w-[18px] h-[18px] ${stat.iconColor}`}
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -438,7 +406,6 @@ export default function Dashboard() {
 
         {/* Recent Classes + Recent Exams */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
           {/* Recent Classes */}
           <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
@@ -447,79 +414,12 @@ export default function Dashboard() {
                 Recent Classes
               </CardTitle>
               <Link href="/classes">
-                <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2">
-                  View All
-=======
-            <Button
-              className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-              variant="outline"
-              onClick={handleManageStudentsClick}
-            >
-              <Users className="w-4 h-4 text-[#B38B00]" />
-              {loadingClasses ? "Loading classes…" : "Manage Students"}
-            </Button>
-
-            <Link href="/exams" className="block">
-              <Button
-                className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-                variant="outline"
-              >
-                <FileText className="w-4 h-4 text-[#B38B00]" />
-                View All Exams
-              </Button>
-            </Link>
-
-            <Link href="/audit-logs" className="block">
-              <Button
-                className="w-full justify-start gap-3 h-10 md:h-12 text-sm md:text-base border-2 border-[#166534]/20 hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-                variant="outline"
-              >
-                <History className="w-4 h-4 text-[#B38B00]" />
-                Template and Log History
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="card-elevated border-2 border-[#166534] hover:border-[#B38B00] transition-colors duration-200">
-          <CardHeader className="flex flex-row items-center justify-between pb-3 md:pb-6">
-            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-[#166534]">
-              <Clock className="w-4 h-4 md:w-5 md:h-5 text-[#B38B00]" />
-              Recent Exams
-            </CardTitle>
-            <Link href="/exams">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs md:text-sm border-2 border-transparent hover:border-[#B38B00] hover:bg-[#B38B00]/10 transition-colors duration-200 text-[#166534]"
-              >
-                View all
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {loading ? (
-              <div className="space-y-2 md:space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-14 md:h-16 bg-[#B38B00]/10 rounded-lg animate-pulse border-2 border-[#166534]"
-                  />
-                ))}
-              </div>
-            ) : stats.recentExams.length === 0 ? (
-              <div className="text-center py-6 md:py-8 text-[#166534] border-2 border-dashed border-[#166534] rounded-lg">
-                <FileText className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 opacity-50 text-[#B38B00]" />
-                <p className="text-sm md:text-base text-[#166534]">
-                  No exams created yet
-                </p>
                 <Button
-                  variant="link"
-                  className="mt-2 text-sm text-[#B38B00] hover:text-[#166534]"
-                  onClick={() => setShowCreateModal(true)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2"
                 >
-                  Create your first exam
->>>>>>> 07138f37b34966e62f2cef33e57679a8294057ac
+                  View All
                 </Button>
               </Link>
             </CardHeader>
@@ -527,7 +427,10 @@ export default function Dashboard() {
               {loading ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-14 bg-gray-100 rounded-lg animate-pulse" />
+                    <div
+                      key={i}
+                      className="h-14 bg-gray-100 rounded-lg animate-pulse"
+                    />
                   ))}
                 </div>
               ) : stats.recentClasses.length === 0 ? (
@@ -535,7 +438,10 @@ export default function Dashboard() {
                   <BookOpen className="w-6 h-6 mx-auto mb-1.5 text-gray-300" />
                   <p className="text-xs text-gray-400">No classes yet</p>
                   <Link href="/classes">
-                    <Button variant="link" className="mt-1 text-xs text-green-600 h-auto p-0">
+                    <Button
+                      variant="link"
+                      className="mt-1 text-xs text-green-600 h-auto p-0"
+                    >
                       Create your first class
                     </Button>
                   </Link>
@@ -557,7 +463,9 @@ export default function Dashboard() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-0.5">{cls.course_subject}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              {cls.course_subject}
+                            </p>
                             <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
                               {cls.section_block && (
                                 <span className="flex items-center gap-0.5">
@@ -595,7 +503,11 @@ export default function Dashboard() {
                 Recent Exams
               </CardTitle>
               <Link href="/exams">
-                <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2"
+                >
                   View All
                 </Button>
               </Link>
@@ -604,7 +516,10 @@ export default function Dashboard() {
               {loading ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-14 bg-gray-100 rounded-lg animate-pulse" />
+                    <div
+                      key={i}
+                      className="h-14 bg-gray-100 rounded-lg animate-pulse"
+                    />
                   ))}
                 </div>
               ) : stats.recentExams.length === 0 ? (
@@ -634,7 +549,9 @@ export default function Dashboard() {
                                 {exam.num_items} Items
                               </span>
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-0.5">{exam.subject}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              {exam.subject}
+                            </p>
                             <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
                               {exam.examCode && (
                                 <span className="flex items-center gap-0.5">
@@ -645,7 +562,14 @@ export default function Dashboard() {
                               {exam.created_at && (
                                 <span className="flex items-center gap-0.5">
                                   <CalendarDays className="w-2.5 h-2.5" />
-                                  {new Date(exam.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                  {new Date(exam.created_at).toLocaleDateString(
+                                    "en-US",
+                                    {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    }
+                                  )}
                                 </span>
                               )}
                             </div>
@@ -659,10 +583,10 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
-
         </div>
       </div>
 
+      {/* Create Exam Modal */}
       <CreateExamModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -686,7 +610,9 @@ export default function Dashboard() {
                   <Users className="w-5 h-5 text-[#166534]" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-[#166534]">Manage Students</h2>
+                  <h2 className="text-base font-semibold text-[#166534]">
+                    Manage Students
+                  </h2>
                   <p className="text-xs text-gray-500">Select a class to open</p>
                 </div>
               </div>
@@ -733,7 +659,9 @@ export default function Dashboard() {
                   );
                 });
                 return filtered.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-400">No classes match "{classSearch}"</div>
+                  <div className="text-center py-8 text-sm text-gray-400">
+                    No classes match "{classSearch}"
+                  </div>
                 ) : (
                   filtered.map((cls) => (
                     <button
@@ -747,14 +675,18 @@ export default function Dashboard() {
                             {cls.class_name}
                           </p>
                           <p className="text-xs text-gray-400 truncate mt-0.5">
-                            {[cls.course_subject, cls.section_block].filter(Boolean).join(" · ")}
+                            {[cls.course_subject, cls.section_block]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-xs bg-[#166534]/10 text-[#166534] px-2 py-0.5 rounded-full font-medium">
                             {cls.students?.length ?? 0} students
                           </span>
-                          <span className="text-gray-300 group-hover:text-[#B38B00] text-lg leading-none">›</span>
+                          <span className="text-gray-300 group-hover:text-[#B38B00] text-lg leading-none">
+                            ›
+                          </span>
                         </div>
                       </div>
                     </button>
