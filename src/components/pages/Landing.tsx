@@ -102,10 +102,6 @@ export default function Landing() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left Content */}
             <div>
-              <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
-                <Sparkles className="w-3.5 h-3.5" />
-                Smart Paper-Based Exam Checking
-              </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
                 GC SMART<br />
                 <span className="text-green-600">CHECK</span>
@@ -253,7 +249,7 @@ export default function Landing() {
       {/* Auth Modal */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto border border-gray-200">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto border border-green-200" style={{ boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.25)' }}>
             <button
               onClick={() => setShowAuthModal(false)}
               className="absolute top-4 right-4 p-2 rounded-lg hover:bg-gray-100 transition-colors z-10"

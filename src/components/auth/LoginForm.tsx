@@ -100,7 +100,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
+                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
                     required
                     autoFocus
                   />
@@ -109,7 +109,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                 <button 
                   type="submit" 
                   disabled={!email} 
-                  className="w-full h-12 sm:h-14 px-4 py-2 bg-[#166534] hover:bg-[#1a7a3e] text-white rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
+                  className="w-full h-12 sm:h-14 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
                 >
                   Next
                 </button>
@@ -117,9 +117,9 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
 
               {/* Divider */}
               <div className="flex items-center gap-4 my-6">
-                <div className="flex-1 h-px" style={{ backgroundColor: '#F0E6D2' }} />
+                <div className="flex-1 h-px bg-gray-200" />
                 <span className="text-sm font-medium text-gray-600">or</span>
-                <div className="flex-1 h-px" style={{ backgroundColor: '#F0E6D2' }} />
+                <div className="flex-1 h-px bg-gray-200" />
               </div>
 
               {/* Google Sign-In Button */}
@@ -133,15 +133,9 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                     setError(error.message);
                     setFormLoading(false);
                   }
-                  // If successful, onAuthStateChanged will handle redirect
                 }}
                 disabled={formLoading}
-                className="w-full h-14 px-4 py-2 bg-white border-2 hover:bg-gray-50 rounded-xl font-semibold transition-all duration-200 inline-flex items-center justify-center gap-3 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-                style={{ 
-                  borderColor: '#F0E6D2',
-                  color: '#166534',
-                  boxShadow: '0 4px 8px -2px rgba(22, 101, 52, 0.1)'
-                }}
+                className="w-full h-14 px-4 py-2 bg-white border-2 border-gray-200 hover:bg-gray-50 text-green-600 rounded-xl font-semibold transition-all duration-200 inline-flex items-center justify-center gap-3 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
               >
                 {formLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -197,7 +191,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-12 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
+                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-12 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
                     required
                     autoFocus
                   />
@@ -220,13 +214,9 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 rounded border-2"
-                      style={{ 
-                        accentColor: '#166534',
-                        borderColor: '#F0E6D2'
-                      }}
+                      className="w-4 h-4 rounded border-2 accent-green-600"
                     />
-                    <span className="text-sm font-medium" style={{ color: '#166534' }}>Remember me</span>
+                    <span className="text-sm font-medium text-green-600">Remember me</span>
                   </label>
                   <button 
                     type="button" 
@@ -240,11 +230,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                 <button 
                   type="submit" 
                   disabled={formLoading} 
-                  className="w-full h-14 px-4 py-2 text-white hover:opacity-90 rounded-xl font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50 transform hover:scale-[1.02] active:scale-[0.98]"
-                  style={{ 
-                    backgroundColor: '#166534',
-                    boxShadow: '0 8px 16px -4px rgba(22, 101, 52, 0.3)'
-                  }}
+                  className="w-full h-14 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50 transform hover:scale-[1.02] active:scale-[0.98]"
                 >
                   {formLoading ? (
                     <>
@@ -275,49 +261,33 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
           onClick={closeModal}
         />
         <div 
-          className="relative w-full max-w-md rounded-2xl p-8"
-          style={{ 
-            backgroundColor: '#FFFFFF', 
-            borderColor: '#F0E6D2', 
-            borderWidth: '1px',
-            boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.3)'
-          }}
+          className="relative w-full max-w-md rounded-2xl p-8 bg-white border border-gray-200"
+          style={{ boxShadow: '0 20px 40px -12px rgba(22, 163, 74, 0.3)' }}
         >
           <button
             onClick={closeModal}
-            className="absolute right-4 top-4 p-1 rounded-full hover:bg-[#F0E6D2] transition-colors"
+            className="absolute right-4 top-4 p-1 rounded-full hover:bg-gray-100 transition-colors"
           >
-            <X className="w-5 h-5" style={{ color: '#166534' }} />
+            <X className="w-5 h-5 text-green-600" />
           </button>
 
-          <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Reset password</h2>
+          <h2 className="text-2xl font-bold mb-2 text-green-600">Reset password</h2>
           <p className="text-sm mb-6 text-gray-600">
             Enter your email address and we'll send you a link to reset your password.
           </p>
 
           {resetSuccess ? (
             <div className="text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-[#166534]/10 flex items-center justify-center mx-auto mb-4">
-                <Mail className="w-8 h-8" style={{ color: '#166534' }} />
+              <div className="w-16 h-16 rounded-full bg-green-600/10 flex items-center justify-center mx-auto mb-4">
+                <Mail className="w-8 h-8 text-green-600" />
               </div>
-              <h3 className="text-lg font-semibold mb-2" style={{ color: '#166534' }}>Check your email</h3>
+              <h3 className="text-lg font-semibold mb-2 text-green-600">Check your email</h3>
               <p className="text-sm mb-6 text-gray-600">
-                We've sent a password reset link to <strong style={{ color: '#166534' }}>{resetEmail}</strong>
+                We've sent a password reset link to <strong className="text-green-600">{resetEmail}</strong>
               </p>
               <button
                 onClick={closeModal}
-                className="
-                  px-6 py-2 rounded-lg font-medium 
-                  border-2 transition-all duration-300
-                  hover:bg-[#166534] hover:text-white
-                  hover:shadow-lg hover:scale-105
-                  active:scale-95
-                "
-                style={{
-                  borderColor: "#166534",
-                  color: "#166534",
-                  backgroundColor: "transparent",
-                }}
+                className="px-6 py-2 rounded-lg font-medium border-2 border-green-600 text-green-600 bg-transparent hover:bg-green-600 hover:text-white transition-all duration-300 hover:shadow-lg hover:scale-105 active:scale-95"
               >
                 Close
               </button>
@@ -325,18 +295,13 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
           ) : (
             <form onSubmit={handleForgotPassword} className="space-y-6">
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
                   type="email"
                   placeholder="Enter your email"
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
-                  className="h-14 text-base rounded-xl pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0"
-                  style={{ 
-                    borderColor: '#F0E6D2',
-                    color: '#166534',
-                    backgroundColor: '#FEF9E7'
-                  }}
+                  className="h-14 text-base rounded-xl pl-12 pr-4 border-2 border-gray-200 focus:border-green-600 focus-visible:ring-2 focus-visible:ring-offset-0"
                   required
                   autoFocus
                 />
@@ -346,18 +311,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="
-                    flex-1 h-12 px-4 py-2 rounded-xl font-medium 
-                    border-2 transition-all duration-300
-                    hover:bg-[#F0E6D2] hover:border-[#166534]
-                    hover:shadow-md hover:scale-[1.02]
-                    active:scale-95
-                  "
-                  style={{
-                    borderColor: "#F0E6D2",
-                    color: "#166534",
-                    backgroundColor: "transparent",
-                  }}
+                  className="flex-1 h-12 px-4 py-2 rounded-xl font-medium border-2 border-gray-200 text-gray-600 bg-transparent hover:bg-gray-100 hover:border-green-600 transition-all duration-300 hover:shadow-md hover:scale-[1.02] active:scale-95"
                 >
                   Cancel
                 </button>
@@ -365,11 +319,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                 <button
                   type="submit"
                   disabled={resetLoading || !resetEmail}
-                  className="flex-1 h-12 px-4 py-2 text-white hover:opacity-90 rounded-xl font-medium transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
-                  style={{ 
-                    backgroundColor: '#166534',
-                    boxShadow: '0 4px 8px -2px rgba(22, 101, 52, 0.2)'
-                  }}
+                  className="flex-1 h-12 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
                 >
                   {resetLoading ? (
                     <>

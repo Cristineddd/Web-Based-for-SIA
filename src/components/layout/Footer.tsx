@@ -35,14 +35,14 @@ export function Footer() {
 	const currentYear = new Date().getFullYear();
 
 	return (
-		<footer className="bg-[#166534] border-t border-white/10 mt-12">
+		<footer className="bg-white border-t border-gray-200 mt-12">
 			<div className="max-w-7xl mx-auto px-6 py-12">
 				{/* Top Row */}
 				<div className="flex flex-col md:flex-row justify-between gap-10 mb-10">
 					{/* Brand */}
 					<div className="space-y-4 max-w-sm">
 						<div className="flex items-center gap-3">
-							<div className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-lg flex-shrink-0">
+							<div className="w-9 h-9 flex items-center justify-center bg-green-50 rounded-lg flex-shrink-0">
 								<Image
 									src="/gclogo.png"
 									alt="GC Logo"
@@ -52,15 +52,15 @@ export function Footer() {
 								/>
 							</div>
 							<div>
-								<h3 className="text-base font-bold text-white">
+								<h3 className="text-base font-bold text-[#166534]">
 									GC SMART CHECK
 								</h3>
-								<p className="text-xs text-white/50">
+								<p className="text-xs text-gray-400">
 									Exam &amp; Quiz Builder
 								</p>
 							</div>
 						</div>
-						<p className="text-sm text-white/60 leading-relaxed">
+						<p className="text-sm text-gray-500 leading-relaxed">
 							A streamlined, paper-based exam checking solution for efficient
 							exam management and automatic grading.
 						</p>
@@ -75,7 +75,7 @@ export function Footer() {
 										target="_blank"
 										rel="noopener noreferrer"
 										title={social.label}
-										className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+										className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-[#166534] transition-colors"
 										aria-label={social.label}
 									>
 										<Icon className="w-4 h-4" />
@@ -88,7 +88,7 @@ export function Footer() {
 					{/* Links */}
 					<div className="flex flex-wrap gap-10">
 						<div className="space-y-3">
-							<h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider">
+							<h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
 								Navigation
 							</h4>
 							<div className="flex flex-col gap-2">
@@ -101,7 +101,7 @@ export function Footer() {
 									<Link
 										key={link.href}
 										href={link.href}
-										className="text-sm text-white/60 hover:text-white transition-colors"
+										className="text-sm text-gray-500 hover:text-[#166534] transition-colors"
 									>
 										{link.label}
 									</Link>
@@ -110,25 +110,25 @@ export function Footer() {
 						</div>
 
 						<div className="space-y-3">
-							<h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider">
+							<h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
 								Legal
 							</h4>
 							<div className="flex flex-col gap-2">
 								<Link
 									href="/privacy"
-									className="text-sm text-white/60 hover:text-white transition-colors"
+									className="text-sm text-gray-500 hover:text-[#166534] transition-colors"
 								>
 									Privacy Policy
 								</Link>
 								<Link
 									href="/terms"
-									className="text-sm text-white/60 hover:text-white transition-colors"
+									className="text-sm text-gray-500 hover:text-[#166534] transition-colors"
 								>
 									Terms of Service
 								</Link>
 								<Link
 									href="/contact"
-									className="text-sm text-white/60 hover:text-white transition-colors"
+									className="text-sm text-gray-500 hover:text-[#166534] transition-colors"
 								>
 									Contact Us
 								</Link>
@@ -138,11 +138,11 @@ export function Footer() {
 				</div>
 
 				{/* Divider */}
-				<div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-					<p className="text-xs text-white/40">
+				<div className="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+					<p className="text-xs text-gray-400">
 						&copy; {currentYear} GC SMART CHECK. All rights reserved.
 					</p>
-					<p className="text-xs text-white/30">v1.0.0 · Gordon College</p>
+					<p className="text-xs text-gray-300">v1.0.0 · Gordon College</p>
 				</div>
 			</div>
 		</footer>
@@ -158,31 +158,31 @@ export function MinimalFooter() {
 	const currentYear = new Date().getFullYear();
 
 	return (
-		<footer className="bg-[#166534] border-t border-white/10">
+		<footer className="bg-white border-t border-gray-200">
 			<div className="max-w-7xl mx-auto px-4 py-8">
 				<div className="flex flex-col md:flex-row items-center justify-between gap-4">
-					<div className="text-sm text-white/50">
+					<div className="text-sm text-gray-400">
 						<p>&copy; {currentYear} GC SMART CHECK</p>
 					</div>
 
 					<div className="flex gap-6 text-sm">
 						<Link
 							href="/privacy"
-							className="text-white/50 hover:text-white transition-colors"
+							className="text-gray-400 hover:text-[#166534] transition-colors"
 						>
 							Privacy
 						</Link>
-						<span className="text-white/20">•</span>
+						<span className="text-gray-200">•</span>
 						<Link
 							href="/terms"
-							className="text-white/50 hover:text-white transition-colors"
+							className="text-gray-400 hover:text-[#166534] transition-colors"
 						>
 							Terms
 						</Link>
-						<span className="text-white/20">•</span>
+						<span className="text-gray-200">•</span>
 						<Link
 							href="/contact"
-							className="text-white/50 hover:text-white transition-colors"
+							className="text-gray-400 hover:text-[#166534] transition-colors"
 						>
 							Contact
 						</Link>
@@ -206,7 +206,7 @@ export function DashboardFooter() {
 					<p className="text-xs text-gray-400">
 						&copy; {currentYear} GC SMART CHECK. All rights reserved.
 					</p>
-					<p className="text-xs text-gray-400">v1.0.0</p>
+					<p className="text-xs text-gray-300">v1.0.0</p>
 				</div>
 			</div>
 		</footer>

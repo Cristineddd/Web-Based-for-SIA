@@ -12,7 +12,6 @@ import {
   FileText,
   Users,
   BookOpen,
-  Plus,
   TrendingUp,
   Clock,
   ChevronRight,
@@ -23,7 +22,7 @@ import {
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
 import { toast } from "sonner";
 import { createExam, type ExamFormData } from "@/services/examService";
-import { getClasses, type Class } from "@/services/classService";
+import { type Class } from "@/services/classService";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -80,9 +79,9 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [classes, setClasses] = useState<Class[]>([]);
+  const [classes] = useState<Class[]>([]);
   const [showClassPicker, setShowClassPicker] = useState(false);
-  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [loadingClasses] = useState(false);
   const [classSearch, setClassSearch] = useState("");
 
   // Use ref to prevent double fetching
@@ -235,20 +234,6 @@ export default function Dashboard() {
     fetchStats();
   }, [user?.id]);
 
-  const handleManageStudentsClick = async () => {
-    setClassSearch("");
-    setLoadingClasses(true);
-    try {
-      const fetched = await getClasses(user?.id);
-      setClasses(fetched.filter((c) => !c.isArchived));
-    } catch {
-      toast.error("Failed to load classes");
-    } finally {
-      setLoadingClasses(false);
-    }
-    setShowClassPicker(true);
-  };
-
   const handleClassSelect = (classId: string) => {
     setShowClassPicker(false);
     router.push(`/classes/edit/${classId}`);
@@ -283,7 +268,10 @@ export default function Dashboard() {
     }
   };
 
-  const displayName = user?.displayName || user?.email?.split("@")[0] || "Instructor";
+  const rawName = user?.displayName || user?.email?.split("@")[0] || "Faculty";
+  const displayName = rawName
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const statCards = [
     {
@@ -328,41 +316,13 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-              Welcome back, {displayName}
+              Welcome back, {displayName}!
             </h1>
             <p className="text-xs text-gray-500 mt-0.5">
               Here&apos;s what&apos;s happening with your classes today.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleManageStudentsClick}
-              className="flex items-center gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-100 text-xs h-8 px-3"
-            >
-              <Users className="w-3.5 h-3.5" />
-              Manage Students
-            </Button>
-            <Link href="/classes">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-100 text-xs h-8 px-3"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                New Class
-              </Button>
-            </Link>
-            <Button
-              size="sm"
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs h-8 px-3"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              New Exam
-            </Button>
-          </div>
+
         </div>
 
         {/* Pending role notice */}

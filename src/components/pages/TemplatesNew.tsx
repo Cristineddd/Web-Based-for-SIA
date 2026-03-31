@@ -495,6 +495,7 @@ export default function Templates() {
           <Button
             variant={showArchived ? "default" : "outline"}
             size="sm"
+            className={showArchived ? "bg-[#166534] hover:bg-[#1a7a3e] text-white" : "border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"}
             onClick={() => setShowArchived(!showArchived)}
           >
             <FolderArchive className="w-4 h-4 mr-2" />
@@ -521,6 +522,7 @@ export default function Templates() {
           {/* Filter Toggle Button */}
           <Button
             variant={showFilters ? "default" : "outline"}
+            className={showFilters ? "bg-[#166534] hover:bg-[#1a7a3e] text-white" : "border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"}
             onClick={() => setShowFilters(!showFilters)}
           >
             <Filter className="w-4 h-4 mr-2" />
@@ -625,8 +627,8 @@ export default function Templates() {
       ) : filteredTemplates.length === 0 ? (
         <Card className="p-8 border text-center">
           <div className="max-w-md mx-auto">
-            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-blue-600" />
+            <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-8 h-8 text-green-700" />
             </div>
             {templates.length === 0 ? (
               <>
@@ -673,11 +675,11 @@ export default function Templates() {
             {paginatedTemplates.map((template) => (
               <Card
                 key={template.id}
-                className={`p-6 border hover:shadow-md hover:border-primary/30 transition-all ${template.isArchived ? "opacity-75 bg-muted/30" : ""}`}
+                className={`p-6 border hover:shadow-md hover:border-green-400 transition-all ${template.isArchived ? "opacity-75 bg-muted/30" : ""}`}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-6 h-6 text-blue-600" />
+                  <div className="w-12 h-12 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-6 h-6 text-green-700" />
                   </div>
                   <div className="flex items-center gap-2">
                     {template.version && template.version > 1 && (
@@ -690,7 +692,7 @@ export default function Templates() {
                         Archived
                       </span>
                     )}
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
                       {template.numQuestions} Questions
                     </span>
                   </div>
@@ -730,21 +732,21 @@ export default function Templates() {
 
                 {/* Show linked class/exam */}
                 {(template.className || template.examName) && (
-                  <div className="mb-4 p-2 bg-blue-50 rounded text-xs space-y-1">
+                  <div className="mb-4 p-2 bg-green-50 rounded text-xs space-y-1">
                     {template.className && (
                       <div className="flex items-center gap-1">
-                        <span className="font-medium text-blue-700">
+                        <span className="font-medium text-green-800">
                           Class:
                         </span>
-                        <span className="text-blue-600">
+                        <span className="text-green-700">
                           {template.className}
                         </span>
                       </div>
                     )}
                     {template.examName && (
                       <div className="flex items-center gap-1">
-                        <span className="font-medium text-blue-700">Exam:</span>
-                        <span className="text-blue-600">
+                        <span className="font-medium text-green-800">Exam:</span>
+                        <span className="text-green-700">
                           {template.examName}
                         </span>
                       </div>
@@ -757,7 +759,7 @@ export default function Templates() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1"
+                    className="flex-1 border-green-200 hover:border-green-400 hover:bg-green-50 hover:text-green-700"
                     onClick={() => handlePreview(template)}
                   >
                     <Eye className="w-4 h-4 mr-1" />
@@ -766,7 +768,7 @@ export default function Templates() {
                   <Button
                     variant="default"
                     size="sm"
-                    className="flex-1"
+                    className="flex-1 bg-[#166534] hover:bg-[#1a7a3e] text-white"
                     onClick={() => handleDownload(template)}
                   >
                     <Download className="w-4 h-4 mr-1" />
@@ -780,7 +782,7 @@ export default function Templates() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full text-primary hover:text-primary hover:bg-primary/10 border-primary/30"
+                      className="w-full text-green-700 hover:text-green-800 hover:bg-green-50 border-green-300"
                       onClick={() => handleReuse(template)}
                     >
                       <Copy className="w-4 h-4 mr-1" />
@@ -1256,54 +1258,54 @@ export default function Templates() {
       </Dialog>
 
       {/* Guidelines Card */}
-      <Card className="p-6 border bg-blue-50/50">
+      <Card className="p-6 border bg-green-50/50 border-green-100">
         <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-          <FileText className="w-5 h-5 text-blue-600" />
+          <FileText className="w-5 h-5 text-green-700" />
           Template Guidelines
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
           <li className="flex gap-3">
-            <span className="text-blue-600 font-bold">•</span>
+            <span className="text-green-700 font-bold">•</span>
             <span>
               Templates are automatically created when you create an exam in the
               Exams page
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="text-blue-600 font-bold">•</span>
+            <span className="text-green-700 font-bold">•</span>
             <span>
               Templates include alignment markers (black squares) for optical
               scanning accuracy
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="text-blue-600 font-bold">•</span>
+            <span className="text-green-700 font-bold">•</span>
             <span>
               Student ID section uses bubble format for easy scanning and
               validation
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="text-blue-600 font-bold">•</span>
+            <span className="text-green-700 font-bold">•</span>
             <span>
               Print on standard Letter (8.5" x 11") white paper for best results
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="text-blue-600 font-bold">•</span>
+            <span className="text-green-700 font-bold">•</span>
             <span>
               Instruct students to use #2 pencils and fill bubbles completely
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="text-blue-600 font-bold">•</span>
+            <span className="text-green-700 font-bold">•</span>
             <span>
               Archived templates are preserved for audit purposes and log
               integrity
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="text-blue-600 font-bold">•</span>
+            <span className="text-green-700 font-bold">•</span>
             <span>
               Use the <strong>&quot;Reuse for New Exam&quot;</strong> button to
               create a new exam pre-filled with an existing template&apos;s

@@ -78,18 +78,18 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             backgroundColor: '#FFFFFF', 
             borderColor: '#e5e7eb', 
             borderWidth: '1px',
-            boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.15)'
+            boxShadow: '0 20px 40px -12px rgba(22, 163, 74, 0.15)'
           }}>
-            <div className="w-16 h-16 rounded-full bg-[gray-600]/10 flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
               <Mail className="w-8 h-8 text-gray-600" />
             </div>
-            <h2 className="text-2xl font-bold mb-2 text-center" style={{ color: '#166534' }}>Verify Your Email</h2>
+            <h2 className="text-2xl font-bold mb-2 text-center text-green-600">Verify Your Email</h2>
             <p className="text-center mb-6 text-gray-600">
-              We've sent a verification link to <strong style={{ color: '#166534' }}>{email}</strong>
+              We've sent a verification link to <strong className="text-green-600">{email}</strong>
             </p>
 
-            <div className="bg-[gray-600]/5 border-2 border-[gray-600]/20 rounded-lg p-4 mb-6">
-              <p className="text-sm mb-2" style={{ color: '#166534' }}>
+            <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 mb-6">
+              <p className="text-sm mb-2 text-green-600">
                 <strong>📧 Check these places:</strong>
               </p>
               <ul className="text-sm space-y-1 ml-4 text-gray-600">
@@ -101,8 +101,8 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             </div>
 
             {error && (
-              <Alert className="mb-4" style={{ backgroundColor: 'gray-600}/10', borderColor: '#166534' }}>
-                <AlertDescription style={{ color: '#166534' }}>{error}</AlertDescription>
+              <Alert className="mb-4 bg-green-50 border-green-600">
+                <AlertDescription className="text-green-600">{error}</AlertDescription>
               </Alert>
             )}
 
@@ -113,12 +113,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               <button
                 onClick={handleResendVerification}
                 disabled={resendLoading}
-                className="w-full h-12 px-4 py-2 rounded-xl font-medium border-2 transition-all duration-200 disabled:opacity-50"
-                style={{ 
-                  borderColor: '#166534',
-                  color: '#166534',
-                  backgroundColor: 'transparent'
-                }}
+                className="w-full h-12 px-4 py-2 rounded-xl font-medium border-2 border-green-600 text-green-600 bg-transparent hover:bg-green-50 transition-all duration-200 disabled:opacity-50"
               >
                 {resendLoading ? (
                   <>
@@ -132,11 +127,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               
               <button
                 onClick={onToggleMode}
-                className="w-full h-12 px-4 py-2 text-white hover:opacity-90 rounded-xl font-medium transition-all duration-200"
-                style={{ 
-                  backgroundColor: '#166534',
-                  boxShadow: '0 4px 8px -2px rgba(22, 101, 52, 0.2)'
-                }}
+                className="w-full h-12 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all duration-200"
               >
                 Back to Sign In
               </button>
@@ -155,17 +146,17 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             backgroundColor: '#FFFFFF', 
             borderColor: '#e5e7eb', 
             borderWidth: '1px',
-            boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.15)'
+            boxShadow: '0 20px 40px -12px rgba(22, 163, 74, 0.15)'
           }}>
-            <div className="w-16 h-16 rounded-full bg-[#166534]/10 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8" style={{ color: '#166534' }} />
+            <div className="w-16 h-16 rounded-full bg-green-600/10 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
-            <h2 className="text-2xl font-bold mb-2" style={{ color: '#166534' }}>Account Created</h2>
+            <h2 className="text-2xl font-bold mb-2 text-green-600">Account Created</h2>
             <p className="mb-6 text-gray-600">
-              Welcome to GC Scan, <strong style={{ color: '#166534' }}>{fullName}</strong>!
+              Welcome to GC Scan, <strong className="text-green-600">{fullName}</strong>!
             </p>
             <p className="text-sm flex items-center justify-center gap-2 text-gray-600">
-              <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#166534' }} />
+              <Loader2 className="w-4 h-4 animate-spin text-green-600" />
               Redirecting to dashboard...
             </p>
           </div>
@@ -196,7 +187,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               placeholder="Full name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
                 required
                 autoFocus
               />
@@ -209,7 +200,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
                 required
               />
             </div>
@@ -221,7 +212,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               placeholder="Password (at least 6 characters)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-[#166534]"
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
                 required
                 minLength={6}
               />
@@ -230,7 +221,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
           <button 
             type="submit" 
             disabled={loading} 
-            className="w-full h-12 sm:h-14 px-4 py-2 bg-[#166534] hover:bg-[#1a7a3e] text-white rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
+            className="w-full h-12 sm:h-14 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
           >
               {loading ? (
                 <>
@@ -265,7 +256,7 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             }
           }}
           disabled={loading}
-          className="w-full h-12 sm:h-14 px-4 py-2 bg-white border-2 border-gray-200 hover:bg-gray-50 rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center gap-3 disabled:opacity-50"
+          className="w-full h-12 sm:h-14 px-4 py-2 bg-white border-2 border-gray-200 hover:bg-gray-50 text-green-600 rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center gap-3 disabled:opacity-50"
         >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
