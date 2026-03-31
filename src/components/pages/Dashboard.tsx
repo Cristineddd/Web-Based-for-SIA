@@ -335,6 +335,15 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleManageStudentsClick}
+              className="flex items-center gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-100 text-xs h-8 px-3"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Manage Students
+            </Button>
             <Link href="/classes">
               <Button
                 variant="outline"
@@ -660,7 +669,7 @@ export default function Dashboard() {
                 });
                 return filtered.length === 0 ? (
                   <div className="text-center py-8 text-sm text-gray-400">
-                    No classes match "{classSearch}"
+                    No classes match &quot;{classSearch}&quot;
                   </div>
                 ) : (
                   filtered.map((cls) => (

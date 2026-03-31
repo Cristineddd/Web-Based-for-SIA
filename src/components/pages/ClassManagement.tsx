@@ -79,7 +79,6 @@ export default function ClassManagement() {
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [roomWarning, setRoomWarning] = useState(false);
-  const [, setSelectedFile] = useState<File | null>(null);
   const [uploadSummary, setUploadSummary] = useState<{
     total: number;
     successful: number;
@@ -894,7 +893,7 @@ export default function ClassManagement() {
       {/* Upload Summary Dialog */}
       {showUploadSummary && uploadSummary && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Upload Summary</h3>
 
             <div className="space-y-3 mb-6">
@@ -948,9 +947,9 @@ export default function ClassManagement() {
           </div>
         </div>
       )}
-
-      <Card className="card-elevated mb-6">
+      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl mb-6">
         <CardContent className="p-4">
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
@@ -981,7 +980,7 @@ export default function ClassManagement() {
           {filteredClasses.map((classItem) => (
             <Card
               key={classItem.id}
-              className="card-elevated hover:shadow-lg transition-shadow cursor-pointer"
+              className="bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => {
                 router.push(`/classes/edit/${classItem.id}`);
               }}

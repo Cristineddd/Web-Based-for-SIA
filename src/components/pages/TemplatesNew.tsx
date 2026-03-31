@@ -504,8 +504,9 @@ export default function Templates() {
       </div>
 
       {/* Search and Filter Bar */}
-      <Card className="p-4 border">
+      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl p-4">
         <div className="flex flex-col md:flex-row gap-4">
+
           {/* Search Input */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -616,8 +617,9 @@ export default function Templates() {
       )}
 
       {/* Loading State */}
-      {loading ? (
-        <Card className="p-8 border text-center">
+{loading ? (
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl p-8 text-center">
+
           <p className="text-muted-foreground">Loading templates...</p>
         </Card>
       ) : filteredTemplates.length === 0 ? (

@@ -534,8 +534,9 @@ export default function Exams() {
       </div>
 
       {/* Actions Bar */}
-      <Card className="mb-6">
+      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl mb-6">
         <CardContent className="py-4">
+
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div className="flex-1">
               <div className="relative">
@@ -568,8 +569,9 @@ export default function Exams() {
       </div>
 
       {/* Table */}
-      <Card className="table-container overflow-x-auto">
+      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl table-container overflow-x-auto">
         <Table>
+
           <TableHeader>
             <TableRow className="bg-table-header hover:bg-table-header">
               <TableHead>Title</TableHead>
