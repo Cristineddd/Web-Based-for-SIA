@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { X, Search } from "lucide-react";
+import { X, Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -107,11 +107,18 @@ export default function Dashboard() {
           examsSnapshot = (await Promise.race([
             getDocs(examsQuery),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Query timeout")), 3000)
+              setTimeout(() => reject(new Error("Query timeout")), 3000),
             ),
           ])) as any;
         } catch {
-          setStats({ totalExams: 0, totalStudents: 0, totalClasses: 0, averageScore: 0, recentExams: [], recentClasses: [] });
+          setStats({
+            totalExams: 0,
+            totalStudents: 0,
+            totalClasses: 0,
+            averageScore: 0,
+            recentExams: [],
+            recentClasses: [],
+          });
           return;
         }
 
@@ -146,7 +153,10 @@ export default function Dashboard() {
         let totalClasses = 0;
         try {
           const classesRef = collection(db, "classes");
-          const classesQuery = query(classesRef, where("createdBy", "==", user.id));
+          const classesQuery = query(
+            classesRef,
+            where("createdBy", "==", user.id),
+          );
           const classesSnapshot = await getDocs(classesQuery);
 
           const classes = classesSnapshot.docs
@@ -167,7 +177,10 @@ export default function Dashboard() {
             .filter((c) => !c.isArchived);
 
           totalClasses = classes.length;
-          totalStudents = classes.reduce((sum, c) => sum + (c.students?.length || 0), 0);
+          totalStudents = classes.reduce(
+            (sum, c) => sum + (c.students?.length || 0),
+            0,
+          );
           recentClasses = classes
             .sort((a, b) => {
               const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -191,7 +204,7 @@ export default function Dashboard() {
               const scoresQuery = query(
                 collection(db, "scanned_results"),
                 where("examId", "in", batch),
-                where("isNullId", "==", false)
+                where("isNullId", "==", false),
               );
               const scoresSnap = await getDocs(scoresQuery);
               scoresSnap.docs.forEach((d) => {
@@ -225,7 +238,14 @@ export default function Dashboard() {
         });
       } catch (error) {
         console.error("Error fetching stats:", error);
-        setStats({ totalExams: 0, totalStudents: 0, totalClasses: 0, averageScore: 0, recentExams: [], recentClasses: [] });
+        setStats({
+          totalExams: 0,
+          totalStudents: 0,
+          totalClasses: 0,
+          averageScore: 0,
+          recentExams: [],
+          recentClasses: [],
+        });
       } finally {
         setLoading(false);
       }
@@ -241,8 +261,14 @@ export default function Dashboard() {
 
   const handleCreateExam = async (formData: ExamFormData) => {
     try {
-      if (!user?.id) { toast.error("You must be logged in to create an exam"); return; }
-      if (!user?.instructorId) { toast.error("Instructor ID not found. Please log out and log back in."); return; }
+      if (!user?.id) {
+        toast.error("You must be logged in to create an exam");
+        return;
+      }
+      if (!user?.instructorId) {
+        toast.error("Instructor ID not found. Please log out and log back in.");
+        return;
+      }
 
       const newExam = await createExam(formData, user.id, user.instructorId);
 
@@ -253,7 +279,13 @@ export default function Dashboard() {
           ...prev,
           totalExams: prev.totalExams + 1,
           recentExams: [
-            { id: newExam.id, title: newExam.title, subject: newExam.subject, num_items: newExam.num_items, created_at: newExam.created_at },
+            {
+              id: newExam.id,
+              title: newExam.title,
+              subject: newExam.subject,
+              num_items: newExam.num_items,
+              created_at: newExam.created_at,
+            },
             ...prev.recentExams.slice(0, 2),
           ],
         };
@@ -322,14 +354,22 @@ export default function Dashboard() {
               Here&apos;s what&apos;s happening with your classes today.
             </p>
           </div>
-
+          <div className="flex justify-end items-center w-full sm:w-auto">
+            <Link href="/classes">
+              <Button className="bg-green-600 hover:bg-green-700 text-white rounded-xl py-2 px-4 shadow-sm transition-all active:scale-95">
+                <Plus className="w-4 h-4" />
+                Create Class
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Pending role notice */}
         {!userRole && (
           <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center gap-2 text-yellow-800 text-xs">
             <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-            Your account is pending role assignment. Please contact an administrator.
+            Your account is pending role assignment. Please contact an
+            administrator.
           </div>
         )}
 
@@ -362,9 +402,7 @@ export default function Dashboard() {
                     <div
                       className={`w-9 h-9 rounded-lg ${stat.iconBg} flex items-center justify-center flex-shrink-0`}
                     >
-                      <Icon
-                        className={`w-[18px] h-[18px] ${stat.iconColor}`}
-                      />
+                      <Icon className={`w-[18px] h-[18px] ${stat.iconColor}`} />
                     </div>
                   </div>
                 </CardContent>
@@ -537,7 +575,7 @@ export default function Dashboard() {
                                       month: "short",
                                       day: "numeric",
                                       year: "numeric",
-                                    }
+                                    },
                                   )}
                                 </span>
                               )}
@@ -582,7 +620,9 @@ export default function Dashboard() {
                   <h2 className="text-base font-semibold text-[#166534]">
                     Manage Students
                   </h2>
-                  <p className="text-xs text-gray-500">Select a class to open</p>
+                  <p className="text-xs text-gray-500">
+                    Select a class to open
+                  </p>
                 </div>
               </div>
               <button
@@ -618,56 +658,59 @@ export default function Dashboard() {
                   <Users className="w-8 h-8 opacity-30" />
                   <p className="text-sm">No classes found.</p>
                 </div>
-              ) : (() => {
-                const filtered = classes.filter((cls) => {
-                  const q = classSearch.toLowerCase();
-                  return (
-                    cls.class_name.toLowerCase().includes(q) ||
-                    (cls.course_subject || "").toLowerCase().includes(q) ||
-                    (cls.section_block || "").toLowerCase().includes(q)
+              ) : (
+                (() => {
+                  const filtered = classes.filter((cls) => {
+                    const q = classSearch.toLowerCase();
+                    return (
+                      cls.class_name.toLowerCase().includes(q) ||
+                      (cls.course_subject || "").toLowerCase().includes(q) ||
+                      (cls.section_block || "").toLowerCase().includes(q)
+                    );
+                  });
+                  return filtered.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-400">
+                      No classes match &quot;{classSearch}&quot;
+                    </div>
+                  ) : (
+                    filtered.map((cls) => (
+                      <button
+                        key={cls.id}
+                        onClick={() => handleClassSelect(cls.id)}
+                        className="w-full text-left px-4 py-3 rounded-xl border border-gray-100 hover:border-[#166534] hover:bg-[#166534]/5 transition-all duration-150 group"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 group-hover:text-[#166534] truncate">
+                              {cls.class_name}
+                            </p>
+                            <p className="text-xs text-gray-400 truncate mt-0.5">
+                              {[cls.course_subject, cls.section_block]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs bg-[#166534]/10 text-[#166534] px-2 py-0.5 rounded-full font-medium">
+                              {cls.students?.length ?? 0} students
+                            </span>
+                            <span className="text-gray-300 group-hover:text-[#B38B00] text-lg leading-none">
+                              ›
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))
                   );
-                });
-                return filtered.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-400">
-                    No classes match &quot;{classSearch}&quot;
-                  </div>
-                ) : (
-                  filtered.map((cls) => (
-                    <button
-                      key={cls.id}
-                      onClick={() => handleClassSelect(cls.id)}
-                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-100 hover:border-[#166534] hover:bg-[#166534]/5 transition-all duration-150 group"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 group-hover:text-[#166534] truncate">
-                            {cls.class_name}
-                          </p>
-                          <p className="text-xs text-gray-400 truncate mt-0.5">
-                            {[cls.course_subject, cls.section_block]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs bg-[#166534]/10 text-[#166534] px-2 py-0.5 rounded-full font-medium">
-                            {cls.students?.length ?? 0} students
-                          </span>
-                          <span className="text-gray-300 group-hover:text-[#B38B00] text-lg leading-none">
-                            ›
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                );
-              })()}
+                })()
+              )}
             </div>
 
             {/* Footer */}
             <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50">
               <p className="text-xs text-gray-400 text-center">
-                {classes.length} class{classes.length !== 1 ? "es" : ""} available
+                {classes.length} class{classes.length !== 1 ? "es" : ""}{" "}
+                available
               </p>
             </div>
           </div>

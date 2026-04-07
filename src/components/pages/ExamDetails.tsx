@@ -3,18 +3,20 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
-  Edit2,
-  Smartphone,
   FileText,
-  BarChart3,
-  Tag,
+  BarChart2,
   FilePlus,
   CheckCircle,
   Loader2,
   Pencil,
-  RefreshCw,
+  Maximize,
+  Upload,
+  Save,
+  X,
+  ArrowLeft,
 } from "lucide-react";
 import {
   getExamById,
@@ -35,7 +37,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { toast } from "sonner";
-import { BackButton } from '@/components/ui/BackButton';
+import { BackButton } from "@/components/ui/BackButton";
 import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
@@ -70,6 +72,19 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   // Finalize exam state
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [scannedCount, setScannedCount] = useState(0);
+  const [activeTab, setActiveTab] = useState("key_answer");
+  const [answerKey, setAnswerKey] = useState<Record<number, string>>({});
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [existingKeyId, setExistingKeyId] = useState<string | null>(null);
+
+  const tabs = [
+    { id: "key_answer", label: "Answer Key", icon: CheckCircle },
+    { id: "template", label: "Template", icon: FileText },
+    { id: "scan_papers", label: "Scan Papers", icon: Maximize },
+    { id: "review_paper", label: "Review Papers", icon: FileText },
+    { id: "item_analysis", label: "Item Analysis", icon: BarChart2 },
+  ];
 
   useEffect(() => {
     async function fetchExam() {
@@ -96,9 +111,15 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               params.id,
             );
             if (result.success && result.data) {
-              // Answer key exists
+              setExistingKeyId(result.data.id);
+              // Convert array to object for easier editing
+              const answersObj: Record<number, string> = {};
+              result.data.answers.forEach((ans, idx) => {
+                answersObj[idx + 1] = ans;
+              });
+              setAnswerKey(answersObj);
             } else {
-              // No answer key
+              setAnswerKey({});
             }
           } catch (error) {
             console.error("Error fetching answer key:", error);
@@ -109,7 +130,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             const scannedResult =
               await ScanningService.getScannedResultsByExamId(params.id);
             if (scannedResult.success && scannedResult.data) {
-              // Scanned results exist
+              setScannedCount(scannedResult.data.length);
             }
           } catch (error) {
             console.error("Error fetching scanned results:", error);
@@ -144,59 +165,42 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-          <div className="flex items-center gap-4">
-            <BackButton href="/exams" asLink />
-            <h1 className="text-3xl font-bold text-gray-900">Loading...</h1>
-          </div>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
       </div>
     );
   }
 
   if (!exam) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-          <div className="flex items-center gap-4">
-            <BackButton href="/exams" asLink />
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {error ? "Error loading exam" : "Exam not found"}
-              </h1>
-              {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
-            </div>
-          </div>
-        </div>
+      <div className="min-h-screen bg-gray-50 p-8 text-center">
+        <h1 className="text-2xl font-bold text-gray-900">
+          {error || "Exam not found"}
+        </h1>
+        <Link
+          href="/exams"
+          className="text-green-600 hover:underline mt-4 inline-block"
+        >
+          Back to Exams
+        </Link>
       </div>
     );
   }
 
   const handleSaveEdit = async () => {
-    // Guard: block editing if exam date has been reached or exam is finalized
     if (!canEditExam(exam)) {
       toast.error(EDIT_RESTRICTION_MESSAGE);
       setIsEditing(false);
       return;
     }
 
-    if (!editForm.title.trim()) {
-      toast.error("Exam name is required");
-      return;
-    }
-    if (!editForm.subject.trim()) {
-      toast.error("Subject is required");
-      return;
-    }
-    if (!editForm.num_items || editForm.num_items < 1) {
-      toast.error("Number of items must be at least 1");
+    if (!editForm.title.trim() || !editForm.subject.trim()) {
+      toast.error("Title and Subject are required");
       return;
     }
 
     try {
       setIsSavingEdit(true);
-
       const updates = {
         title: editForm.title.trim(),
         subject: editForm.subject.trim(),
@@ -209,53 +213,22 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
       await updateExam(params.id, updates);
 
-      // Delete any existing template linked to this exam so a new one can be generated
-      const templateQuery = query(
-        collection(db, "templates"),
-        where("examId", "==", params.id),
-      );
-      const templateSnap = await getDocs(templateQuery);
-      if (!templateSnap.empty) {
-        await Promise.all(templateSnap.docs.map((d) => deleteDoc(d.ref)));
-        setHasTemplate(false);
-        toast.info("Existing template deleted — please generate a new one.");
-      }
-
-      // Update local exam state
-      setExam((prev) =>
-        prev
-          ? {
-              ...prev,
-              title: editForm.title.trim(),
-              subject: editForm.subject.trim(),
-              num_items: editForm.num_items,
-              choices_per_item: editForm.choices_per_item,
-              examType: editForm.examType,
-              institutionName: editForm.institutionName,
-              examCode: editForm.examCode.trim().toUpperCase(),
-            }
-          : prev,
-      );
-
-      // Log exam update
+      // Audit Log
       if (user?.email) {
         AuditLogger.logActivity(
           user.id,
           user.email,
           "exam_updated",
-          `Updated exam configuration: ${editForm.title.trim()}`,
-          {
-            entityId: params.id,
-            entityName: editForm.title.trim(),
-            entityType: "exam",
-          },
+          `Updated exam: ${updates.title}`,
+          { entityId: params.id, entityType: "exam" },
         ).catch(console.error);
       }
 
+      setExam((prev) => (prev ? { ...prev, ...updates } : null));
       toast.success("Exam updated successfully");
       setIsEditing(false);
     } catch (err) {
-      console.error("Error updating exam:", err);
+      console.error(err);
       toast.error("Failed to update exam");
     } finally {
       setIsSavingEdit(false);
@@ -264,71 +237,25 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
   const handleFinalizeExam = async () => {
     try {
-      if (!user?.id || !user?.email) {
-        toast.error("You must be logged in to finalize an exam");
-        return;
-      }
-
       setIsFinalizing(true);
       await updateExam(params.id, { status: "final" });
-
-      setExam((prev) => (prev ? { ...prev, status: "final" } : prev));
-
-      // Log finalization action
-      AuditLogger.logActivity(
-        user.id,
-        user.email,
-        "exam_finalized",
-        `Finalized exam configuration: ${exam?.title}`,
-        {
-          entityId: params.id,
-          entityName: exam?.title,
-          entityType: "exam",
-        },
-      ).catch(console.error);
-
-      toast.success("Exam finalized successfully!");
+      setExam((prev) => (prev ? { ...prev, status: "final" } : null));
+      toast.success("Exam finalized!");
       setShowFinalizeConfirm(false);
-      // Force the Exams list to re-fetch so the Status column reflects "Final"
-      router.refresh();
     } catch (err) {
-      console.error("Error finalizing exam:", err);
-      toast.error("Failed to finalize exam. Please try again.");
+      toast.error("Failed to finalize");
     } finally {
       setIsFinalizing(false);
     }
   };
 
   const handleCreateTemplate = async () => {
-    if (!user?.instructorId) {
-      toast.error(
-        "⚠️ Instructor ID not found. Please log out and log back in.",
-      );
-      return;
-    }
-
-    if (!exam) {
-      toast.error("Exam information not found");
-      return;
-    }
-
-    if (hasTemplate) {
-      toast.error("A template has already been generated for this exam.");
-      return;
-    }
-
+    if (!user?.instructorId || !exam) return;
     setCreatingTemplate(true);
-
     try {
-      const currentUser = auth.currentUser;
-      console.log("🔍 Firebase Auth State:", {
-        isAuthenticated: !!currentUser,
-        uid: currentUser?.uid,
-      });
-
       await TemplateService.create({
         name: exam.title,
-        description: exam.subject || "Answer Sheet Template",
+        description: exam.subject,
         numQuestions: exam.num_items,
         choicesPerQuestion: exam.choices_per_item,
         layout: "single",
@@ -339,489 +266,493 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         examId: params.id,
         examName: exam.title,
         examCode: exam.examCode,
-        classId: exam.classId,
-        className: exam.className,
       });
 
-      // Use the exam's stored exam code (unique identifier for this exam)
-      const examCode = exam.examCode || params.id.substring(0, 8).toUpperCase();
-
-      // Fetch instructor settings for branding (fallback)
-      const settings = user?.id
-        ? await InstructorSettingsService.getSettings(user.id)
-        : null;
-
+      const settings = await InstructorSettingsService.getSettings(user.id);
       await generateTemplatePDF({
         name: exam.title,
-        description: exam.subject || "Answer Sheet Template",
+        description: exam.subject,
         numQuestions: exam.num_items,
         choicesPerQuestion: exam.choices_per_item,
         examName: exam.title,
-        examCode: examCode,
+        examCode: exam.examCode,
         institutionName: exam.institutionName || settings?.institutionName,
         logoUrl: exam.logoUrl || settings?.logoUrl,
       });
 
       setHasTemplate(true);
-      toast.success("✅ Template created and downloaded!");
-    } catch (error: any) {
-      console.error("❌ Error creating template:", error);
-
-      if (error?.code === "permission-denied") {
-        toast.error(
-          "Permission denied. Please check if you are logged in and try again.",
-        );
-      } else {
-        toast.error(
-          `Failed to create template: ${error?.message || "Unknown error"}`,
-        );
-      }
+      toast.success("Template created!");
+    } catch (err) {
+      toast.error("Failed to create template");
     } finally {
       setCreatingTemplate(false);
     }
   };
 
-  const actionButtons = [
-    {
-      icon: Edit2,
-      label: "Edit Answer Key",
-      description: "Set correct answers for each question",
-      href: `/exams/${params.id}/edit-key`,
-      color: "bg-blue-50 text-primary",
-    },
-    {
-      icon: hasTemplate ? CheckCircle : creatingTemplate ? Loader2 : FilePlus,
-      label: hasTemplate
-        ? "Template Created"
-        : creatingTemplate
-          ? "Generating..."
-          : "Create Template",
-      description: hasTemplate
-        ? "Answer sheet template already generated"
-        : "Auto-generate and download answer sheet PDF",
-      color: hasTemplate
-        ? "bg-green-100 text-green-600"
-        : "bg-green-50 text-green-600",
-      onClick:
-        hasTemplate || creatingTemplate
-          ? undefined
-          : () => handleCreateTemplate(),
-      disabled: hasTemplate || creatingTemplate,
-    },
-    {
-      icon: Smartphone,
-      label: "Scan Papers",
-      description: "Scan and capture answer sheets",
-      href: `/exams/${params.id}/scan-papers`,
-      color: "bg-blue-50 text-primary",
-    },
-    {
-      icon: FileText,
-      label: "Review Papers",
-      description: "Review scanned documents",
-      href: `/exams/${params.id}/review-papers`,
-      color: "bg-blue-50 text-primary",
-    },
-    {
-      icon: BarChart3,
-      label: "Item Analysis",
-      description: "Analyze question performance",
-      href: `/exams/${params.id}/item-analysis`,
-      color: "bg-blue-50 text-primary",
-    },
-    {
-      icon: Tag,
-      label: "Tag Reports",
-      description: "Generate tagged reports",
-      href: `/exams/${params.id}/tag-reports`,
-      color: "bg-blue-50 text-primary",
-    },
-  ];
+  const handleSaveAnswerKey = async () => {
+    if (!user || !exam) return;
+
+    // Check if everything is filled
+    const totalQuestions = exam.num_items;
+    const answers: string[] = [];
+    let missingQuestions = [];
+
+    for (let i = 1; i <= totalQuestions; i++) {
+      if (!answerKey[i]) {
+        missingQuestions.push(i);
+      }
+      answers.push(answerKey[i] || ""); // fallback if we allow partial save
+    }
+
+    if (missingQuestions.length > 0) {
+      toast.warning(
+        `${missingQuestions.length} questions are missing answers. You can still save, but scanning may be incomplete.`,
+      );
+    }
+
+    try {
+      setIsSavingKey(true);
+      if (existingKeyId) {
+        // Update
+        const result = await AnswerKeyService.updateAnswerKey(
+          existingKeyId,
+          answers,
+          user.id,
+        );
+        if (result.success) {
+          toast.success("Answer key updated successfully");
+        } else {
+          toast.error(result.error || "Failed to update answer key");
+        }
+      } else {
+        // Create
+        const result = await AnswerKeyService.createAnswerKey(
+          params.id,
+          answers,
+          user.id,
+          [], // questionSettings
+          user.instructorId,
+        );
+        if (result.success && result.data) {
+          setExistingKeyId(result.data.id);
+          toast.success("Answer key created successfully");
+        } else {
+          toast.error(result.error || "Failed to save answer key");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 sm:gap-4">
-        <BackButton href="/exams" asLink />
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-3xl font-bold text-gray-900 break-words">
-            {exam.title}
-          </h1>
-          <p className="text-xs sm:text-sm text-gray-500 break-words">
-            {exam.examCode || "No exam code"}
-            {exam.status === "final" ? (
-              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-                Final
-              </span>
-            ) : (
-              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
-                Draft
-              </span>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Header Section */}
+        <div className="flex items-start gap-4">
+          <Link
+            href="/exams"
+            className="mt-1.5 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0f172a] tracking-tight">
+              {exam.title}
+            </h1>
+            <p className="text-sm sm:text-base font-semibold text-gray-400 mt-1">
+              {exam.subject}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {exam.status !== "final" && (
+              <button
+                onClick={() => setShowFinalizeConfirm(true)}
+                className="flex items-center gap-2 px-6 py-2.5 bg-[#22c55e] text-white rounded-xl font-bold text-sm hover:bg-[#16a34a] transition-all shadow-md shadow-green-500/10"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Finalize</span>
+              </button>
             )}
-          </p>
+
+            {canEditExam(exam) && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-2 px-6 py-2.5 border border-gray-200 bg-white text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+              >
+                <Pencil className="w-4 h-4" />
+                <span>Edit</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {exam.status !== "final" && (
-          <button
-            onClick={() => setShowFinalizeConfirm(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-success text-white rounded-md font-semibold text-sm hover:bg-success/90 transition-colors flex-shrink-0"
-            title="Finalize exam to lock configuration"
-          >
-            <CheckCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">Finalize</span>
-          </button>
-        )}
+        {/* Stats Card */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="space-y-3 relative before:absolute before:left-[-24px] before:top-[-8px] before:bottom-[-8px] before:w-[4px] before:bg-green-500 before:rounded-full">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Items
+              </p>
+              <p className="text-base font-extrabold text-[#0f172a]">
+                {exam.num_items} Questions
+              </p>
+            </div>
 
-        {exam.status !== "final" && canEditExam(exam) && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="flex items-center gap-2 px-3 py-2 border-2 border-primary text-primary rounded-md font-semibold text-sm hover:bg-primary hover:text-primary-foreground transition-colors flex-shrink-0"
-            title="Edit exam details"
-          >
-            <Pencil className="w-4 h-4" />
-            <span className="hidden sm:inline">Edit</span>
-          </button>
-        )}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Template ID
+              </p>
+              <div className="inline-block px-3 py-1 bg-gray-50 border border-gray-100 rounded-md">
+                <span className="text-sm font-bold text-gray-600 font-mono">
+                  {exam.examCode || "NO-CODE"}
+                </span>
+              </div>
+            </div>
 
-        {exam.status !== "final" && !canEditExam(exam) && (
-          <button
-            disabled
-            className="flex items-center gap-2 px-3 py-2 border-2 border-muted text-muted-foreground rounded-md font-semibold text-sm cursor-not-allowed opacity-50 flex-shrink-0"
-            title={EDIT_RESTRICTION_MESSAGE}
-          >
-            <Pencil className="w-4 h-4" />
-            <span className="hidden sm:inline">Edit</span>
-          </button>
-        )}
-      </div>
-
-      {/* Action Buttons */}
-      <div>
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {actionButtons.map((btn) => {
-            const IconComponent = btn.icon;
-            const content = (
-              <Card className="p-4 border hover:border-primary hover:shadow-md transition-all h-full">
-                <div className="flex gap-4">
-                  <div
-                    className={`w-12 h-12 rounded-lg ${btn.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}
-                  >
-                    <IconComponent className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 group-hover:text-green-700 transition-colors">
-                      {btn.label}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {btn.description}
-                    </p>
-                  </div>
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Tagged Classes
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <div className="inline-block px-3 py-1 bg-green-50 border border-green-100 rounded-full">
+                  <span className="text-xs font-bold text-green-600">
+                    {exam.className || "General"}
+                  </span>
                 </div>
-              </Card>
-            );
+              </div>
+            </div>
 
-            if (btn.onClick) {
-              return (
-                <button
-                  key={btn.label}
-                  onClick={btn.onClick}
-                  className="group text-left"
-                >
-                  {content}
-                </button>
-              );
-            }
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Papers Scanned
+              </p>
+              <p className="text-xl font-extrabold text-[#0f172a]">
+                {scannedCount}
+              </p>
+            </div>
+          </div>
+        </div>
 
-            if (btn.disabled) {
-              return (
-                <div key={btn.label} className="opacity-70 cursor-not-allowed">
-                  {content}
-                </div>
-              );
-            }
-
+        {/* Tabs */}
+        <div className="flex items-center gap-8 border-b border-gray-100 px-2 overflow-x-auto no-scrollbar">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
             return (
-              <Link key={btn.label} href={btn.href || "#"} className="group">
-                {content}
-              </Link>
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2.5 pb-5 text-sm font-bold transition-all relative whitespace-nowrap ${
+                  isActive
+                    ? "text-[#22c55e]"
+                    : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                <Icon
+                  className={`w-4.5 h-4.5 ${isActive ? "text-[#22c55e]" : "text-gray-300"}`}
+                />
+                <span>{tab.label}</span>
+                {isActive && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#22c55e] rounded-full" />
+                )}
+              </button>
             );
           })}
         </div>
+
+        {/* Tab Content Container */}
+        <div className="mt-6">
+          {activeTab === "key_answer" && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <h3 className="text-xl font-bold text-[#0f172a]">
+                  Answer Key Configuration
+                </h3>
+                <div className="flex items-center gap-3">
+                  <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all">
+                    <Upload className="w-4 h-4" />
+                    <span>Import Key</span>
+                  </button>
+                  <button
+                    onClick={handleSaveAnswerKey}
+                    disabled={isSavingKey}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#22c55e] text-white rounded-lg text-sm font-bold hover:bg-[#16a34a] transition-all shadow-md shadow-green-500/10 disabled:opacity-50"
+                  >
+                    {isSavingKey ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    <span>{isSavingKey ? "Saving..." : "Save Changes"}</span>
+                  </button>
+                </div>
+              </div>
+
+              <Card className="border-none shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm p-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-1">
+                  {Array.from({ length: exam.num_items }).map((_, idx) => {
+                    const qNum = idx + 1;
+                    const selectedOption = answerKey ? answerKey[qNum] : null;
+                    const choices = ["A", "B", "C", "D", "E"].slice(
+                      0,
+                      exam.choices_per_item || 5,
+                    );
+
+                    return (
+                      <div
+                        key={qNum}
+                        className="flex items-center gap-4 py-2 group hover:bg-green-50/30 rounded-lg transition-colors px-2"
+                      >
+                        <span className="w-6 text-sm font-bold text-gray-400 tabular-nums">
+                          {qNum}.
+                        </span>
+                        <div className="flex items-center gap-3">
+                          {choices.map((choice) => {
+                            const isSelected = selectedOption === choice;
+                            return (
+                              <button
+                                key={choice}
+                                onClick={() =>
+                                  setAnswerKey((prev) => ({
+                                    ...prev,
+                                    [qNum]: isSelected ? "" : choice,
+                                  }))
+                                }
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border-2 shadow-sm ${
+                                  isSelected
+                                    ? "bg-[#22c55e] border-[#22c55e] text-white ring-4 ring-green-500/10 scale-110"
+                                    : "bg-white border-gray-200 text-gray-400 hover:border-green-200 hover:text-green-500"
+                                }`}
+                              >
+                                {choice}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "template" && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+                <FileText className="w-16 h-16 text-green-500 mx-auto mb-4 opacity-20" />
+                <h3 className="text-xl font-bold text-gray-900">
+                  Exam Template
+                </h3>
+                <p className="text-gray-500 max-w-sm mx-auto mt-2">
+                  {hasTemplate
+                    ? "Template has been generated."
+                    : "Generate and download OMR answer sheets for your students."}
+                </p>
+                <button
+                  disabled={hasTemplate || creatingTemplate}
+                  onClick={handleCreateTemplate}
+                  className={`mt-8 flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-sm mx-auto transition-all ${
+                    hasTemplate
+                      ? "bg-green-50 text-green-600 cursor-default"
+                      : "bg-[#22c55e] text-white hover:bg-[#16a34a] shadow-lg shadow-green-500/20"
+                  }`}
+                >
+                  {creatingTemplate ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : hasTemplate ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <FilePlus className="w-4 h-4" />
+                  )}
+                  <span>
+                    {creatingTemplate
+                      ? "Generating..."
+                      : hasTemplate
+                        ? "Template Created"
+                        : "Create Template"}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "scan_papers" && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+              <Maximize className="w-16 h-16 text-green-500 mx-auto mb-4 opacity-20" />
+              <h3 className="text-xl font-bold text-gray-900">
+                Ready to Scan?
+              </h3>
+              <p className="text-gray-500 max-w-md mx-auto mt-2">
+                Use your mobile device to scan the answer sheets. Results sync
+                automatically.
+              </p>
+              <Link
+                href={`/exams/${params.id}/scan-papers`}
+                className="mt-8 inline-block"
+              >
+                <button className="bg-[#22c55e] text-white px-10 py-3.5 rounded-xl font-bold hover:bg-[#16a34a] shadow-lg shadow-green-500/20 transition-all">
+                  Open Scanner UI
+                </button>
+              </Link>
+            </div>
+          )}
+
+          {["review_paper", "item_analysis"].includes(activeTab) && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+              <BarChart2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-gray-900 capitalize">
+                {activeTab.replace("_", " ")}
+              </h3>
+              <p className="text-gray-500 mt-1">
+                No data available to display yet.
+              </p>
+              <Link
+                href={`/exams/${params.id}/${activeTab.replace("_", "-")}`}
+                className="mt-8 inline-block"
+              >
+                <button className="px-6 py-2.5 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">
+                  Go to Dedicated Page
+                </button>
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Exam Details */}
-      <Card className="mb-6">
-        <CardContent className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Exam Details
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Program
-                </label>
-                <p className="text-base text-gray-900 mt-1">{exam.title}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Course
-                </label>
-                <p className="text-base text-gray-900 mt-1">{exam.subject}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Created
-                </label>
-                <p className="text-base text-gray-900 mt-1">
-                  {new Date(exam.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Number of Items
-                </label>
-                <p className="text-base text-gray-900 mt-1">
-                  {exam.num_items}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Choices per Item
-                </label>
-                <p className="text-base text-gray-900 mt-1">
-                  {exam.choices_per_item}
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* Edit Modal */}
       {isEditing && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-gray-50 flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Edit Exam</h2>
-                <p className="text-sm text-gray-500">
-                  Update exam information and settings
+                <h2 className="text-xl font-bold text-[#0f172a]">
+                  Edit Exam Details
+                </h2>
+                <p className="text-sm text-gray-400 font-medium">
+                  Update the information for this exam
                 </p>
               </div>
               <button
                 onClick={() => setIsEditing(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Close"
+                className="p-2 hover:bg-gray-100 rounded-full"
               >
-                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
-              {/* Exam Code */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Exam Code <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={editForm.examCode}
-                    onChange={(e) => setEditForm({ ...editForm, examCode: e.target.value.toUpperCase() })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all font-mono text-lg"
-                    placeholder="e.g. EX-ABC123"
-                    maxLength={12}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                      let code = "";
-                      for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-                      setEditForm({ ...editForm, examCode: `EX-${code}` });
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-green-600 transition-colors"
-                    title="Regenerate random code"
-                  >
-                    <RefreshCw className="w-5 h-5" />
-                  </button>
-                </div>
-                <p className="text-[10px] text-gray-400">Unique identifier used for answer sheet scanning and identification.</p>
-              </div>
-
-              {/* Exam Name & Subject */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Exam Name <span className="text-red-500">*</span></label>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    Exam Title
+                  </label>
                   <input
                     type="text"
                     value={editForm.title}
-                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                    placeholder="Enter exam name"
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, title: e.target.value })
+                    }
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all font-semibold text-[#0f172a]"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Subject / Folder <span className="text-red-500">*</span></label>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    Subject
+                  </label>
                   <input
                     type="text"
                     value={editForm.subject}
-                    onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                    placeholder="Enter subject or folder name"
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, subject: e.target.value })
+                    }
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all font-semibold text-[#0f172a]"
                   />
                 </div>
-              </div>
-
-              {/* Number of Items */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Number of Items <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[20, 50, 100].map((num) => (
-                    <button
-                      key={num}
-                      onClick={() => setEditForm({ ...editForm, num_items: num })}
-                      className={`py-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
-                        editForm.num_items === num
-                          ? "bg-green-600 text-white border-green-600"
-                          : "bg-white border-gray-200 text-gray-700 hover:border-green-500 hover:bg-green-50"
-                      }`}
-                    >
-                      {num} Items
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-400">Current: {exam.num_items} items</p>
-              </div>
-
-              {/* Choices & Type */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700">Choices per Question</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[{ label: "4 (A–D)", value: 4 }, { label: "5 (A–E)", value: 5 }].map((opt) => (
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    Number of Items
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[20, 50, 100].map((n) => (
                       <button
-                        key={opt.value}
-                        onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
-                        className={`py-2.5 px-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
-                          editForm.choices_per_item === opt.value
-                            ? "bg-green-600 text-white border-green-600"
-                            : "bg-white border-gray-200 text-gray-700 hover:border-green-500 hover:bg-green-50"
+                        key={n}
+                        onClick={() =>
+                          setEditForm({ ...editForm, num_items: n })
+                        }
+                        className={`py-3 rounded-xl font-bold text-sm border transition-all ${
+                          editForm.num_items === n
+                            ? "bg-[#22c55e] text-white border-[#22c55e] shadow-md shadow-green-500/10"
+                            : "bg-white border-gray-100 text-gray-500 hover:border-green-200"
                         }`}
                       >
-                        {opt.label}
+                        {n} Items
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-gray-700">Exam Type</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[{ label: "Board", value: "board" }, { label: "Diagnostic", value: "diagnostic" }].map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })}
-                        className={`py-2.5 px-3 rounded-lg font-medium text-sm border transition-all duration-200 ${
-                          editForm.examType === opt.value
-                            ? "bg-green-600 text-white border-green-600"
-                            : "bg-white border-gray-200 text-gray-700 hover:border-green-500 hover:bg-green-50"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Branding */}
-              <div className="pt-4 border-t border-gray-100 space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900">Answer Sheet Branding (Optional)</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Institution Name</label>
-                  <input
-                    type="text"
-                    value={editForm.institutionName}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, institutionName: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none"
-                    placeholder="e.g. Gordon College SIA Department"
-                  />
-                </div>
-              </div>
-
-              {/* Warning */}
-              <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <span className="text-amber-500 text-lg flex-shrink-0">⚠️</span>
-                <p className="text-sm text-amber-700">Editing this exam will delete any existing answer sheet template so you can generate a new one.</p>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex-shrink-0 flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+            <div className="p-6 border-t border-gray-50 bg-gray-50/50 flex items-center justify-end gap-3">
               <button
                 onClick={() => setIsEditing(false)}
-                className="px-6 py-2.5 border border-gray-200 rounded-lg font-medium text-gray-700 hover:bg-gray-100 transition-all"
+                className="px-6 py-2.5 font-bold text-sm text-gray-400 hover:text-gray-600"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit}
-                className="px-6 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-8 py-2.5 bg-[#22c55e] text-white rounded-xl font-bold text-sm hover:bg-[#16a34a] shadow-md shadow-green-500/10 disabled:opacity-50"
               >
-                {isSavingEdit ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /><span>Saving...</span></>
-                ) : (
-                  <span>Save Changes</span>
-                )}
+                {isSavingEdit ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Finalize Dialog */}
       {showFinalizeConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Finalize Exam</h2>
-            <p className="text-gray-500 text-sm mb-6">
-              Are you sure you want to finalize <strong className="text-gray-900">{exam.title}</strong>?
-              Once finalized, you will{" "}
-              <strong className="text-red-500">not be able to edit</strong>{" "}
-              the number of items or choice structures.
+        <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center overflow-hidden">
+            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="w-8 h-8 text-[#22c55e]" />
+            </div>
+            <h2 className="text-2xl font-bold text-[#0f172a]">
+              Finalize Exam?
+            </h2>
+            <p className="text-gray-500 mt-3 font-medium leading-relaxed">
+              Once finalized, the exam configuration will be locked for editing.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="mt-8 flex items-center gap-3">
               <button
                 onClick={() => setShowFinalizeConfirm(false)}
-                className="px-4 py-2 border border-gray-200 rounded-lg font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-                disabled={isFinalizing}
+                className="flex-1 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-gray-50 transition-all"
               >
-                Cancel
+                Go Back
               </button>
               <button
                 onClick={handleFinalizeExam}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
                 disabled={isFinalizing}
+                className="flex-1 px-4 py-3 bg-[#22c55e] text-white rounded-xl font-bold hover:bg-[#16a34a] shadow-lg shadow-green-500/20 transition-all disabled:opacity-50"
               >
                 {isFinalizing ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Finalizing...</>
+                  <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                 ) : (
-                  <><CheckCircle className="w-4 h-4" />Confirm Finalize</>
+                  "Yes, Finalize"
                 )}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
     </div>
   );
 }

@@ -590,3 +590,81 @@ export async function addGeneratedSheetToExam(
     throw new Error("Failed to add generated sheet to exam");
   }
 }
+
+/**
+ * Get all exams for a specific class ID
+ */
+export async function getExamsByClassId(classId: string): Promise<Exam[]> {
+  try {
+    const q = query(
+      collection(db, "exams"),
+      where("classId", "==", classId),
+      where("isArchived", "==", false)
+    );
+    const querySnapshot = await getDocs(q);
+    const exams: Exam[] = [];
+
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      exams.push({
+        id: docSnap.id,
+        title: data.title,
+        subject: data.subject,
+        num_items: data.num_items,
+        choices_per_item: data.choices_per_item,
+        created_at:
+          data.created_at ||
+          data.createdAt?.toDate?.().toISOString() ||
+          new Date().toISOString(),
+        answer_keys: data.answer_keys || [],
+        generated_sheets: data.generated_sheets || [],
+        createdBy: data.createdBy,
+        updatedAt:
+          data.updatedAt?.toDate?.().toISOString() ||
+          new Date().toISOString(),
+        className: data.className || undefined,
+        classId: data.classId || undefined,
+        isArchived: data.isArchived,
+        examCode: data.examCode,
+      });
+    });
+
+    return exams;
+  } catch (error) {
+    console.error("Error fetching exams by class ID:", error);
+    throw new Error("Failed to fetch exams for this class");
+  }
+}
+
+/**
+ * Get total scanned results count for all exams in a class
+ */
+export async function getScannedResultsCountByClassId(classId: string): Promise<number> {
+  try {
+    const q = query(
+      collection(db, "exams"),
+      where("classId", "==", classId),
+      where("isArchived", "==", false)
+    );
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) return 0;
+
+    const examIds = querySnapshot.docs.map(docSnap => docSnap.id);
+    
+    // Check results for each exam
+    let totalCount = 0;
+    for (const eid of examIds) {
+      const rq = query(
+        collection(db, "scannedResults"),
+        where("examId", "==", eid)
+      );
+      const rSnap = await getDocs(rq);
+      totalCount += rSnap.size;
+    }
+    
+    return totalCount;
+  } catch (error) {
+    console.error("Error counting scanned results for class:", error);
+    return 0;
+  }
+}

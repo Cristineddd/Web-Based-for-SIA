@@ -27,7 +27,6 @@ const navItems = [
   { path: "/classes", label: "Classes", icon: Users },
   { path: "/exams", label: "Exams", icon: FileText },
   { path: "/results", label: "Results", icon: BarChart3 },
-  { path: "/templates", label: "Templates", icon: FileText },
   { path: "/archive", label: "Archive", icon: FolderArchive },
 ];
 
@@ -74,10 +73,20 @@ export function Sidebar() {
           onClick={() => setMobileOpen(!mobileOpen)}
           className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 transition-colors"
         >
-          {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          {mobileOpen ? (
+            <X className="w-4 h-4" />
+          ) : (
+            <Menu className="w-4 h-4" />
+          )}
         </button>
         <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
-          <Image src="/gclogo.png" alt="GC Logo" width={24} height={24} className="object-contain" />
+          <Image
+            src="/gclogo.png"
+            alt="GC Logo"
+            width={24}
+            height={24}
+            className="object-contain"
+          />
         </div>
         <h1 className="font-bold text-green-700 text-sm">GC SMART CHECK</h1>
       </div>
@@ -100,17 +109,33 @@ export function Sidebar() {
           {!collapsed ? (
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-green-50 rounded-xl">
-                <Image src="/gclogo.png" alt="GC Logo" width={30} height={30} className="object-contain" />
+                <Image
+                  src="/gclogo.png"
+                  alt="GC Logo"
+                  width={30}
+                  height={30}
+                  className="object-contain"
+                />
               </div>
               <div className="min-w-0">
-                <h1 className="font-bold text-gray-900 text-sm leading-tight">GC SMART CHECK</h1>
-                <p className="text-xs text-gray-400 mt-0.5">Exam &amp; Quiz Builder</p>
+                <h1 className="font-bold text-gray-900 text-sm leading-tight">
+                  GC SMART CHECK
+                </h1>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Exam &amp; Quiz Builder
+                </p>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
               <div className="w-10 h-10 flex items-center justify-center bg-green-50 rounded-xl">
-                <Image src="/gclogo.png" alt="GC Logo" width={26} height={26} className="object-contain" />
+                <Image
+                  src="/gclogo.png"
+                  alt="GC Logo"
+                  width={26}
+                  height={26}
+                  className="object-contain"
+                />
               </div>
             </div>
           )}
@@ -133,7 +158,12 @@ export function Sidebar() {
                     : "text-gray-500 hover:bg-gray-100 hover:text-gray-800",
                 )}
               >
-                <Icon className={cn("w-[18px] h-[18px] flex-shrink-0", isActive ? "text-green-600" : "text-gray-400")} />
+                <Icon
+                  className={cn(
+                    "w-[18px] h-[18px] flex-shrink-0",
+                    isActive ? "text-green-600" : "text-gray-400",
+                  )}
+                />
                 {!collapsed && <span>{item.label}</span>}
               </Link>
             );
@@ -178,7 +208,11 @@ export function Sidebar() {
           className="absolute -right-2.5 top-16 w-5 h-5 rounded-full border border-gray-200 bg-white shadow-sm hover:bg-green-50 p-0 text-green-700"
           onClick={() => setCollapsed(!collapsed)}
         >
-          {collapsed ? <ChevronRight className="w-2.5 h-2.5" /> : <ChevronLeft className="w-2.5 h-2.5" />}
+          {collapsed ? (
+            <ChevronRight className="w-2.5 h-2.5" />
+          ) : (
+            <ChevronLeft className="w-2.5 h-2.5" />
+          )}
         </Button>
       </aside>
 
@@ -207,7 +241,12 @@ export function Sidebar() {
                     : "text-gray-500 hover:bg-gray-100 hover:text-gray-800",
                 )}
               >
-                <Icon className={cn("w-[18px] h-[18px] flex-shrink-0", isActive ? "text-green-600" : "text-gray-400")} />
+                <Icon
+                  className={cn(
+                    "w-[18px] h-[18px] flex-shrink-0",
+                    isActive ? "text-green-600" : "text-gray-400",
+                  )}
+                />
                 <span>{item.label}</span>
               </Link>
             );
@@ -220,7 +259,9 @@ export function Sidebar() {
               <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 {getEmailInitial()}
               </div>
-              <p className="text-xs font-medium text-gray-600 truncate">{user.email}</p>
+              <p className="text-xs font-medium text-gray-600 truncate">
+                {user.email}
+              </p>
             </div>
           )}
           <button
@@ -237,7 +278,9 @@ export function Sidebar() {
       {showSignOutModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={(e) => e.target === e.currentTarget && setShowSignOutModal(false)}
+          onClick={(e) =>
+            e.target === e.currentTarget && setShowSignOutModal(false)
+          }
         >
           <div
             className="absolute inset-0 bg-black/40 cursor-pointer"
@@ -253,7 +296,8 @@ export function Sidebar() {
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Sign Out</h2>
               <p className="text-sm text-gray-500 mb-6">
-                Are you sure you want to sign out? You&apos;ll need to log in again to access your exams and data.
+                Are you sure you want to sign out? You&apos;ll need to log in
+                again to access your exams and data.
               </p>
               <div className="flex gap-3">
                 <button

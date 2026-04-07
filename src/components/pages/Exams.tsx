@@ -1,27 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Plus,
   Search,
   FileText,
-  Eye,
   FolderArchive,
   Pencil,
   RefreshCw,
+  Tag,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -81,6 +73,7 @@ interface ExamWithStatus extends Exam {
 
 export default function Exams() {
   const { user } = useAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [exams, setExams] = useState<ExamWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -376,7 +369,7 @@ export default function Exams() {
       title: exam.title,
       subject: exam.subject,
       num_items: exam.num_items,
-      choices_per_item: exam.choices_per_item,
+      choices_per_item: exam.choices_per_item || 4,
       examType: exam.examType || "board",
       examCode: exam.examCode || "",
       institutionName: exam.institutionName || "",
@@ -511,168 +504,165 @@ export default function Exams() {
       exam.title.toLowerCase().includes(search.toLowerCase()) ||
       getCourseForExam(exam).toLowerCase().includes(search.toLowerCase()) ||
       getClassNameForExam(exam).toLowerCase().includes(search.toLowerCase()) ||
+      (exam.examCode || "").toLowerCase().includes(search.toLowerCase()) ||
       exam.num_items.toString().includes(search),
   );
 
   return (
     <div className="page-container">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Exams
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Create and manage your exams</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Create and manage your exams and answer keys.
+          </p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors"
+          className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-lg font-semibold transition-all shadow-sm"
         >
-          <Plus className="w-4 h-4" />
-          Create New Exam
+          <Plus className="w-5 h-5" />
+          Create Exam
         </button>
       </div>
 
-      {/* Actions Bar */}
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl mb-6">
-        <CardContent className="py-4">
-
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by title, subject, class, or number of items..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FileText className="w-4 h-4" />
-              <span>
-                {filteredExams.length} exam
-                {filteredExams.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Exam Information */}
-      <div className="mb-6">
-        <p className="text-sm text-muted-foreground">
-          Manage your exams and answer keys. Click on any exam row to view
-          details or use the actions to edit or manage.
-        </p>
+      {/* Search Bar - Full Width */}
+      <div className="relative mb-8">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <Input
+          placeholder="Search exams by title, subject, or template ID..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-lg focus:ring-green-500/20 focus:border-green-500"
+        />
       </div>
 
-      {/* Table */}
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl table-container overflow-x-auto">
-        <Table>
-
-          <TableHeader>
-            <TableRow className="bg-table-header hover:bg-table-header">
-              <TableHead>Title</TableHead>
-              <TableHead className="hidden sm:table-cell">Course</TableHead>
-              <TableHead className="hidden lg:table-cell">Class</TableHead>
-              <TableHead className="text-center">Items</TableHead>
-              <TableHead className="text-center">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-12">
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                    Loading exams...
+      {/* Grid Layout */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <div className="w-10 h-10 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-500 font-medium">Loading exams...</p>
+        </div>
+      ) : filteredExams.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 bg-white border border-dashed border-gray-200 rounded-2xl">
+          <FileText className="w-16 h-16 text-gray-200 mb-4" />
+          <p className="text-gray-500 text-lg font-medium">
+            {search ? "No exams match your search" : "No exams created yet"}
+          </p>
+          {!search && (
+            <Button
+              variant="link"
+              className="mt-2 text-[#22c55e] hover:text-[#16a34a] font-semibold"
+              onClick={() => setShowCreateModal(true)}
+            >
+              Start by creating your first exam
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredExams.map((exam) => {
+            const course = getCourseForExam(exam);
+            return (
+              <Card
+                key={exam.id}
+                className="group bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden flex flex-col h-full rounded-2xl border-b-4 border-b-green-500/10 hover:border-b-green-500/40 relative"
+                onClick={() => {
+                  router.push(`/exams/${exam.id}`);
+                }}
+              >
+                <CardContent className="p-6 flex flex-col h-full">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-green-100 transition-colors">
+                      <FileText className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-[10px] font-bold uppercase tracking-wider border border-green-100">
+                        {exam.num_items} Items
+                      </div>
+                      {exam.status === "final" && (
+                        <div className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[9px] font-bold uppercase tracking-tight border border-blue-100">
+                          Finalized
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </TableCell>
-              </TableRow>
-            ) : filteredExams.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-12">
-                  <FileText className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
-                  <p className="text-muted-foreground">
-                    {search
-                      ? "No exams found matching your search"
-                      : "No exams created yet"}
-                  </p>
-                  {!search && (
-                    <Button
-                      variant="link"
-                      className="mt-2"
-                      onClick={() => setShowCreateModal(true)}
-                    >
-                      Create your first exam
-                    </Button>
-                  )}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredExams.map((exam) => (
-                <TableRow
-                  key={exam.id}
-                  className="hover:bg-table-row-hover cursor-pointer"
-                  onClick={() => (window.location.href = `/exams/${exam.id}`)}
-                >
-                  <TableCell className="font-medium">{exam.title}</TableCell>
-                  <TableCell className="text-muted-foreground hidden sm:table-cell">
-                    {getCourseForExam(exam)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden lg:table-cell">
-                    {getClassNameForExam(exam)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {exam.num_items}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center gap-1">
-                      <Link href={`/exams/${exam.id}`}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={(e) => e.stopPropagation()}
-                          title="View Exam"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Link>
+
+                  <div className="flex-1">
+                    <h3 className="font-bold text-lg text-gray-900 group-hover:text-green-700 transition-colors line-clamp-1 mb-1">
+                      {exam.title}
+                    </h3>
+                    <p className="text-sm text-gray-500 font-medium line-clamp-1">
+                      {course}
+                    </p>
+                    
+                    <div className="mt-4 flex flex-col gap-2">
+                      <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-500 transition-colors">
+                        <span className="text-sm font-bold opacity-30">#</span>
+                        <span className="text-xs font-mono font-bold tracking-tight text-gray-600">
+                          {exam.examCode || "NO-CODE-ASSIGNED"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <Calendar className="w-3.5 h-3.5 opacity-60" />
+                        <span className="text-[11px] font-bold">
+                          {new Date(exam.created_at).toLocaleDateString('en-US', { 
+                            month: 'short', day: 'numeric', year: 'numeric' 
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+                        <Tag className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <span className="text-xs font-bold text-gray-700">
+                        {exam.className ? 1 : 0}{" "}
+                        <span className="text-[10px] font-normal text-gray-400 uppercase tracking-tight">
+                          Class Tagged
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        className="h-8 w-8 text-gray-300 hover:text-green-600 hover:bg-green-50 rounded-lg"
                         onClick={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           handleEditExam(exam);
                         }}
-                        title="Edit Exam"
                       >
                         <Pencil className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        className="h-8 w-8 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg"
                         onClick={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           setArchiveId(exam.id);
                         }}
-                        title="Archive Exam"
                       >
                         <FolderArchive className="w-4 h-4" />
                       </Button>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Create Exam Modal */}
       <CreateExamModal
