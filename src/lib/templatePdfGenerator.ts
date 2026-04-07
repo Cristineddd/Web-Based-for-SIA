@@ -86,6 +86,8 @@ export async function generateTemplatePDF(template: TemplateData) {
     generateTemplate50(doc, template, logoData);
   } else if (template.numQuestions === 100) {
     generateTemplate100(doc, template, logoData);
+  } else if (template.numQuestions === 150) {
+    generateTemplate150(doc, template, logoData);
   }
 
   // Generate filename
@@ -95,7 +97,7 @@ export async function generateTemplatePDF(template: TemplateData) {
   doc.save(filename);
 }
 
-// 20 Questions - 4 mini sheets per page (2x2 grid)
+// 20 Questions - 2 sheets per page (stacked vertically)
 function generateTemplate20(
   doc: jsPDF,
   template: TemplateData,
@@ -104,32 +106,26 @@ function generateTemplate20(
   const pageWidth = 210;
   const pageHeight = 297;
 
-  // Create 4 mini sheets in a 2x2 grid
-  const sheetWidth = pageWidth / 2;
+  const sheetWidth = pageWidth;
   const sheetHeight = pageHeight / 2;
 
-  const positions = [
-    { x: 0, y: 0 }, // Top left
-    { x: sheetWidth, y: 0 }, // Top right
-    { x: 0, y: sheetHeight }, // Bottom left
-    { x: sheetWidth, y: sheetHeight }, // Bottom right
-  ];
+  // Top sheet
+  drawMiniSheet(doc, 0, 0, sheetWidth, sheetHeight, template, 20, logoData);
 
-  positions.forEach((pos) => {
-    drawMiniSheet(
-      doc,
-      pos.x,
-      pos.y,
-      sheetWidth,
-      sheetHeight,
-      template,
-      20,
-      logoData,
-    );
-  });
+  // Bottom sheet
+  drawMiniSheet(
+    doc,
+    0,
+    sheetHeight,
+    sheetWidth,
+    sheetHeight,
+    template,
+    20,
+    logoData,
+  );
 }
 
-// 50 Questions - 2 sheets per page (side by side)
+// 50 Questions - 2 sheets per page (stacked vertically)
 function generateTemplate50(
   doc: jsPDF,
   template: TemplateData,
@@ -138,17 +134,17 @@ function generateTemplate50(
   const pageWidth = 210;
   const pageHeight = 297;
 
-  const sheetWidth = pageWidth / 2;
-  const sheetHeight = pageHeight;
+  const sheetWidth = pageWidth;
+  const sheetHeight = pageHeight / 2;
 
-  // Left sheet
+  // Top sheet
   drawMiniSheet(doc, 0, 0, sheetWidth, sheetHeight, template, 50, logoData);
 
-  // Right sheet
+  // Bottom sheet
   drawMiniSheet(
     doc,
-    sheetWidth,
     0,
+    sheetHeight,
     sheetWidth,
     sheetHeight,
     template,
@@ -181,85 +177,75 @@ function drawMiniSheet(
   logoData: string,
 ) {
   const margin = 10; // 10mm margin
-  const bubbleSize = 3.2; // Bubble size
-  const markerSize = 4;
+  const bubbleSize = 3.5; // Answer bubble size - 13px equivalent
+  const idBubbleSize = 3.0; // ID bubble size - 11px equivalent
+  const markerSize = 8; // Corner squares - 30px equivalent (8mm ≈ 30px at 96dpi)
+  const regMarkSize = 2.0; // Registration marks - small squares at each answer block
+  const cornerInset = 2; // Distance from edge for corner markers
 
-  let currentY = startY + margin + 5; // Top margin
+  // Header positioned IN BETWEEN the corner markers (slightly lower)
+  let currentY = startY + cornerInset + 3;
 
-  // Header with logo and text on same line - centered
+  // Header with logo and text on same line - centered (consistent with full sheets)
   if (logoData) {
-    const logoSize = 6;
-    const textWidth = 25; // Approximate width of "Gordon College" text
-    const totalWidth = logoSize + 2 + textWidth; // logo + gap + text
-    const headerStartX = startX + (width - totalWidth) / 2;
-
-    // Add logo
-    doc.addImage(
-      logoData,
-      "PNG",
-      headerStartX,
-      currentY - 1,
-      logoSize,
-      logoSize,
-    );
-
-    // Add text next to logo
-    doc.setFontSize(8);
+    const logoSize = 10;
+    const hx = startX + (width - 55) / 2;
+    doc.addImage(logoData, "PNG", hx, currentY, logoSize, logoSize);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    const textX = headerStartX + logoSize + 2;
-    const textY = currentY + 3; // Vertically center with logo
-    doc.text(template.institutionName || "Gordon College", textX, textY);
-
-    currentY += logoSize + 3;
+    doc.text(
+      template.institutionName || "Gordon College",
+      hx + logoSize + 3,
+      currentY + 6,
+    );
+    currentY += logoSize + 2;
   } else {
     // Header without logo - centered
-    doc.setFontSize(8);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     const centerX = startX + width / 2;
-    doc.text(template.institutionName || "Gordon College", centerX, currentY, {
+    doc.text(template.institutionName || "Gordon College", centerX, currentY + 5, {
       align: "center",
     });
-    currentY += 4;
+    currentY += markerSize + 2;
   }
 
   // Exam Code (if provided)
   if (template.examCode) {
-    doc.setFontSize(6);
+    doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     const centerX = startX + width / 2;
     doc.text(`Exam Code: ${template.examCode}`, centerX, currentY, {
       align: "center",
     });
-    currentY += 3.5;
+    currentY += 4;
   }
 
-  // Save the Y position for top black squares (aligned with Name/Date)
-  const topBlackSquareY = currentY - 2;
+  // Name and Date fields - consistent with full sheets
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
 
-  // Name and Date fields side by side
-  doc.setFontSize(6);
-  doc.setFont("helvetica", "normal");
+  const fieldStartX = startX + margin;
+  const fieldEndX = startX + width - margin;
+  const usableW = fieldEndX - fieldStartX;
+  const nameEnd = fieldStartX + usableW * 0.65;
 
-  const fieldStartX = startX + margin + 1;
-  const fieldMidX = startX + width / 2;
-  const fieldEndX = startX + width - margin - 1;
-
-  // Name field (left side)
+  // Name field
   doc.text("Name:", fieldStartX, currentY);
-  doc.line(fieldStartX + 8, currentY, fieldMidX - 1, currentY);
+  doc.line(fieldStartX + 11, currentY, nameEnd, currentY);
 
-  // Date field (right side)
-  doc.text("Date:", fieldMidX + 1, currentY);
-  doc.line(fieldMidX + 7, currentY, fieldEndX, currentY);
+  // Date field
+  doc.text("Date:", nameEnd + 3, currentY);
+  doc.line(nameEnd + 13, currentY, fieldEndX, currentY);
 
   currentY += 4;
 
-  // Student ZipGrade ID section with border
+  // Student ZipGrade ID section with border (9 columns)
   const idTopY = currentY - 1;
   const idPadMini = 2;
   const idLabelWMini = 6;
-  const idColSpacing = 4.5;
-  const idContentWMini = idLabelWMini + 10 * idColSpacing;
+  const idColSpacing = 4.8;
+  const idContentWMini = idLabelWMini + 9 * idColSpacing; // 9 columns
   const idBorderWMini = idContentWMini + idPadMini * 2;
   const idBorderXMini = startX + margin;
   const idContentXMini = idBorderXMini + idPadMini;
@@ -268,27 +254,29 @@ function drawMiniSheet(
   doc.setFontSize(6);
   doc.setFont("helvetica", "bold");
   doc.text("Student ZipGrade ID", idContentXMini + 1, currentY + 2);
-  currentY += 5;
+  currentY += 4.5; // Reduced from 5 to 4.5
 
-  // Draw input boxes for writing Student ID
-  const idBoxWidth = 4;
-  const idBoxHeight = 4;
+  // Draw input boxes for writing Student ID (9 boxes)
+  const idBoxWidth = 4.2;
+  const idBoxHeight = 4.0; // Reduced from 4.5 to 4.0
 
   doc.setFont("helvetica", "normal");
-  for (let i = 0; i < 10; i++) {
+  doc.setLineWidth(0.5);
+  for (let i = 0; i < 9; i++) {
     const idBoxX = idStartX + i * idColSpacing - idBoxWidth / 2;
     doc.rect(idBoxX, currentY, idBoxWidth, idBoxHeight);
   }
+  doc.setLineWidth(0.2);
 
   currentY += idBoxHeight + 2;
 
-  const idRowSpacing = 3.5;
+  const idRowSpacing = 4.0;
   const rowLabels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
-  doc.setFontSize(6);
+  doc.setFontSize(5.5);
 
-  // Draw 10 columns for ID
-  for (let col = 0; col < 10; col++) {
+  // Draw 9 columns for ID
+  for (let col = 0; col < 9; col++) {
     const x = idStartX + col * idColSpacing;
 
     for (let row = 0; row < 10; row++) {
@@ -296,17 +284,17 @@ function drawMiniSheet(
 
       if (col === 0) {
         doc.setFont("helvetica", "bold");
-        doc.text(rowLabels[row], idContentXMini + 1, y + 1);
+        doc.text(rowLabels[row], idContentXMini + 1.5, y + 1.2);
       }
 
-      drawBubble(doc, x, y, bubbleSize);
+      drawBubble(doc, x, y, idBubbleSize);
     }
   }
 
   const idBottomYMini = currentY + 10 * idRowSpacing + 1;
 
   // Draw border around ID section
-  doc.setLineWidth(0.4);
+  doc.setLineWidth(0.5);
   doc.rect(idBorderXMini, idTopY, idBorderWMini, idBottomYMini - idTopY + 1);
   doc.setLineWidth(0.2);
 
@@ -317,8 +305,8 @@ function drawMiniSheet(
     0,
     template.choicesPerQuestion,
   );
-  const bubbleSpacing = 4.8;
-  const ansRowH = 4.5;
+  const bubbleSpacing = 5.5; // Wider spacing between bubbles
+  const ansRowH = 5.2; // More vertical space between rows
   const numW = 10; // space for question numbers before bubbles
 
   let maxQY = currentY; // Track the maximum Y position for black squares
@@ -332,23 +320,25 @@ function drawMiniSheet(
   ) {
     let qY = by;
 
-    // Header row: ■ A B C D (E)
-    doc.setFontSize(6.5);
-    doc.setFont("helvetica", "bold");
+    // Registration mark at top-left of this block
     doc.setFillColor(0, 0, 0);
-    doc.rect(bx + 1.5, qY, 2, 2, "F");
+    doc.rect(bx, qY, regMarkSize, regMarkSize, "F");
+
+    // Header row: A B C D (E) - with proper spacing
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
     for (let i = 0; i < choices.length; i++) {
-      doc.text(choices[i], bx + numW + i * bubbleSpacing, qY + 1.5, {
+      doc.text(choices[i], bx + numW + i * bubbleSpacing, qY + 2.5, {
         align: "center",
       });
     }
-    qY += 4;
+    qY += 5; // Space after header before first question row
 
     // Question rows
     for (let q = startQ; q <= endQ; q++) {
-      doc.setFontSize(6.5);
+      doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
-      doc.text(q.toString(), bx + numW - 3, qY + 1, { align: "right" });
+      doc.text(q.toString(), bx + numW - 3, qY + 1.5, { align: "right" });
       doc.setFont("helvetica", "normal");
       const correctLetter = template.answerKey?.[q - 1]?.toUpperCase();
       for (let i = 0; i < choices.length; i++) {
@@ -367,28 +357,25 @@ function drawMiniSheet(
   }
 
   if (questionsPerSheet === 50) {
-    // For 50 questions: 2 cols
-    // Col 0: Q1-10, Q11-20, Q21-30
-    // Col 1: Q31-40, Q41-50
+    // For 50 questions: 5 blocks arranged horizontally in a single row
     const blocks = [
-      { startQ: 1, endQ: 10, col: 0, row: 0 },
-      { startQ: 11, endQ: 20, col: 0, row: 1 },
-      { startQ: 21, endQ: 30, col: 0, row: 2 },
-      { startQ: 31, endQ: 40, col: 1, row: 0 },
-      { startQ: 41, endQ: 50, col: 1, row: 1 },
+      { startQ: 1, endQ: 10 },
+      { startQ: 11, endQ: 20 },
+      { startQ: 21, endQ: 30 },
+      { startQ: 31, endQ: 40 },
+      { startQ: 41, endQ: 50 },
     ];
 
-    const colWidth = (width - 2 * margin) / 2;
-    const blockVGap = 10 * ansRowH + 7;
+    const blockWidth = (width - 2 * margin) / 5; // Divide width equally for 5 blocks
 
-    blocks.forEach((block) => {
-      const bx = startX + margin + block.col * colWidth;
-      const by = currentY + block.row * blockVGap;
-      const endY = drawMiniQBlock(bx, by, block.startQ, block.endQ);
+    // All 5 blocks in a single row
+    for (let i = 0; i < 5; i++) {
+      const bx = startX + margin + i * blockWidth;
+      const endY = drawMiniQBlock(bx, currentY, blocks[i].startQ, blocks[i].endQ);
       if (endY > maxQY) maxQY = endY;
-    });
+    }
   } else {
-    // For 20 questions: 2 columns of 10 each
+    // For 20 questions: 2 columns of 10 each, side by side (Q1-10 and Q11-20)
     const colWidth = (width - 2 * margin) / 2;
 
     for (let col = 0; col < 2; col++) {
@@ -400,27 +387,27 @@ function drawMiniSheet(
     }
   }
 
-  // Draw alignment markers - BLACK SQUARES - aligned with content
+  // Draw alignment markers - BLACK SQUARES - consistent positioning
   doc.setFillColor(0, 0, 0);
-  const inset = 5; // Distance from edge
-  const bottomBlackSquareY = maxQY + 2; // Aligned with bottom of content
+  const topMarkerY = startY + cornerInset; // Top corners near the edge
+  const bottomMarkerY = startY + height - markerSize - cornerInset; // Bottom corners near the edge (consistent)
 
-  // Top-left corner (aligned with Name/Date line)
-  doc.rect(startX + inset, topBlackSquareY, markerSize, markerSize, "F");
-  // Top-right corner (aligned with Name/Date line)
+  // Top-left corner
+  doc.rect(startX + cornerInset, topMarkerY, markerSize, markerSize, "F");
+  // Top-right corner
   doc.rect(
-    startX + width - markerSize - inset,
-    topBlackSquareY,
+    startX + width - markerSize - cornerInset,
+    topMarkerY,
     markerSize,
     markerSize,
     "F",
   );
-  // Bottom-left corner (aligned with bottom numbers)
-  doc.rect(startX + inset, bottomBlackSquareY, markerSize, markerSize, "F");
-  // Bottom-right corner (aligned with bottom numbers)
+  // Bottom-left corner
+  doc.rect(startX + cornerInset, bottomMarkerY, markerSize, markerSize, "F");
+  // Bottom-right corner
   doc.rect(
-    startX + width - markerSize - inset,
-    bottomBlackSquareY,
+    startX + width - markerSize - cornerInset,
+    bottomMarkerY,
     markerSize,
     markerSize,
     "F",
@@ -440,50 +427,54 @@ function drawFullSheet(
   template: TemplateData,
   logoData: string,
 ) {
-  // A4 = 210 x 297mm, usable ~190 x 277mm
-  const margin = 10;
-  const markerSize = 7;
-  const inset = 3;
+  // A4 = 210 x 297mm
+  const margin = 10; // Consistent with mini sheets
+  const markerSize = 8; // Corner squares - 30px equivalent
+  const regMarkSize = 2.0; // Registration marks - small
+  const cornerInset = 2; // Consistent with mini sheets
   const numChoices = template.choicesPerQuestion;
   const choices = ["A", "B", "C", "D", "E"].slice(0, numChoices);
 
-  // Answer bubble settings
-  const bubbleSize = 3.8;
-  const bubbleGap = 5.0; // center-to-center between A, B, C, D, E
-  const rowH = 4.8; // vertical row spacing
+  // Answer bubble settings - consistent with mini sheets
+  const bubbleSize = 3.5; // 13px equivalent
+  const bubbleGap = 5.5; // Wider spacing between bubbles (same as mini sheets)
+  const rowH = 5.2; // More vertical space between rows (same as mini sheets)
 
-  // ID bubble settings (smaller/tighter)
-  const idBubbleSize = 3.5;
-  const idColGap = 4.5; // center-to-center between ID columns
-  const idRowH = 4.8;
+  // ID bubble settings
+  const idBubbleSize = 3.0; // 11px equivalent
+  const idColGap = 4.8; // Same spacing
+  const idRowH = 4.0;
 
-  let currentY = startY + margin + 2;
+  // Header positioned IN BETWEEN the corner markers (consistent with mini sheets)
+  let currentY = startY + cornerInset + 3;
   const lx = startX + margin;
   const rx = startX + width - margin;
-  const usableW = rx - lx; // ~190mm
+  const usableW = rx - lx;
 
-  // ── Helper: draw a question block. Returns Y after last row ──
+  // Helper: draw a question block
   function drawQBlock(bx: number, by: number, startQ: number, endQ: number) {
-    const numW = 12; // space for number text (enough for 3 digits + gap)
+    const numW = 10;
     let qY = by;
 
-    // Header row: ■ A B C D (E)
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "bold");
+    // Registration mark at top-left of block
     doc.setFillColor(0, 0, 0);
-    doc.rect(bx + 2, qY, 2.5, 2.5, "F");
+    doc.rect(bx, qY, regMarkSize, regMarkSize, "F");
+
+    // Header row: A B C D (E) - positioned with proper spacing
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
     for (let i = 0; i < choices.length; i++) {
-      doc.text(choices[i], bx + numW + i * bubbleGap, qY + 2, {
+      doc.text(choices[i], bx + numW + i * bubbleGap, qY + 2.5, {
         align: "center",
       });
     }
-    qY += 4.5;
+    qY += 5; // Space after header before first question row
 
     // Question rows
     for (let q = startQ; q <= endQ; q++) {
-      doc.setFontSize(7);
+      doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
-      doc.text(q.toString(), bx + numW - 4, qY + 1.2, { align: "right" });
+      doc.text(q.toString(), bx + numW - 3, qY + 1.5, { align: "right" });
       doc.setFont("helvetica", "normal");
       const correctLetter = template.answerKey?.[q - 1]?.toUpperCase();
       for (let i = 0; i < choices.length; i++) {
@@ -495,145 +486,130 @@ function drawFullSheet(
     return qY;
   }
 
-  // Block width = numW(12) + bubbles span
-  const qBlockW = 12 + (numChoices - 1) * bubbleGap + bubbleSize;
+  const qBlockW = 10 + (numChoices - 1) * bubbleGap + bubbleSize;
 
-  // ── CORNER MARKERS (top) ──
+  // Corner markers (top)
   doc.setFillColor(0, 0, 0);
-  doc.rect(startX + inset, startY + inset, markerSize, markerSize, "F");
+  doc.rect(startX + cornerInset, startY + cornerInset, markerSize, markerSize, "F");
   doc.rect(
-    startX + width - markerSize - inset,
-    startY + inset,
+    startX + width - markerSize - cornerInset,
+    startY + cornerInset,
     markerSize,
     markerSize,
     "F",
   );
 
-  // ── HEADER ──
+  // Header
   if (logoData) {
-    const logoSize = 12;
-    const hx = startX + (width - 63) / 2;
-    doc.addImage(logoData, "PNG", hx, currentY - 2, logoSize, logoSize);
-    doc.setFontSize(14);
+    const logoSize = 10;
+    const hx = startX + (width - 55) / 2;
+    doc.addImage(logoData, "PNG", hx, currentY, logoSize, logoSize);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text(
       template.institutionName || "Gordon College",
       hx + logoSize + 3,
       currentY + 6,
     );
-    currentY += logoSize + 4;
+    currentY += logoSize + 2;
   } else {
-    doc.setFontSize(14);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text(
       template.institutionName || "Gordon College",
       startX + width / 2,
-      currentY + 4,
+      currentY + 5,
       { align: "center" },
     );
-    currentY += 10;
+    currentY += markerSize + 2;
   }
 
-  // Exam Code (if provided)
+  // Exam Code
   if (template.examCode) {
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text(`Exam Code: ${template.examCode}`, startX + width / 2, currentY, {
       align: "center",
     });
-    currentY += 5;
+    currentY += 4;
   }
 
-  // ── FIELDS: Name ___ Date ___ ──
-  doc.setFontSize(9);
+  // Name and Date fields
+  doc.setFontSize(7);
   doc.setFont("helvetica", "bold");
-  const nameEnd = lx + usableW * 0.62;
+  const nameEnd = lx + usableW * 0.65;
   doc.text("Name:", lx, currentY);
-  doc.line(lx + 13, currentY, nameEnd, currentY);
-  doc.text("Date:", nameEnd + 4, currentY);
-  doc.line(nameEnd + 16, currentY, rx, currentY);
-  currentY += 5;
+  doc.line(lx + 11, currentY, nameEnd, currentY);
+  doc.text("Date:", nameEnd + 3, currentY);
+  doc.line(nameEnd + 13, currentY, rx, currentY);
+  currentY += 4;
 
-  // ════════════════════════════════════════════
-  // TOP SECTION: [ID box] [Q41-50] [Q71-80]
-  // ════════════════════════════════════════════
-
-  // ID grid: 8mm labels + 10 cols × 4.2mm = 50mm content + 4mm padding = 54mm border
-  const idLabelW = 8;
-  const idPad = 3;
-  const idContentW = idLabelW + 10 * idColGap;
+  // Student ZipGrade ID section - 9 columns consistent with mini sheets
+  const idLabelW = 6;
+  const idPad = 2;
+  const idContentW = idLabelW + 9 * idColGap;
   const idBorderW = idContentW + idPad * 2;
 
-  // Layout: ID box starts at lx, Q blocks fill remaining space evenly
   const idBorderX = lx;
   const idContentX = idBorderX + idPad;
   const idStartX = idContentX + idLabelW;
 
-  // Position Q41-50 and Q71-80 in remaining space
-  const afterIdX = idBorderX + idBorderW;
-  const remainW = rx - afterIdX;
-  const topGap = (remainW - 2 * qBlockW) / 2; // center the 2 blocks in remaining space
-  const b41x = afterIdX + topGap / 2;
-  const b71x = b41x + qBlockW + topGap;
-
-  // ── STUDENT ZIPGRADE ID ──
   const idTopY = currentY;
-  doc.setFontSize(8);
+  doc.setFontSize(5.5);
   doc.setFont("helvetica", "bold");
-  doc.text("Student ZipGrade ID", idContentX + 1, currentY + 3.5);
-  currentY += 7;
+  doc.text("Student ZipGrade ID", idContentX + 1, currentY + 3);
+  currentY += 5.5;
 
   // ID input boxes
-  const idBoxW = 4.5;
-  const idBoxH = 5;
+  const idBoxW = 4.2;
+  const idBoxH = 4.0;
   doc.setFont("helvetica", "normal");
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 9; i++) {
     doc.rect(idStartX + i * idColGap - idBoxW / 2, currentY, idBoxW, idBoxH);
   }
-  currentY += idBoxH + 3;
+  currentY += idBoxH + 2;
 
   // ID bubble grid
-  const idBubbleY = currentY;
   const rowLabels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
-  doc.setFontSize(7);
+  doc.setFontSize(5.5);
   for (let row = 0; row < 10; row++) {
     const y = currentY + row * idRowH;
     doc.setFont("helvetica", "bold");
-    doc.text(rowLabels[row], idContentX + 2, y + 1.2);
+    doc.text(rowLabels[row], idContentX + 1.5, y + 1);
     doc.setFont("helvetica", "normal");
-    for (let col = 0; col < 10; col++) {
+    for (let col = 0; col < 9; col++) {
       drawBubble(doc, idStartX + col * idColGap, y, idBubbleSize);
     }
   }
 
-  // ID border
-  const idBottomY = currentY + 10 * idRowH + 2;
+  const idBottomY = currentY + 10 * idRowH + 1.5;
   doc.setLineWidth(0.4);
   doc.rect(idBorderX, idTopY - 1, idBorderW, idBottomY - idTopY + 2);
   doc.setLineWidth(0.2);
 
-  // ── Q41-50 and Q71-80 aligned to ID bubble rows ──
-  drawQBlock(b41x, idBubbleY, 41, 50);
-  drawQBlock(b71x, idBubbleY, 71, 80);
+  currentY = idBottomY + 3;
 
-  currentY = idBottomY + 4;
-
-  // ════════════════════════════════════════════
-  // BOTTOM: 4 cols × 2 rows
-  // ════════════════════════════════════════════
-  const totalGridW = 4 * qBlockW;
-  const colGap = (usableW - totalGridW) / 5;
-  const blockVGap = 10 * rowH + 8;
+  // 100 questions: 5 cols, each column goes down (Q1-20, Q21-40, Q41-60, Q61-80, Q81-100)
+  const totalGridW = 5 * qBlockW;
+  const colGap = (usableW - totalGridW) / 6;
+  const blockVGap = 10 * rowH + 10; // Vertical space between blocks
 
   const gridBlocks = [
+    // Col 0: Q1-10, Q11-20 (down)
     { startQ: 1, endQ: 10, col: 0, row: 0 },
-    { startQ: 21, endQ: 30, col: 1, row: 0 },
-    { startQ: 51, endQ: 60, col: 2, row: 0 },
-    { startQ: 81, endQ: 90, col: 3, row: 0 },
     { startQ: 11, endQ: 20, col: 0, row: 1 },
+    // Col 1: Q21-30, Q31-40 (down)
+    { startQ: 21, endQ: 30, col: 1, row: 0 },
     { startQ: 31, endQ: 40, col: 1, row: 1 },
-    { startQ: 61, endQ: 70, col: 2, row: 1 },
-    { startQ: 91, endQ: 100, col: 3, row: 1 },
+    // Col 2: Q41-50, Q51-60 (down)
+    { startQ: 41, endQ: 50, col: 2, row: 0 },
+    { startQ: 51, endQ: 60, col: 2, row: 1 },
+    // Col 3: Q61-70, Q71-80 (down)
+    { startQ: 61, endQ: 70, col: 3, row: 0 },
+    { startQ: 71, endQ: 80, col: 3, row: 1 },
+    // Col 4: Q81-90, Q91-100 (down)
+    { startQ: 81, endQ: 90, col: 4, row: 0 },
+    { startQ: 91, endQ: 100, col: 4, row: 1 },
   ];
 
   let maxQY = currentY;
@@ -644,12 +620,12 @@ function drawFullSheet(
     if (endY > maxQY) maxQY = endY;
   });
 
-  // ── CORNER MARKERS (bottom) ──
+  // Corner markers (bottom)
   doc.setFillColor(0, 0, 0);
-  const bmY = maxQY + 3;
-  doc.rect(startX + inset, bmY, markerSize, markerSize, "F");
+  const bmY = startY + height - markerSize - cornerInset;
+  doc.rect(startX + cornerInset, bmY, markerSize, markerSize, "F");
   doc.rect(
-    startX + width - markerSize - inset,
+    startX + width - markerSize - cornerInset,
     bmY,
     markerSize,
     markerSize,
@@ -657,12 +633,253 @@ function drawFullSheet(
   );
 
   // Footer
-  doc.setFontSize(6);
+  doc.setFontSize(5);
   doc.setFont("helvetica", "italic");
   doc.text(
     "Do not fold, staple, or tear this answer sheet.",
     startX + width / 2,
-    startY + height - 5,
+    startY + height - 4,
+    { align: "center" },
+  );
+}
+
+// 150 Questions - Full page single sheet with 15 blocks of 10 questions each (5 cols × 3 rows)
+function generateTemplate150(
+  doc: jsPDF,
+  template: TemplateData,
+  logoData: string,
+) {
+  const pageWidth = 210;
+  const pageHeight = 297;
+
+  drawFullSheet150(doc, 0, 0, pageWidth, pageHeight, template, logoData);
+}
+
+// Draw full page sheet for 150 questions - ZipGrade style
+function drawFullSheet150(
+  doc: jsPDF,
+  startX: number,
+  startY: number,
+  width: number,
+  height: number,
+  template: TemplateData,
+  logoData: string,
+) {
+  const margin = 10; // Consistent with mini sheets
+  const markerSize = 8; // Corner squares - 30px equivalent
+  const regMarkSize = 2.0; // Registration marks - small (consistent)
+  const cornerInset = 2; // Consistent with mini sheets
+  const numChoices = template.choicesPerQuestion;
+  const choices = ["A", "B", "C", "D", "E"].slice(0, numChoices);
+
+  // Bubble settings - consistent with mini sheets
+  const bubbleSize = 3.5; // 13px equivalent (same as others for consistency)
+  const bubbleGap = 5.5; // Wider spacing between bubbles (same as mini sheets)
+  const rowH = 5.2; // More vertical space between rows (same as mini sheets)
+
+  // ID bubble settings
+  const idBubbleSize = 3.0; // 11px equivalent
+  const idColGap = 4.8;
+  const idRowH = 4.0;
+
+  let currentY = startY + cornerInset + 3; // Header positioned IN BETWEEN corner markers
+  const lx = startX + margin;
+  const rx = startX + width - margin;
+  const usableW = rx - lx;
+
+  // Helper: draw a question block
+  function drawQBlock(bx: number, by: number, startQ: number, endQ: number) {
+    const numW = 10;
+    let qY = by;
+
+    // Registration mark at top-left of block
+    doc.setFillColor(0, 0, 0);
+    doc.rect(bx, qY, regMarkSize, regMarkSize, "F");
+
+    // Header row: A B C D (E) - positioned with proper spacing
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    for (let i = 0; i < choices.length; i++) {
+      doc.text(choices[i], bx + numW + i * bubbleGap, qY + 2.5, {
+        align: "center",
+      });
+    }
+    qY += 5; // Space after header before first question row
+
+    // Question rows
+    for (let q = startQ; q <= endQ; q++) {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text(q.toString(), bx + numW - 3, qY + 1.5, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      const correctLetter = template.answerKey?.[q - 1]?.toUpperCase();
+      for (let i = 0; i < choices.length; i++) {
+        const isFilled = correctLetter ? choices[i] === correctLetter : false;
+        drawBubble(doc, bx + numW + i * bubbleGap, qY, bubbleSize, isFilled);
+      }
+      qY += rowH;
+    }
+    return qY;
+  }
+
+  const qBlockW = 10 + (numChoices - 1) * bubbleGap + bubbleSize;
+
+  // Corner markers (top)
+  doc.setFillColor(0, 0, 0);
+  doc.rect(startX + cornerInset, startY + cornerInset, markerSize, markerSize, "F");
+  doc.rect(
+    startX + width - markerSize - cornerInset,
+    startY + cornerInset,
+    markerSize,
+    markerSize,
+    "F",
+  );
+
+  // Header
+  if (logoData) {
+    const logoSize = 10;
+    const hx = startX + (width - 55) / 2;
+    doc.addImage(logoData, "PNG", hx, currentY, logoSize, logoSize);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      template.institutionName || "Gordon College",
+      hx + logoSize + 3,
+      currentY + 6,
+    );
+    currentY += logoSize + 2;
+  } else {
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      template.institutionName || "Gordon College",
+      startX + width / 2,
+      currentY + 5,
+      { align: "center" },
+    );
+    currentY += markerSize + 2;
+  }
+
+  // Exam Code
+  if (template.examCode) {
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Exam Code: ${template.examCode}`, startX + width / 2, currentY, {
+      align: "center",
+    });
+    currentY += 4;
+  }
+
+  // Name and Date fields
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  const nameEnd = lx + usableW * 0.65;
+  doc.text("Name:", lx, currentY);
+  doc.line(lx + 11, currentY, nameEnd, currentY);
+  doc.text("Date:", nameEnd + 3, currentY);
+  doc.line(nameEnd + 13, currentY, rx, currentY);
+  currentY += 4;
+
+  // Student ZipGrade ID - 9 columns consistent with mini sheets
+  const idLabelW = 6;
+  const idPad = 2;
+  const idContentW = idLabelW + 9 * idColGap;
+  const idBorderW = idContentW + idPad * 2;
+
+  const idBorderX = lx;
+  const idContentX = idBorderX + idPad;
+  const idStartX = idContentX + idLabelW;
+
+  const idTopY = currentY;
+  doc.setFontSize(5.5);
+  doc.setFont("helvetica", "bold");
+  doc.text("Student ZipGrade ID", idContentX + 1, currentY + 3);
+  currentY += 5.5;
+
+  // ID input boxes
+  const idBoxW = 4.2;
+  const idBoxH = 4.0;
+  doc.setFont("helvetica", "normal");
+  for (let i = 0; i < 9; i++) {
+    doc.rect(idStartX + i * idColGap - idBoxW / 2, currentY, idBoxW, idBoxH);
+  }
+  currentY += idBoxH + 2;
+
+  // ID bubble grid
+  const rowLabels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+  doc.setFontSize(5.5);
+  for (let row = 0; row < 10; row++) {
+    const y = currentY + row * idRowH;
+    doc.setFont("helvetica", "bold");
+    doc.text(rowLabels[row], idContentX + 1.5, y + 1);
+    doc.setFont("helvetica", "normal");
+    for (let col = 0; col < 9; col++) {
+      drawBubble(doc, idStartX + col * idColGap, y, idBubbleSize);
+    }
+  }
+
+  const idBottomY = currentY + 10 * idRowH + 1.5;
+  doc.setLineWidth(0.4);
+  doc.rect(idBorderX, idTopY - 1, idBorderW, idBottomY - idTopY + 2);
+  doc.setLineWidth(0.2);
+
+  currentY = idBottomY + 3;
+
+  // 150 questions: 5 cols, each column goes down (Q1-30, Q31-60, Q61-90, Q91-120, Q121-150)
+  const totalGridW = 5 * qBlockW;
+  const colGap = (usableW - totalGridW) / 6;
+  const blockVGap = 10 * rowH + 10; // Vertical space between blocks
+
+  const gridBlocks = [
+    // Col 0: Q1-10, Q11-20, Q21-30 (down)
+    { startQ: 1, endQ: 10, col: 0, row: 0 },
+    { startQ: 11, endQ: 20, col: 0, row: 1 },
+    { startQ: 21, endQ: 30, col: 0, row: 2 },
+    // Col 1: Q31-40, Q41-50, Q51-60 (down)
+    { startQ: 31, endQ: 40, col: 1, row: 0 },
+    { startQ: 41, endQ: 50, col: 1, row: 1 },
+    { startQ: 51, endQ: 60, col: 1, row: 2 },
+    // Col 2: Q61-70, Q71-80, Q81-90 (down)
+    { startQ: 61, endQ: 70, col: 2, row: 0 },
+    { startQ: 71, endQ: 80, col: 2, row: 1 },
+    { startQ: 81, endQ: 90, col: 2, row: 2 },
+    // Col 3: Q91-100, Q101-110, Q111-120 (down)
+    { startQ: 91, endQ: 100, col: 3, row: 0 },
+    { startQ: 101, endQ: 110, col: 3, row: 1 },
+    { startQ: 111, endQ: 120, col: 3, row: 2 },
+    // Col 4: Q121-130, Q131-140, Q141-150 (down)
+    { startQ: 121, endQ: 130, col: 4, row: 0 },
+    { startQ: 131, endQ: 140, col: 4, row: 1 },
+    { startQ: 141, endQ: 150, col: 4, row: 2 },
+  ];
+
+  let maxQY = currentY;
+  gridBlocks.forEach((block) => {
+    const bx = lx + colGap + block.col * (qBlockW + colGap);
+    const by = currentY + block.row * blockVGap;
+    const endY = drawQBlock(bx, by, block.startQ, block.endQ);
+    if (endY > maxQY) maxQY = endY;
+  });
+
+  // Corner markers (bottom) - consistent positioning
+  doc.setFillColor(0, 0, 0);
+  const bmY = startY + height - markerSize - cornerInset;
+  doc.rect(startX + cornerInset, bmY, markerSize, markerSize, "F");
+  doc.rect(
+    startX + width - markerSize - cornerInset,
+    bmY,
+    markerSize,
+    markerSize,
+    "F",
+  );
+
+  // Footer
+  doc.setFontSize(5);
+  doc.setFont("helvetica", "italic");
+  doc.text(
+    "Do not fold, staple, or tear this answer sheet.",
+    startX + width / 2,
+    startY + height - 4,
     { align: "center" },
   );
 }

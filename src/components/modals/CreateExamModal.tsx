@@ -333,8 +333,13 @@ export function CreateExamModal({
           {step === 2 && (
             <div className="space-y-3">
               <p className="text-sm font-semibold text-gray-700">How many questions? <span className="text-red-500">*</span></p>
-              <div className="grid grid-cols-3 gap-3">
-                {[20, 50, 100].map((num) => (
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { num: 20, label: "Quick Quiz" },
+                  { num: 50, label: "Standard" },
+                  { num: 100, label: "Major Exam" },
+                  { num: 150, label: "Comprehensive" }
+                ].map(({ num, label }) => (
                   <button
                     key={num}
                     onClick={() => { handleInputChange("totalQuestions", num); setQuestionsPicked(true); }}
@@ -345,9 +350,7 @@ export function CreateExamModal({
                     }`}
                   >
                     <div className="font-bold text-xl">{num}</div>
-                    <div className="text-xs mt-0.5 opacity-80">
-                      {num === 20 ? "Quick Quiz" : num === 50 ? "Standard" : "Major Exam"}
-                    </div>
+                    <div className="text-xs mt-0.5 opacity-80">{label}</div>
                   </button>
                 ))}
               </div>
