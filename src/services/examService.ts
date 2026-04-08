@@ -48,6 +48,8 @@ export interface Exam {
   status?: "draft" | "final"; // Status to control editability
   institutionName?: string;
   logoUrl?: string;
+  scannedCount?: number;
+  averageScore?: string;
 }
 
 export interface GeneratedSheet {

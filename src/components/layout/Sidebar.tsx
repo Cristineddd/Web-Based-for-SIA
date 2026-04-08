@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebarContext } from "@/contexts/SidebarContext";
+import { getClasses } from "@/services/classService";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -37,7 +38,24 @@ export function Sidebar() {
   const { collapsed, setCollapsed, mobileOpen, setMobileOpen } =
     useSidebarContext();
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [classCount, setClassCount] = useState<number | null>(null);
+  const [loadingClasses, setLoadingClasses] = useState(true);
   const prevPathRef = useRef(pathname);
+
+  useEffect(() => {
+    async function fetchClassCount() {
+      if (!user?.id) return;
+      try {
+        const classes = await getClasses(user.id);
+        setClassCount(classes.length);
+      } catch (error) {
+        console.error("Error fetching class count for sidebar:", error);
+      } finally {
+        setLoadingClasses(false);
+      }
+    }
+    fetchClassCount();
+  }, [user?.id]);
 
   // Close mobile sidebar when route changes
   useEffect(() => {
@@ -147,15 +165,17 @@ export function Sidebar() {
             const Icon = item.icon;
             const isActive =
               pathname === item.path || pathname.startsWith(item.path + "/");
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
+            const isDisabled = item.path === "/exams" && classCount === 0;
+
+            const content = (
+              <div
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
                   isActive
                     ? "bg-green-50 text-green-700 border-l-[3px] border-green-600 pl-[9px]"
                     : "text-gray-500 hover:bg-gray-100 hover:text-gray-800",
+                  isDisabled &&
+                    "opacity-50 cursor-not-allowed grayscale pointer-events-none hover:bg-transparent hover:text-gray-500",
                 )}
               >
                 <Icon
@@ -165,6 +185,20 @@ export function Sidebar() {
                   )}
                 />
                 {!collapsed && <span>{item.label}</span>}
+              </div>
+            );
+
+            if (isDisabled) {
+              return (
+                <div key={item.path} title="Create at least one class to access exams">
+                  {content}
+                </div>
+              );
+            }
+
+            return (
+              <Link key={item.path} href={item.path}>
+                {content}
               </Link>
             );
           })}
@@ -229,16 +263,16 @@ export function Sidebar() {
             const Icon = item.icon;
             const isActive =
               pathname === item.path || pathname.startsWith(item.path + "/");
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                onClick={handleNavClick}
+            const isDisabled = item.path === "/exams" && classCount === 0;
+
+            const content = (
+              <div
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
                   isActive
                     ? "bg-green-50 text-green-700 border-l-[3px] border-green-600 pl-[9px]"
                     : "text-gray-500 hover:bg-gray-100 hover:text-gray-800",
+                  isDisabled && "opacity-50 cursor-not-allowed grayscale pointer-events-none",
                 )}
               >
                 <Icon
@@ -248,6 +282,20 @@ export function Sidebar() {
                   )}
                 />
                 <span>{item.label}</span>
+              </div>
+            );
+
+            if (isDisabled) {
+              return (
+                <div key={item.path} title="Create at least one class to access exams">
+                  {content}
+                </div>
+              );
+            }
+
+            return (
+              <Link key={item.path} href={item.path} onClick={handleNavClick}>
+                {content}
               </Link>
             );
           })}
