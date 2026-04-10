@@ -33,6 +33,7 @@ interface CreateExamModalProps {
   simpleMode?: boolean;
   classId?: string;
   className?: string;
+  folder?: string;
 }
 
 interface ExamFormData {
@@ -54,6 +55,9 @@ export function CreateExamModal({
   fromTemplate,
   existingExamTitles = [],
   simpleMode = false,
+  classId,
+  className,
+  folder,
 }: CreateExamModalProps) {
   const { user } = useAuth();
 
@@ -100,6 +104,13 @@ export function CreateExamModal({
           examType: "board",
         });
         if (fromTemplate.totalQuestions) setQuestionsPicked(true);
+      } else if (classId) {
+        setFormData((prev) => ({
+          ...prev,
+          classId: classId,
+          className: className || "",
+          folder: folder || prev.folder,
+        }));
       }
     } else {
       setFormData({
@@ -116,7 +127,7 @@ export function CreateExamModal({
       setQuestionsPicked(false);
       setExamTypePicked(false);
     }
-  }, [isOpen, fromTemplate]);
+  }, [isOpen, fromTemplate, classId, className, folder]);
 
   // Handle keyboard events
   useEffect(() => {

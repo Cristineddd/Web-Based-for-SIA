@@ -56,6 +56,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import * as XLSX from "xlsx";
 
@@ -110,6 +120,8 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [showCreateExam, setShowCreateExam] = useState(false);
   const [selectedScanExamId, setSelectedScanExamId] = useState("");
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!classId) {
@@ -1097,8 +1109,11 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleRemoveStudent(s.student_id)}
-                              className="h-7 w-7 p-0 text-gray-300 hover:text-red-500 hover:bg-red-50"
+                              onClick={() => {
+                                setStudentToDeleteId(s.student_id);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="h-8 w-8 p-0 text-red-500 bg-red-50 hover:bg-red-100 transition-all rounded-lg"
                             >
                               <X className="w-4 h-4" />
                             </Button>
@@ -1617,9 +1632,46 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           }}
           classId={classId || ""}
           className={classData?.class_name || ""}
+          folder={classData?.course_subject || ""}
           simpleMode={true}
         />
       )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-2xl border-none shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold text-gray-900">
+              Confirm Student Removal
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500">
+              Are you sure you want to remove this student from the class? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel
+              onClick={() => {
+                setStudentToDeleteId(null);
+                setIsDeleteDialogOpen(false);
+              }}
+              className="rounded-xl border-gray-200 text-gray-600 font-semibold hover:bg-gray-50"
+            >
+              No
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (studentToDeleteId) {
+                  handleRemoveStudent(studentToDeleteId);
+                  setStudentToDeleteId(null);
+                  setIsDeleteDialogOpen(false);
+                }
+              }}
+              className="rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
+            >
+              Yes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
