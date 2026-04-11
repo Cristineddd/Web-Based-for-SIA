@@ -260,7 +260,7 @@ export default function ClassManagement() {
                       e.stopPropagation();
                       handleArchive(classItem.id);
                     }}
-                    className="p-2.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
+                    className="p-2.5 rounded-lg text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
                     title="Archive Class"
                   >
                     <FolderArchive className="w-6 h-6" />

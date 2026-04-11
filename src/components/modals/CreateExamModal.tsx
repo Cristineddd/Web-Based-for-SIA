@@ -340,7 +340,7 @@ export function CreateExamModal({
               {!formData.classId || !simpleMode ? (
                 <div className="space-y-2">
                   <label className="text-[13px] font-bold text-gray-600">
-                    Select Class
+                    Tag Class
                   </label>
                   {loadingClasses ? (
                     <div className="flex items-center justify-center py-4">
@@ -531,7 +531,7 @@ export function CreateExamModal({
               {step === 4 && (
                 <div className="space-y-3">
                   <p className="text-sm font-semibold text-gray-700">
-                    Select Class
+                    Tag Class
                   </p>
                   {loadingClasses ? (
                     <div className="flex items-center justify-center py-8">
