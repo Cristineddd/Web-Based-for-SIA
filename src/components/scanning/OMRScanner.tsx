@@ -316,8 +316,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const ctx = scanCanvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return { found: false, markers: null };
     
-    // Use 480px wide for better accuracy while staying fast
-    const targetW = 480;
+    // Use 640px wide for better accuracy (increased from 480px)
+    const targetW = 640;
     const scale = targetW / (crop.w * vw);
     const dw = Math.round(crop.w * vw * scale);
     const dh = Math.round(crop.h * vh * scale);
@@ -364,10 +364,10 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     // Adaptive threshold: normalize global brightness to handle dark/bright scenes
     const globalBrightness = rectAvgLive(0, 0, dw, dh);
-    // A "dark enough" marker: below 60% of global brightness (relaxed from 55%)
-    const darkThreshold = Math.min(120, globalBrightness * 0.60);
-    // A "bright enough" paper ring: above 60% of global brightness (relaxed from 65%)
-    const brightThreshold = Math.max(100, globalBrightness * 0.60);
+    // A "dark enough" marker: below 70% of global brightness (very relaxed)
+    const darkThreshold = Math.min(150, globalBrightness * 0.70);
+    // A "bright enough" paper ring: above 55% of global brightness (very relaxed)
+    const brightThreshold = Math.max(90, globalBrightness * 0.55);
 
     // Get template type first
     const t = getTemplateType();
@@ -425,23 +425,22 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       let bestContrast = 0;
       let bestCx = (region.x1 + region.x2) / 2;
       let bestCy = (region.y1 + region.y2) / 2;
-      let debugInner = 0, debugBrightSides = 0;
 
       for (let cy = region.y1 + half + 2; cy < region.y2 - half - 2; cy += step) {
         for (let cx = region.x1 + half + 2; cx < region.x2 - half - 2; cx += step) {
           // 1. Interior must be dark
           const inner = rectAvgLive(cx - half, cy - half, cx + half, cy + half);
-          if (inner > darkThreshold) { debugInner = Math.max(debugInner, inner); continue; }
+          if (inner > darkThreshold) continue;
 
           // 2. Uniformity: all 4 quadrants of the marker must be consistently dark
           const q1 = rectAvgLive(cx - half, cy - half, cx, cy);
           const q2 = rectAvgLive(cx,         cy - half, cx + half, cy);
           const q3 = rectAvgLive(cx - half, cy,         cx, cy + half);
           const q4 = rectAvgLive(cx,         cy,         cx + half, cy + half);
-          // Relaxed from 70 to 85 for better tolerance
-          if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 85) continue;
+          // Relaxed to 100 for better tolerance in varied lighting
+          if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 100) continue;
 
-          // 3. At least ONE surrounding side must be bright (on paper, not desk)
+          // 3. Check surrounding paper brightness (more lenient)
           const ringInner = Math.floor(half * 1.2);
           const ringOuter = Math.floor(half * 2.5);
           const tB = rectAvgLive(cx - ringOuter, cy - ringOuter, cx + ringOuter, cy - ringInner);
@@ -449,14 +448,18 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           const lB = rectAvgLive(cx - ringOuter, cy - ringInner, cx - ringInner, cy + ringInner);
           const rB = rectAvgLive(cx + ringInner, cy - ringInner, cx + ringOuter, cy + ringInner);
           
-          const brightSides = (tB > brightThreshold ? 1 : 0) + (bB > brightThreshold ? 1 : 0)
-                             + (lB > brightThreshold ? 1 : 0) + (rB > brightThreshold ? 1 : 0);
-          debugBrightSides = Math.max(debugBrightSides, brightSides);
-          if (brightSides < 1) continue;
-
-          // 4. Contrast: dark centre vs average of surrounding bright sides
+          // Calculate average border brightness
           const borderAvg = (tB + bB + lB + rB) / 4;
+          
+          // Skip if border isn't brighter than center (not on paper)
+          if (borderAvg <= inner) continue;
+
+          // 4. Calculate contrast score
           const contrast = borderAvg - inner;
+          
+          // Require minimum contrast of 15 (very relaxed)
+          if (contrast < 15) continue;
+          
           if (contrast > bestContrast) {
             bestContrast = contrast;
             bestCx = cx;
@@ -465,16 +468,16 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         }
       }
 
-      // Relaxed contrast threshold from 30 to 20 for better detection
-      if (bestContrast > 20) {
+      // Very relaxed contrast threshold of 15 for live detection
+      if (bestContrast > 15) {
         cornersFound++;
         foundCorners.push(region.name);
         bestPos[region.name] = { cx: bestCx, cy: bestCy };
       }
     }
     
-    // Periodic log for debugging (increased frequency for troubleshooting)
-    if (Math.random() < 0.1) {
+    // Frequent logging for troubleshooting (20% of frames)
+    if (Math.random() < 0.2) {
       console.log(`[LiveScan] ${dw}x${dh} t=${t} found=${foundCorners.join(',') || 'none'} (${cornersFound}/4) markerSize=${markerSize} darkTh=${darkThreshold.toFixed(0)} brightTh=${brightThreshold.toFixed(0)} globalBright=${globalBrightness.toFixed(0)}`);
     }
     
@@ -589,7 +592,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     
     let frameCount = 0;
     let consecutiveDetections = 0;
-    const REQUIRED_CONSECUTIVE = 8; // ~1.3 seconds of stable marker detection
+    const REQUIRED_CONSECUTIVE = 5; // ~0.8 seconds of stable marker detection (reduced from 8)
     let cancelled = false;
     
     const scanLoop = () => {
