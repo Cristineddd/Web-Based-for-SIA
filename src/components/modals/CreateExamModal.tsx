@@ -1,12 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { X, Loader2, AlertTriangle } from "lucide-react";
 import { getClasses, type Class } from "@/services/classService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CreateExamModalProps {
   isOpen: boolean;
@@ -20,9 +25,15 @@ interface CreateExamModalProps {
     description: string;
     classId?: string;
     className?: string;
+    folder?: string;
   } | null;
   /** Existing exam titles for duplicate detection at Step 1. */
   existingExamTitles?: string[];
+  /** If true, uses the simplified single-page UI from the screenshot */
+  simpleMode?: boolean;
+  classId?: string;
+  className?: string;
+  folder?: string;
 }
 
 interface ExamFormData {
@@ -43,9 +54,12 @@ export function CreateExamModal({
   onCreateExam,
   fromTemplate,
   existingExamTitles = [],
+  simpleMode = false,
+  classId,
+  className,
+  folder,
 }: CreateExamModalProps) {
   const { user } = useAuth();
-  const router = useRouter();
 
   // Helper function to get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -74,7 +88,6 @@ export function CreateExamModal({
   const [questionsPicked, setQuestionsPicked] = useState(false);
   const [examTypePicked, setExamTypePicked] = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
-  const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
   // Initialize or Reset form
   useEffect(() => {
@@ -84,13 +97,20 @@ export function CreateExamModal({
           name: fromTemplate.name || "",
           totalQuestions: fromTemplate.totalQuestions || 50,
           date: getTodayDate(),
-          folder: "General",
+          folder: fromTemplate.folder || "General",
           className: fromTemplate.className || "",
           classId: fromTemplate.classId || undefined,
           choicesPerItem: fromTemplate.choicesPerItem || 5,
           examType: "board",
         });
         if (fromTemplate.totalQuestions) setQuestionsPicked(true);
+      } else if (classId) {
+        setFormData((prev) => ({
+          ...prev,
+          classId: classId,
+          className: className || "",
+          folder: folder || prev.folder,
+        }));
       }
     } else {
       setFormData({
@@ -107,7 +127,7 @@ export function CreateExamModal({
       setQuestionsPicked(false);
       setExamTypePicked(false);
     }
-  }, [isOpen, fromTemplate]);
+  }, [isOpen, fromTemplate, classId, className, folder]);
 
   // Handle keyboard events
   useEffect(() => {
@@ -177,8 +197,6 @@ export function CreateExamModal({
       (t) => t.trim().toLowerCase() === trimmed,
     );
     setIsDuplicate(found);
-    // Reset confirmation if name changes
-    setConfirmDuplicate(false);
   }, [formData.name, existingExamTitles]);
 
   const handleInputChange = (
@@ -259,296 +277,428 @@ export function CreateExamModal({
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[88vh]">
         {/* Header */}
         <div className="flex-shrink-0 px-5 pt-5 pb-4 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">Create New Exam</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {step === 1 && "What's the name of your exam?"}
-                {step === 2 && "How many questions will it have?"}
-                {step === 3 && "What answer format will you use?"}
-                {step === 4 && "Which class is taking this exam?"}
-                {step === 5 && "What type of exam is this?"}
-                {step === 6 && "Review and create your exam"}
-              </p>
-            </div>
-            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-              <X className="w-4 h-4 text-gray-500" />
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-bold text-gray-900">Create New Exam</h2>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
+          {!simpleMode && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              {step === 1 && "What's the name of your exam?"}
+              {step === 2 && "How many questions will it have?"}
+              {step === 3 && "What answer format will you use?"}
+              {step === 4 && "Which class is taking this exam?"}
+              {step === 5 && "What type of exam is this?"}
+              {step === 6 && "Review and create your exam"}
+            </p>
+          )}
 
-          {/* Step Progress */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-gray-500">
-              <span className="font-medium text-gray-700">Step {step} of 6</span>
-              <span>{Math.round((step / 6) * 100)}%</span>
+          {!simpleMode && (
+            <div className="space-y-1.5 mt-4">
+              <div className="flex justify-between text-xs text-gray-500">
+                <span className="font-medium text-gray-700">
+                  Step {step} of 6
+                </span>
+                <span>{Math.round((step / 6) * 100)}%</span>
+              </div>
+              <div className="flex gap-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`flex-1 h-1.5 rounded-full transition-all ${
+                      i + 1 <= step ? "bg-green-600" : "bg-gray-200"
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex gap-1">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`flex-1 h-1.5 rounded-full transition-all ${
-                    i + 1 <= step ? "bg-green-600" : "bg-gray-200"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {step === 1 && (
-            <div className="space-y-3">
-              <label className="block space-y-1.5">
-                <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                  Exam Name <span className="text-red-500">*</span>
-                </span>
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+          {simpleMode ? (
+            <>
+              {/* Simple Mode UI matching Screenshot */}
+              <div className="space-y-2">
+                <label className="text-[13px] font-bold text-gray-600">
+                  Exam Title
+                </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleInputChange("name", e.target.value)}
-                  placeholder='e.g. "Midterm Exam", "Quiz 1"'
-                  className={`w-full px-3 py-2.5 border rounded-lg bg-white text-sm focus:outline-none focus:ring-2 transition-all ${
-                    formData.name.trim()
-                      ? "border-green-500 focus:ring-green-500/20"
-                      : "border-gray-200 focus:ring-green-500/20 focus:border-green-500"
-                  }`}
+                  placeholder="e.g. Midterm Examination"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all placeholder:text-gray-300"
                 />
-                {!formData.name.trim() && (
-                  <p className="text-xs text-gray-400">Try "Math Midterm", "Science Quiz 1", or "Final Exam"</p>
-                )}
-              </label>
-              {isDuplicate && (
-                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-800">
-                    <p className="font-semibold">Potential Duplicate</p>
-                    <p className="mt-0.5">An exam with this name already exists. You can still proceed.</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-700">How many questions? <span className="text-red-500">*</span></p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { num: 20, label: "Quick Quiz" },
-                  { num: 50, label: "Standard" },
-                  { num: 100, label: "Major Exam" },
-                  { num: 150, label: "Comprehensive" }
-                ].map(({ num, label }) => (
-                  <button
-                    key={num}
-                    onClick={() => { handleInputChange("totalQuestions", num); setQuestionsPicked(true); }}
-                    className={`py-4 px-3 rounded-lg border-2 transition-all text-center ${
-                      formData.totalQuestions === num && questionsPicked
-                        ? "bg-green-600 text-white border-green-600 shadow-md"
-                        : "border-gray-200 text-gray-700 hover:border-green-500 hover:bg-green-50"
-                    }`}
-                  >
-                    <div className="font-bold text-xl">{num}</div>
-                    <div className="text-xs mt-0.5 opacity-80">{label}</div>
-                  </button>
-                ))}
               </div>
-              {!questionsPicked && (
-                <p className="text-xs text-amber-600">Please select the number of questions to continue</p>
-              )}
-            </div>
-          )}
 
-          {step === 3 && (
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-700">Answer choices per question <span className="text-red-500">*</span></p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: "A, B, C, D", sub: "4 Choices (Most Common)", value: 4 },
-                  { label: "A, B, C, D, E", sub: "5 Choices (Extended)", value: 5 },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => handleInputChange("choicesPerItem", opt.value)}
-                    className={`py-4 px-4 rounded-lg border-2 transition-all text-center ${
-                      formData.choicesPerItem === opt.value
-                        ? "bg-green-600 text-white border-green-600 shadow-md"
-                        : "border-gray-200 text-gray-700 hover:border-green-500 hover:bg-green-50"
-                    }`}
-                  >
-                    <div className="font-bold text-base">{opt.label}</div>
-                    <div className="text-xs mt-0.5 opacity-80">{opt.sub}</div>
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-green-700 font-medium">{formData.choicesPerItem} answer choices selected</p>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-gray-700">Select Class <span className="text-red-500">*</span></p>
-                <p className="text-xs text-gray-400 mt-0.5">Choose which class this exam is for</p>
-              </div>
-              {loadingClasses ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-5 h-5 animate-spin text-green-600" />
-                  <span className="ml-2 text-sm text-gray-500">Loading classes...</span>
-                </div>
-              ) : classes.length === 0 ? (
-                <div className="text-center py-8 space-y-3 border-2 border-dashed border-gray-200 rounded-xl">
-                  <p className="text-sm text-gray-400">No classes available yet</p>
-                  <Button type="button" size="sm" onClick={() => { onClose(); router.push("/classes"); }}
-                    className="bg-green-600 hover:bg-green-700 text-white text-xs">
-                    Create a New Class
-                  </Button>
+              {!formData.classId || !simpleMode ? (
+                <div className="space-y-2">
+                  <label className="text-[13px] font-bold text-gray-600">
+                    Select Class
+                  </label>
+                  {loadingClasses ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                    </div>
+                  ) : (
+                    <Select
+                      value={formData.classId || ""}
+                      onValueChange={(id) => {
+                        const c = classes.find((i) => i.id === id);
+                        if (c) {
+                          handleInputChange("className", c.class_name);
+                          handleInputChange("classId", c.id);
+                          handleInputChange(
+                            "folder",
+                            c.course_subject || "General",
+                          );
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all">
+                        <SelectValue placeholder="Choose Class..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {classes.map((c) => (
+                          <SelectItem
+                            key={c.id}
+                            value={c.id}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">
+                                {c.class_name}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {c.course_subject}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               ) : (
-                <div className="space-y-2 max-h-52 overflow-y-auto">
-                  {classes.map((classItem) => (
+                <div className="space-y-2">
+                  <label className="text-[13px] font-bold text-gray-600">
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.folder}
+                    onChange={(e) =>
+                      handleInputChange("folder", e.target.value)
+                    }
+                    placeholder="e.g. Biology"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-[14px] focus:outline-none transition-all placeholder:text-gray-300 font-medium text-gray-500"
+                    readOnly
+                  />
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <label className="text-[13px] font-bold text-gray-600">
+                  Number of Items
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[20, 50, 100, 150].map((num) => (
                     <button
-                      key={classItem.id}
+                      key={num}
+                      type="button"
                       onClick={() => {
-                        handleInputChange("className", classItem.class_name);
-                        handleInputChange("classId", classItem.id);
-                        handleInputChange("folder", classItem.course_subject || "General");
+                        handleInputChange("totalQuestions", num);
+                        setQuestionsPicked(true);
                       }}
-                      className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
-                        formData.classId === classItem.id
-                          ? "border-green-500 bg-green-50"
-                          : "border-gray-200 hover:border-green-400 hover:bg-green-50/50"
+                      className={`py-3 px-2 rounded-xl border-2 transition-all font-bold text-[13px] ${
+                        formData.totalQuestions === num
+                          ? "bg-green-50 text-green-600 border-green-500"
+                          : "border-gray-100 text-gray-400 hover:border-green-200 hover:bg-green-50/50"
                       }`}
                     >
-                      <div className="font-semibold text-sm text-gray-800">{classItem.class_name}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{classItem.course_subject} · {classItem.students.length} students</div>
+                      {num} Items
                     </button>
                   ))}
                 </div>
-              )}
-              {formData.classId && (
-                <p className="text-xs text-green-700 font-medium">✓ {formData.className} selected</p>
-              )}
-            </div>
-          )}
-
-          {step === 5 && (
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-gray-700">Exam Type <span className="text-red-500">*</span></p>
-                <p className="text-xs text-gray-400 mt-0.5">Select the type of exam</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: "Board Exam", sub: "Regular exam assessment", value: "board" },
-                  { label: "Diagnostic Test", sub: "Diagnostic assessment", value: "diagnostic" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => { handleInputChange("examType", opt.value); setExamTypePicked(true); }}
-                    className={`p-4 rounded-lg border-2 transition-all text-left ${
-                      formData.examType === opt.value && examTypePicked
-                        ? "border-green-500 bg-green-50"
-                        : "border-gray-200 hover:border-green-400 hover:bg-green-50/50"
-                    }`}
-                  >
-                    <div className={`font-semibold text-sm ${formData.examType === opt.value && examTypePicked ? "text-green-700" : "text-gray-800"}`}>{opt.label}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">{opt.sub}</div>
-                  </button>
-                ))}
-              </div>
-              {!examTypePicked && (
-                <p className="text-xs text-amber-600">Please select an exam type to continue</p>
+            </>
+          ) : (
+            <>
+              {step === 1 && (
+                <div className="space-y-3">
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                      Exam Name <span className="text-red-500">*</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) =>
+                        handleInputChange("name", e.target.value)
+                      }
+                      placeholder='e.g. "Midterm Exam", "Quiz 1"'
+                      className={`w-full px-3 py-2.5 border rounded-lg bg-white text-sm focus:outline-none focus:ring-2 transition-all ${
+                        formData.name.trim()
+                          ? "border-green-500 focus:ring-green-500/20"
+                          : "border-gray-200 focus:ring-green-500/20 focus:border-green-500"
+                      }`}
+                    />
+                  </label>
+                  {isDuplicate && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="text-xs text-amber-800">
+                        <p className="font-semibold">Potential Duplicate</p>
+                        <p className="mt-0.5">
+                          An exam with this name already exists.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
-              {examTypePicked && (
-                <p className="text-xs text-green-700 font-medium">✓ {formData.examType === "board" ? "Board Exam" : "Diagnostic Test"} selected</p>
-              )}
-            </div>
-          )}
 
-          {step === 6 && (
-            <div className="space-y-4">
-              {/* Summary */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
-                <h4 className="text-sm font-semibold text-gray-900 pb-2 border-b border-gray-200">Exam Summary</h4>
-                {[
-                  { label: "Exam Name", value: formData.name },
-                  { label: "Questions", value: `${formData.totalQuestions} questions` },
-                  { label: "Answer Format", value: `${formData.choicesPerItem} choices per question` },
-                  { label: "Class", value: formData.className },
-                  { label: "Type", value: formData.examType === "board" ? "Board Exam" : "Diagnostic Test" },
-                  { label: "Date", value: new Date(formData.date).toLocaleDateString() },
-                ].map((row) => (
-                  <div key={row.label} className="flex justify-between text-xs">
-                    <span className="text-gray-500">{row.label}</span>
-                    <span className="font-medium text-gray-800">{row.value}</span>
+              {step === 2 && (
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-gray-700">
+                    How many questions? <span className="text-red-500">*</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { num: 20, label: "Quick Quiz" },
+                      { num: 50, label: "Standard" },
+                      { num: 100, label: "Major Exam" },
+                      { num: 150, label: "Comprehensive" },
+                    ].map(({ num, label }) => (
+                      <button
+                        key={num}
+                        onClick={() => {
+                          handleInputChange("totalQuestions", num);
+                          setQuestionsPicked(true);
+                        }}
+                        className={`py-4 px-3 rounded-lg border-2 transition-all text-center ${
+                          formData.totalQuestions === num && questionsPicked
+                            ? "bg-green-600 text-white border-green-600 shadow-md"
+                            : "border-gray-200 text-gray-700 hover:border-green-500 hover:bg-green-50"
+                        }`}
+                      >
+                        <div className="font-bold text-xl">{num}</div>
+                        <div className="text-xs mt-0.5 opacity-80">{label}</div>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-              {/* Date */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-gray-700">Exam Date <span className="text-red-500">*</span></label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => handleInputChange("date", e.target.value)}
-                  min={getTodayDate()}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                />
-              </div>
-            </div>
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-gray-700">
+                    Answer choices per question{" "}
+                    <span className="text-red-500">*</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "A, B, C, D", sub: "4 Choices", value: 4 },
+                      { label: "A, B, C, D, E", sub: "5 Choices", value: 5 },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() =>
+                          handleInputChange("choicesPerItem", opt.value)
+                        }
+                        className={`py-4 px-4 rounded-lg border-2 transition-all text-center ${
+                          formData.choicesPerItem === opt.value
+                            ? "bg-green-600 text-white border-green-600 shadow-md"
+                            : "border-gray-200 text-gray-700 hover:border-green-500 hover:bg-green-50"
+                        }`}
+                      >
+                        <div className="font-bold text-base">{opt.label}</div>
+                        <div className="text-xs mt-0.5 opacity-80">
+                          {opt.sub}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {step === 4 && (
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-gray-700">
+                    Select Class
+                  </p>
+                  {loadingClasses ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                    </div>
+                  ) : (
+                    <Select
+                      value={formData.classId || ""}
+                      onValueChange={(id) => {
+                        const c = classes.find((i) => i.id === id);
+                        if (c) {
+                          handleInputChange("className", c.class_name);
+                          handleInputChange("classId", c.id);
+                          handleInputChange(
+                            "folder",
+                            c.course_subject || "General",
+                          );
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full h-12 text-sm border-2 rounded-lg">
+                        <SelectValue placeholder="Choose Class..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {classes.map((c) => (
+                          <SelectItem
+                            key={c.id}
+                            value={c.id}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">
+                                {c.class_name}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {c.course_subject}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+
+              {step === 5 && (
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-gray-700">
+                    Exam Type
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {["board", "diagnostic"].map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => {
+                          handleInputChange("examType", t as any);
+                          setExamTypePicked(true);
+                        }}
+                        className={`p-4 rounded-lg border-2 transition-all text-left ${
+                          formData.examType === t && examTypePicked
+                            ? "border-green-500 bg-green-50"
+                            : "border-gray-200"
+                        }`}
+                      >
+                        <div className="font-semibold text-sm capitalize">
+                          {t} Exam
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {step === 6 && (
+                <div className="space-y-4">
+                  <div className="bg-gray-50 border rounded-lg p-4 space-y-2">
+                    <h4 className="text-sm font-semibold pb-2 border-b">
+                      Summary
+                    </h4>
+                    <div className="flex justify-between text-xs">
+                      <span>Name</span>
+                      <span>{formData.name}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span>Items</span>
+                      <span>{formData.totalQuestions}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span>Class</span>
+                      <span>{formData.className}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Exam Date</label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) =>
+                        handleInputChange("date", e.target.value)
+                      }
+                      className="w-full px-3 py-2.5 border rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 flex gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
-          {step > 1 && (
-            <button
-              onClick={() => setStep(step - 1)}
-              className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              Back
-            </button>
-          )}
-          {step < 6 ? (
-            <button
-              data-testid="next-button"
-              onClick={() => {
-                if (step === 1 && !formData.name.trim()) { toast.error("Please enter an exam name to continue"); return; }
-                if (step === 1 && isDuplicate && !confirmDuplicate) { setConfirmDuplicate(true); return; }
-                if (step === 2 && !questionsPicked) { toast.error("Please select a number of questions to continue"); return; }
-                if (step === 4 && !formData.className) { toast.error("Please select a class before continuing"); return; }
-                if (step === 5 && !examTypePicked) { toast.error("Please select an exam type to continue"); return; }
-                setStep(step + 1);
-              }}
-              disabled={
-                (step === 1 && !formData.name.trim()) ||
-                (step === 2 && !questionsPicked) ||
-                (step === 4 && classes.length === 0) ||
-                (step === 5 && !examTypePicked)
-              }
-              className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700 text-white"
-            >
-              {step === 1 && "Continue to Questions"}
-              {step === 2 && "Continue to Format"}
-              {step === 3 && "Continue to Class"}
-              {step === 4 && "Continue to Type"}
-              {step === 5 && "Review Exam"}
-            </button>
+        <div className="flex-shrink-0 flex gap-3 px-6 py-5 border-t border-gray-100 bg-gray-50/50 rounded-b-xl">
+          {simpleMode ? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-[14px] font-bold text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateExam}
+                disabled={isSubmitting || !formData.name.trim()}
+                className="flex-[1.5] px-4 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-xl text-[14px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/10 flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Creating...
+                  </>
+                ) : (
+                  "Create Exam"
+                )}
+              </button>
+            </>
           ) : (
-            <button
-              data-testid="submit-button"
-              onClick={handleCreateExam}
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isSubmitting ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Creating Exam...</>
-              ) : (
-                <>Create Exam</>
+            <>
+              {step > 1 && (
+                <button
+                  onClick={() => setStep(step - 1)}
+                  className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-100"
+                >
+                  Back
+                </button>
               )}
-            </button>
+              {step < 6 ? (
+                <button
+                  onClick={() => setStep(step + 1)}
+                  disabled={
+                    (step === 1 && !formData.name.trim()) ||
+                    (step === 2 && !questionsPicked)
+                  }
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                >
+                  Continue
+                </button>
+              ) : (
+                <button
+                  onClick={handleCreateExam}
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                >
+                  {isSubmitting ? "Creating..." : "Create Exam"}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

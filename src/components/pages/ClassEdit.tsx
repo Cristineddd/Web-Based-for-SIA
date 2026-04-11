@@ -1,24 +1,53 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Save, Users, BookOpen, Hash, Download, Upload, Plus, X, Search, ArrowUpDown } from 'lucide-react';
-import { getClassById, updateClass, Class, Student as BaseStudent } from '@/services/classService';
-import { toast } from 'sonner';
-import { BackButton } from '@/components/ui/BackButton';
-import { exportStudentRosterToExcel } from '@/services/excelExportService';
-import * as XLSX from 'xlsx';
+} from "@/components/ui/select";
+import {
+  Calendar,
+  Tag,
+  Save,
+  Users,
+  Upload,
+  Plus,
+  X,
+  Search,
+  ArrowUpDown,
+  Edit3,
+  FileText,
+  Scan,
+  ChevronRight,
+  Mail,
+  BarChart3,
+} from "lucide-react";
+import {
+  getClassById,
+  updateClass,
+  Class,
+  Student as BaseStudent,
+} from "@/services/classService";
+import {
+  getExamsByClassId,
+  getScannedResultsCountByClassId,
+  getExams,
+  updateExam,
+  type Exam,
+} from "@/services/examService";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { CreateExamModal } from "@/components/modals/CreateExamModal";
+import { AuditLogger } from "@/services/auditLogger";
+import { BackButton } from "@/components/ui/BackButton";
 import {
   Table,
   TableBody,
@@ -26,12 +55,25 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+import * as XLSX from "xlsx";
 
 // Extended Student interface for editing with additional fields
 interface Student extends BaseStudent {
   section?: string;
   grade?: string;
+  middle_name?: string;
 }
 
 interface ClassEditProps {
@@ -40,38 +82,73 @@ interface ClassEditProps {
 
 export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   // Use prop classId if provided, otherwise fall back to search params
-  const classId = propClassId || searchParams.get('id');
-  
+  const classId = propClassId || searchParams.get("id");
+
   const [classData, setClassData] = useState<Class | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [stats, setStats] = useState({
+    examCount: 0,
+    scanPapersCount: 0,
+  });
+  const [activeTab, setActiveTab] = useState<"students" | "exams" | "scan" | "stats">("students");
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [allExams, setAllExams] = useState<Exam[]>([]);
   const [newStudent, setNewStudent] = useState({
-    student_id: '',
-    first_name: '',
-    last_name: '',
-    email: '',
+    student_id: "",
+    first_name: "",
+    last_name: "",
+    middle_name: "",
+    email: "",
+  });
+
+  const [fieldErrors, setFieldErrors] = useState({
+    student_id: "",
+    first_name: "",
+    last_name: "",
+    middle_name: "",
   });
   const [showAddStudent, setShowAddStudent] = useState(false);
-  const [studentSearch, setStudentSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'student_id' | 'first_name' | 'last_name' | 'email'>('student_id');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [studentSearch, setStudentSearch] = useState("");
+  const [sortBy, setSortBy] = useState<
+    "student_id" | "first_name" | "last_name" | "middle_name"
+  >("student_id");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [showCreateExam, setShowCreateExam] = useState(false);
+  const [selectedScanExamId, setSelectedScanExamId] = useState("");
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!classId) {
-      router.push('/classes');
+      router.push("/classes");
       return;
     }
 
     const fetchClassData = async () => {
       try {
-        const data = await getClassById(classId);
-        setClassData(data);
+        const [data, fetchedExams, scanCount] = await Promise.all([
+          getClassById(classId),
+          getExamsByClassId(classId),
+          getScannedResultsCountByClassId(classId),
+        ]);
+
+        if (data) {
+            setClassData(data);
+            setExams(fetchedExams);
+            setStats({
+              examCount: fetchedExams.length,
+              scanPapersCount: scanCount,
+            });
+        }
       } catch (error) {
-        console.error('Error fetching class:', error);
-        toast.error('Failed to load class data');
-        router.push('/classes');
+        console.error("Error fetching class:", error);
+        toast.error("Failed to load class data");
+        router.push("/classes");
       } finally {
         setLoading(false);
       }
@@ -80,70 +157,137 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     fetchClassData();
   }, [classId, router]);
 
+  useEffect(() => {
+    if (activeTab === "exams" && classId) {
+        const fetchAllExams = async () => {
+            try {
+                const data = await getExams(user?.id);
+                // Filter out exams already in this class
+                setAllExams(data.filter(e => e.classId !== classId));
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        fetchAllExams();
+    }
+  }, [activeTab, classId, user?.id]);
+
+  const handleCreateExam = async (formData: any) => {
+    try {
+      if (!user?.id || !user.instructorId) {
+        toast.error("You must be logged in to create an exam");
+        return;
+      }
+
+      const examData = {
+        ...formData,
+        instructorId: user.instructorId,
+        createdBy: user.id,
+        classId: classId,
+        className: classData?.class_name || "",
+        created_at: new Date().toISOString(),
+      };
+
+      const { createExam } = await import("@/services/examService");
+      const newExam = await createExam(examData, user.id, user.instructorId);
+
+      if (user.email) {
+        AuditLogger.logActivity(user.id, user.email, "exam_created", `Created exam: ${formData.name}`, {
+          entityId: newExam.id,
+          entityType: "exam",
+        }).catch(console.error);
+      }
+
+      setExams((prev) => [newExam, ...prev]);
+      toast.success(`Exam "${formData.name}" created successfully`);
+      setShowCreateExam(false);
+    } catch (error) {
+      console.error("Error creating exam:", error);
+      toast.error("Failed to create exam");
+    }
+  };
+
   const handleSave = async () => {
     if (!classData) return;
 
     // Validation rules (same as class creation)
     // Validate Class Name
     if (!classData.class_name.trim()) {
-      toast.error('Program name is required');
+      toast.error("Program name is required");
       return;
     }
     if (classData.class_name.trim().length < 3) {
-      toast.error('Program name must be at least 3 characters long');
+      toast.error("Program name must be at least 3 characters long");
       return;
     }
     if (!/^[a-zA-ZñÑ\s]+$/.test(classData.class_name.trim())) {
-      toast.error('Program name can only contain letters and spaces');
+      toast.error("Program name can only contain letters and spaces");
       return;
     }
 
     // Validate Course Subject
     if (!classData.course_subject.trim()) {
-      toast.error('Course subject is required');
+      toast.error("Course subject is required");
       return;
     }
     if (classData.course_subject.trim().length < 4) {
-      toast.error('Course subject must be at least 4 characters long');
+      toast.error("Course subject must be at least 4 characters long");
       return;
     }
 
-
     // Validate Year (optional)
     if (classData.year && !/^[1-4]$/.test(classData.year.trim())) {
-      toast.error('Year must be between 1-4');
+      toast.error("Year must be between 1-4");
       return;
     }
 
     // Validate Room
     if (!classData.room.trim()) {
-      toast.error('Room is required');
+      toast.error("Room is required");
       return;
     }
     if (!/^[0-9]{3}$/.test(classData.room.trim())) {
-      toast.error('Room must be exactly 3 digits (e.g., 101, 205, 312)');
+      toast.error("Room must be exactly 3 digits (e.g., 101, 205, 312)");
       return;
     }
 
     // Validate students
     for (let i = 0; i < classData.students.length; i++) {
       const student = classData.students[i];
-      
+
       // Student ID validation
-      if (!student.student_id || !/^\d{9}$/.test(student.student_id) || !student.student_id.startsWith('20')) {
-        toast.error(`Student ${i + 1}: Invalid Student ID. Must be 9 digits starting with '20'`);
+      if (
+        !student.student_id ||
+        !/^\d{9}$/.test(student.student_id) ||
+        !student.student_id.startsWith("20")
+      ) {
+        toast.error(
+          `Student ${i + 1}: Invalid Student ID. Must be 9 digits starting with '20'`,
+        );
         return;
       }
 
       // First name validation
-      if (!student.first_name || !/^[a-zA-ZñÑ\s]+$/.test(student.first_name) || student.first_name.length < 4) {
-        toast.error(`Student ${i + 1}: First name must be at least 4 characters and contain only letters`);
+      if (
+        !student.first_name ||
+        !/^[a-zA-ZñÑ\s]+$/.test(student.first_name) ||
+        student.first_name.length < 4
+      ) {
+        toast.error(
+          `Student ${i + 1}: First name must be at least 4 characters and contain only letters`,
+        );
         return;
       }
 
       // Last name validation
-      if (!student.last_name || !/^[a-zA-ZñÑ\s]+$/.test(student.last_name) || student.last_name.length < 4) {
-        toast.error(`Student ${i + 1}: Last name must be at least 4 characters and contain only letters`);
+      if (
+        !student.last_name ||
+        !/^[a-zA-ZñÑ\s]+$/.test(student.last_name) ||
+        student.last_name.length < 4
+      ) {
+        toast.error(
+          `Student ${i + 1}: Last name must be at least 4 characters and contain only letters`,
+        );
         return;
       }
 
@@ -168,41 +312,18 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         students: classData.students,
         updatedAt: new Date().toISOString(),
       });
-      
-      toast.success('Class updated successfully');
-      
+
+      toast.success("Class updated successfully");
+
       // Navigate back to classes page after successful save
       setTimeout(() => {
-        router.push('/classes');
+        router.push("/classes");
       }, 1500); // Small delay to let user see the success message
     } catch (error) {
-      console.error('Error updating class:', error);
-      toast.error('Failed to update class');
+      console.error("Error updating class:", error);
+      toast.error("Failed to update class");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleExportStudents = () => {
-    if (!classData || classData.students.length === 0) {
-      toast.error('No students to export');
-      return;
-    }
-
-    try {
-      const studentsForExport = classData.students.map(student => ({
-        student_id: student.student_id,
-        first_name: student.first_name,
-        last_name: student.last_name,
-        email: student.email || '',
-        grade: student.grade || '',
-      }));
-
-      exportStudentRosterToExcel(studentsForExport);
-      toast.success(`Exported ${studentsForExport.length} students to Excel`);
-    } catch (error) {
-      console.error('Error exporting students:', error);
-      toast.error('Failed to export students');
     }
   };
 
@@ -211,59 +332,71 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     if (!file) return;
 
     // Reset input early so re-selecting the same file triggers onChange
-    event.target.value = '';
+    event.target.value = "";
 
-    if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
-      toast.error('Please select an Excel file (.xlsx or .xls)');
+    if (
+      !file.name.toLowerCase().endsWith(".xlsx") &&
+      !file.name.toLowerCase().endsWith(".xls")
+    ) {
+      toast.error("Please select an Excel file (.xlsx or .xls)");
       return;
     }
 
     if (!classData) {
-      toast.error('Class data not loaded yet. Please wait and try again.');
+      toast.error("Class data not loaded yet. Please wait and try again.");
       return;
     }
 
     const normalizeHeader = (h: unknown) =>
-      String(h ?? '')
+      String(h ?? "")
         .trim()
         .toLowerCase()
-        .replace(/\s+/g, ' ')
-        .replace(/[()]/g, '')
-        .replace(/[^a-z0-9 ]/g, '');
+        .replace(/\s+/g, " ")
+        .replace(/[()]/g, "")
+        .replace(/[^a-z0-9 ]/g, "");
 
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const data = reader.result;
         if (!(data instanceof ArrayBuffer)) {
-          toast.error('Failed to read file');
+          toast.error("Failed to read file");
           return;
         }
 
-        const wb = XLSX.read(data, { type: 'array' });
+        const wb = XLSX.read(data, { type: "array" });
         const sheetName = wb.SheetNames[0];
         const ws = wb.Sheets[sheetName];
 
         // Parse as array-of-arrays to avoid header quirks
         const aoa = XLSX.utils.sheet_to_json(ws, {
           header: 1,
-          defval: '',
+          defval: "",
           blankrows: false,
         }) as unknown[][];
 
         if (aoa.length < 2) {
-          toast.error('No student rows detected. Please check the template format.');
+          toast.error(
+            "No student rows detected. Please check the template format.",
+          );
           return;
         }
 
         const headerRow = (aoa[0] || []).map(normalizeHeader);
 
-        const aliasesStudentId = new Set(['student id', 'studentid', 'id']);
-        const aliasesFirst = new Set(['first name', 'firstname', 'first']);
-        const aliasesLast = new Set(['last name', 'lastname', 'last']);
-        const aliasesEmail = new Set(['email', 'email optional', 'email optional ', 'e mail', 'e mail optional']);
+        const aliasesStudentId = new Set(["student id", "studentid", "id"]);
+        const aliasesFirst = new Set(["first name", "firstname", "first"]);
+        const aliasesLast = new Set(["last name", "lastname", "last"]);
+        const aliasesEmail = new Set([
+          "email",
+          "email optional",
+          "email optional ",
+          "e mail",
+          "e mail optional",
+        ]);
 
-        const findCol = (aliases: Set<string>) => headerRow.findIndex((h) => aliases.has(h));
+        const findCol = (aliases: Set<string>) =>
+          headerRow.findIndex((h) => aliases.has(h));
 
         const colStudentId = findCol(aliasesStudentId);
         const colFirst = findCol(aliasesFirst);
@@ -275,12 +408,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           // Fallback: assume A-D (Student ID, First Name, Last Name, Email)
           parsed = aoa
             .slice(1)
-            .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
+            .filter((row) =>
+              row.some((cell) => String(cell ?? "").trim() !== ""),
+            )
             .map((row) => {
-              const student_id = String(row[0] ?? '').trim();
-              const first_name = String(row[1] ?? '').trim();
-              const last_name = String(row[2] ?? '').trim();
-              const email = String(row[3] ?? '').trim();
+              const student_id = String(row[0] ?? "").trim();
+              const first_name = String(row[1] ?? "").trim();
+              const last_name = String(row[2] ?? "").trim();
+              const email = String(row[3] ?? "").trim();
               return {
                 student_id,
                 first_name,
@@ -291,12 +426,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         } else {
           parsed = aoa
             .slice(1)
-            .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
+            .filter((row) =>
+              row.some((cell) => String(cell ?? "").trim() !== ""),
+            )
             .map((row) => {
-              const student_id = String(row[colStudentId] ?? '').trim();
-              const first_name = String(row[colFirst] ?? '').trim();
-              const last_name = String(row[colLast] ?? '').trim();
-              const email = colEmail >= 0 ? String(row[colEmail] ?? '').trim() : '';
+              const student_id = String(row[colStudentId] ?? "").trim();
+              const first_name = String(row[colFirst] ?? "").trim();
+              const last_name = String(row[colLast] ?? "").trim();
+              const email =
+                colEmail >= 0 ? String(row[colEmail] ?? "").trim() : "";
               return {
                 student_id,
                 first_name,
@@ -307,7 +445,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         }
 
         if (parsed.length === 0) {
-          toast.error('No student rows detected. Please check the template format.');
+          toast.error(
+            "No student rows detected. Please check the template format.",
+          );
           return;
         }
 
@@ -315,15 +455,27 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         const invalidRows: string[] = [];
         parsed.forEach((s, i) => {
-          if (!s.student_id || !/^\d{9}$/.test(s.student_id) || !s.student_id.startsWith('20')) {
+          if (
+            !s.student_id ||
+            !/^\d{9}$/.test(s.student_id) ||
+            !s.student_id.startsWith("20")
+          ) {
             invalidRows.push(`Row ${i + 2}: Invalid Student ID`);
             return;
           }
-          if (!s.first_name || !/^[a-zA-ZñÑ\s]+$/.test(s.first_name) || s.first_name.length < 4) {
+          if (
+            !s.first_name ||
+            !/^[a-zA-ZñÑ\s]+$/.test(s.first_name) ||
+            s.first_name.length < 4
+          ) {
             invalidRows.push(`Row ${i + 2}: Invalid First Name`);
             return;
           }
-          if (!s.last_name || !/^[a-zA-ZñÑ\s]+$/.test(s.last_name) || s.last_name.length < 4) {
+          if (
+            !s.last_name ||
+            !/^[a-zA-ZñÑ\s]+$/.test(s.last_name) ||
+            s.last_name.length < 4
+          ) {
             invalidRows.push(`Row ${i + 2}: Invalid Last Name`);
             return;
           }
@@ -333,7 +485,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         });
 
         if (invalidRows.length > 0) {
-          toast.error(`Import blocked. Fix these issues:\n${invalidRows.slice(0, 5).join('\n')}${invalidRows.length > 5 ? `\n...and ${invalidRows.length - 5} more` : ''}`);
+          toast.error(
+            `Import blocked. Fix these issues:\n${invalidRows.slice(0, 5).join("\n")}${invalidRows.length > 5 ? `\n...and ${invalidRows.length - 5} more` : ""}`,
+          );
           return;
         }
 
@@ -345,14 +499,20 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           seen.add(s.student_id);
         });
         if (dupInFile.size > 0) {
-          toast.error(`Duplicate Student ID(s) in file: ${Array.from(dupInFile).join(', ')}`);
+          toast.error(
+            `Duplicate Student ID(s) in file: ${Array.from(dupInFile).join(", ")}`,
+          );
           return;
         }
 
-        const existingIds = new Set(classData.students.map((s) => s.student_id));
+        const existingIds = new Set(
+          classData.students.map((s) => s.student_id),
+        );
         const conflicts = parsed.filter((s) => existingIds.has(s.student_id));
         if (conflicts.length > 0) {
-          toast.error(`These Student ID(s) already exist in this class: ${Array.from(new Set(conflicts.map((c) => c.student_id))).join(', ')}`);
+          toast.error(
+            `These Student ID(s) already exist in this class: ${Array.from(new Set(conflicts.map((c) => c.student_id))).join(", ")}`,
+          );
           return;
         }
 
@@ -361,86 +521,207 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           students: [...classData.students, ...parsed],
         });
 
-        toast.success(`Imported ${parsed.length} student(s). Click “Save Changes” to finalize.`);
+        toast.success(
+          `Imported ${parsed.length} student(s). Click “Save Changes” to finalize.`,
+        );
       } catch (err) {
-        console.error('Error importing students:', err);
-        toast.error('Failed to import students. Please check the file and try again.');
+        console.error("Error importing students:", err);
+        toast.error(
+          "Failed to import students. Please check the file and try again.",
+        );
       }
     };
-    reader.onerror = () => toast.error('Failed to read file');
+    reader.onerror = () => toast.error("Failed to read file");
     reader.readAsArrayBuffer(file);
   };
 
-  const updateStudentField = (studentId: string, field: keyof Student, value: string) => {
-    if (!classData) return;
+  // ── Field validators (called on every onChange for real-time feedback) ──
+  const LETTERS_ONLY = /^[a-zA-ZñÑ\s.]+$/;
 
-    const updatedStudents = classData.students.map(student =>
-      student.student_id === studentId ? { ...student, [field]: value } : student
-    );
-
-    setClassData({ ...classData, students: updatedStudents });
+  const validateStudentId = (
+    value: string,
+    students: BaseStudent[],
+  ): string => {
+    if (!value) return "Student ID is required";
+    if (!/^\d+$/.test(value))
+      return "Numbers only — letters and symbols not allowed";
+    if (!value.startsWith("20")) return 'Student ID must start with "20"';
+    if (value.length < 9) return `${9 - value.length} more digit(s) needed`;
+    if (value.length > 9) return "Student ID must be exactly 9 digits";
+    if (students.some((s) => s.student_id === value))
+      return "Duplicate — this ID already exists in this class";
+    return "";
   };
 
-  const handleAddStudent = () => {
-    if (!classData) return;
-
-    // Validate student data
-    if (!newStudent.student_id || !/^\d{9}$/.test(newStudent.student_id) || !newStudent.student_id.startsWith('20')) {
-      toast.error('Invalid Student ID. Must be 9 digits starting with "20"');
-      return;
+  const validateName = (
+    value: string,
+    field: "first_name" | "last_name" | "middle_name",
+    students: BaseStudent[],
+    draft: { first_name: string; last_name: string; middle_name: string },
+  ): string => {
+    if (field === "middle_name") {
+      if (!value) return ""; // optional
+      if (!LETTERS_ONLY.test(value))
+        return "Letters only — numbers and symbols not allowed";
+    } else {
+      const label = field === "first_name" ? "First" : "Last";
+      if (!value) return `${label} name is required`;
+      if (!LETTERS_ONLY.test(value))
+        return "Letters only — numbers and symbols not allowed";
+      if (value.trim().length < 4) return "Minimum 4 characters required";
     }
 
-    if (!newStudent.first_name || newStudent.first_name.length < 4 || !/^[a-zA-ZñÑ\s]+$/.test(newStudent.first_name)) {
-      toast.error('First name must be at least 4 characters and contain only letters');
-      return;
-    }
+    // Build the full name we're about to check, using `value` for the field being changed
+    const fn = (field === "first_name" ? value : draft.first_name)
+      .trim()
+      .toLowerCase();
+    const ln = (field === "last_name" ? value : draft.last_name)
+      .trim()
+      .toLowerCase();
+    const mn = (field === "middle_name" ? value : draft.middle_name)
+      .trim()
+      .toLowerCase();
 
-    if (!newStudent.last_name || newStudent.last_name.length < 4 || !/^[a-zA-ZñÑ\s]+$/.test(newStudent.last_name)) {
-      toast.error('Last name must be at least 4 characters and contain only letters');
-      return;
-    }
-
-    // Check for duplicate student ID
-    if (classData.students.some(s => s.student_id === newStudent.student_id)) {
-      toast.error('Student ID already exists in this class');
-      return;
-    }
-
-    // Email validation (optional)
-    if (newStudent.email && newStudent.email.trim()) {
-      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-      if (!emailRegex.test(newStudent.email.trim())) {
-        toast.error('Invalid email format');
-        return;
+    // Only run duplicate check once both required fields have content
+    if (fn && ln) {
+      const isDuplicate = students.some((s) => {
+        const sf = s.first_name.trim().toLowerCase();
+        const sl = s.last_name.trim().toLowerCase();
+        const sm = ((s as Student).middle_name ?? "").trim().toLowerCase();
+        return sf === fn && sl === ln && sm === mn;
+      });
+      if (isDuplicate) {
+        return mn
+          ? "Duplicate — a student with this full name already exists"
+          : "Duplicate — a student with this first and last name already exists";
       }
     }
 
-    const student = {
+    return "";
+  };
+
+  const handleAddStudent = async () => {
+    if (!classData) return;
+
+    const students = classData.students;
+    const draft = {
+      first_name: newStudent.first_name,
+      last_name: newStudent.last_name,
+      middle_name: newStudent.middle_name,
+    };
+
+    // Re-run all validations before submit
+    const errors = {
+      student_id: validateStudentId(newStudent.student_id, students),
+      first_name: validateName(
+        newStudent.first_name,
+        "first_name",
+        students,
+        draft,
+      ),
+      last_name: validateName(
+        newStudent.last_name,
+        "last_name",
+        students,
+        draft,
+      ),
+      middle_name: validateName(
+        newStudent.middle_name,
+        "middle_name",
+        students,
+        draft,
+      ),
+    };
+    setFieldErrors(errors);
+    if (Object.values(errors).some((e) => e !== "")) return;
+
+    const student: Student = {
       student_id: newStudent.student_id,
       first_name: newStudent.first_name,
       last_name: newStudent.last_name,
-      ...(newStudent.email && { email: newStudent.email }),
+      ...(newStudent.middle_name.trim() && {
+        middle_name: newStudent.middle_name.trim(),
+      }),
+      ...(newStudent.email.trim() && { email: newStudent.email.trim() }),
     };
 
-    setClassData({ ...classData, students: [...classData.students, student] });
-    setNewStudent({ student_id: '', first_name: '', last_name: '', email: '' });
+    const updatedStudents = [...classData.students, student];
+    setClassData({ ...classData, students: updatedStudents });
+    setNewStudent({
+      student_id: "",
+      first_name: "",
+      last_name: "",
+      middle_name: "",
+      email: "",
+    });
+    setFieldErrors({
+      student_id: "",
+      first_name: "",
+      last_name: "",
+      middle_name: "",
+    });
     setShowAddStudent(false);
-    toast.success(`Student added to class roster (ID: ${newStudent.student_id})`);
+
+    // Auto-save immediately — no manual Save button needed
+    try {
+      await updateClass(classData.id, {
+        students: updatedStudents,
+        updatedAt: new Date().toISOString(),
+      });
+      toast.success(`Student added and saved (ID: ${student.student_id})`);
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+      toast.error(
+        "Student added locally but failed to save. Please use Save Changes.",
+      );
+    }
   };
 
   const handleRemoveStudent = (studentId: string) => {
     if (!classData) return;
-    const updatedStudents = classData.students.filter(s => s.student_id !== studentId);
+    const updatedStudents = classData.students.filter(
+      (s) => s.student_id !== studentId,
+    );
     setClassData({ ...classData, students: updatedStudents });
-    toast.success('Student removed from roster');
+    toast.success("Student removed from roster");
   };
 
-  const handleSort = (field: 'student_id' | 'first_name' | 'last_name' | 'email') => {
+  const handleSort = (
+    field: "student_id" | "first_name" | "last_name" | "middle_name",
+  ) => {
     if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
       setSortBy(field);
-      setSortOrder('asc');
+      setSortOrder("asc");
+    }
+  };
+
+  const handleTagExam = async (examId: string) => {
+    if (!classData || !examId) return;
+    
+    const selectedExam = allExams.find(e => e.id === examId);
+    if (!selectedExam) return;
+
+    try {
+
+        await updateExam(examId, {
+            classId: classData.id,
+            className: classData.class_name
+        });
+        
+        toast.success(`Tagged "${selectedExam.title}" to this class`);
+        
+        // Refresh exams
+        const updatedExams = await getExamsByClassId(classData.id);
+        setExams(updatedExams);
+        setStats(prev => ({ ...prev, examCount: updatedExams.length }));
+        
+        // Update allExams (remove the tagged one)
+        setAllExams(prev => prev.filter(e => e.id !== examId));
+    } catch (err) {
+        console.error(err);
+        toast.error("Failed to tag exam");
     }
   };
 
@@ -453,24 +734,35 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
             student.student_id.toLowerCase().includes(query) ||
             student.first_name.toLowerCase().includes(query) ||
             student.last_name.toLowerCase().includes(query) ||
-            (student.email || '').toLowerCase().includes(query)
+            ((student as Student).middle_name || "")
+              .toLowerCase()
+              .includes(query)
           );
         })
         .sort((a, b) => {
-          const aVal = (sortBy === 'email' ? a[sortBy] || '' : a[sortBy]).toLowerCase();
-          const bVal = (sortBy === 'email' ? b[sortBy] || '' : b[sortBy]).toLowerCase();
-          if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-          if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+          const getVal = (s: Student) => {
+            if (sortBy === "middle_name") return s.middle_name || "";
+            return s[sortBy] || "";
+          };
+          const aVal = getVal(a as Student).toLowerCase();
+          const bVal = getVal(b as Student).toLowerCase();
+          if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+          if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
           return 0;
         })
     : [];
 
+  const tabItems = [
+    { id: "students", label: `Students (${classData?.students?.length || 0})`, icon: Users },
+    { id: "exams", label: `Exams (${stats.examCount})`, icon: FileText },
+    { id: "scan", label: "Scan Papers", icon: Scan },
+    { id: "stats", label: "Stats", icon: BarChart3 }
+  ] as const;
+
   if (loading) {
     return (
       <div className="page-container">
-        <div className="text-center py-12">
-          Loading class data...
-        </div>
+        <div className="text-center py-12">Loading class data...</div>
       </div>
     );
   }
@@ -478,9 +770,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   if (!classData) {
     return (
       <div className="page-container">
-        <div className="text-center py-12">
-          Class not found
-        </div>
+        <div className="text-center py-12">Class not found</div>
       </div>
     );
   }
@@ -488,368 +778,900 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   return (
     <div className="page-container pb-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4 mb-6">
-          <BackButton href="/classes" />
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Edit Class</h1>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleExportStudents}
-            disabled={!classData || classData.students.length === 0}
-            className="flex items-center justify-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Export Students
-          </Button>
-          <div className="relative">
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleImportStudents}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-            <Button 
-              variant="outline"
-              className="flex items-center justify-center gap-2"
-            >
-              <Upload className="w-4 h-4" />
-              Import Students
-            </Button>
-          </div>
-          <Button onClick={handleSave} disabled={saving} className="flex items-center justify-center gap-2">
-            <Save className="w-4 h-4" />
-            {saving ? 'Saving...' : 'Save Changes'}
-          </Button>
+      <div className="flex items-center gap-4 mb-8">
+        <BackButton href="/classes" />
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+            {classData.class_name}{" "}
+            {classData.course_subject ? `– ${classData.course_subject}` : ""}
+          </h1>
+          <p className="text-sm text-gray-500 font-medium">
+            Class Details &amp; Management
+          </p>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Class Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5" />
-              Class Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="class_name">Program *</Label>
-                <Input
-                  id="class_name"
-                  value={classData.class_name}
-                  onChange={(e) => setClassData({ ...classData, class_name: e.target.value })}
-                  placeholder="Enter program name"
-                  className={
-                    !classData.class_name.trim() || 
-                    !/^[a-zA-ZñÑ\s]+$/.test(classData.class_name.trim()) || 
-                    classData.class_name.trim().length < 3 
-                      ? 'border-red-300 focus:border-red-500' 
-                      : 'border-green-300 focus:border-green-500'
-                  }
-                />
-                <p className="text-xs text-gray-600">
-                  Letters only, minimum 3 characters
-                  {classData.class_name.trim() && ` (${classData.class_name.trim().length}/3)`}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="course_subject">Course *</Label>
-                <Input
-                  id="course_subject"
-                  value={classData.course_subject}
-                  onChange={(e) => setClassData({ ...classData, course_subject: e.target.value })}
-                  placeholder="Enter course or subject"
-                  className={
-                    !classData.course_subject.trim() ||
-                    classData.course_subject.trim().length < 4
-                      ? 'border-red-300 focus:border-red-500'
-                      : 'border-green-300 focus:border-green-500'
-                  }
-                />
-                <p className="text-xs text-gray-600">
-                  Minimum 4 characters
-                  {classData.course_subject.trim() && ` (${classData.course_subject.trim().length}/4)`}
-                </p>
+      <div className="space-y-6">
+        {/* Class Information Panel */}
+        <Card className="border-gray-200 shadow-sm rounded-xl border-l-[6px] border-l-green-500">
+          <CardHeader className="bg-white px-8 pt-6 pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-[1.1rem] font-bold text-gray-900 border-none">
+                Class Information
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {!isEditingInfo ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditingInfo(true)}
+                    className="h-9 px-4 text-gray-600 hover:bg-gray-100 transition-all rounded-lg font-medium flex items-center gap-2"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    Edit Info
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingInfo(false)}
+                      className="h-9 px-4 text-gray-500 hover:bg-gray-100 transition-all rounded-lg font-medium"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        await handleSave();
+                        setIsEditingInfo(false);
+                      }}
+                      disabled={saving}
+                      className="h-9 px-4 bg-green-600 hover:bg-green-700 text-white transition-all rounded-lg font-medium flex items-center gap-2 shadow-sm"
+                    >
+                      <Save className="w-4 h-4" />
+                      {saving ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
+          </CardHeader>
+          <CardContent className="px-8 pb-8 pt-4">
+            {!isEditingInfo ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-gray-400">
+                    Program
+                  </label>
+                  <p className="text-sm font-bold text-gray-900">
+                    {classData.class_name}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-gray-400">
+                    Course
+                  </label>
+                  <p className="text-sm font-bold text-gray-900">
+                    {classData.course_subject}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-gray-400">
+                    Year Level
+                  </label>
+                  <p className="text-sm font-bold text-gray-900">
+                    {classData.year
+                      ? `${classData.year}${classData.year === "1" ? "st" : classData.year === "2" ? "nd" : classData.year === "3" ? "rd" : "th"} Year`
+                      : "---"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-gray-400">
+                    Room
+                  </label>
+                  <p className="text-sm font-bold text-gray-900">
+                    {classData.room || "---"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="class_name"
+                    className="text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
+                    Program *
+                  </Label>
+                  <Input
+                    id="class_name"
+                    value={classData.class_name}
+                    onChange={(e) =>
+                      setClassData({ ...classData, class_name: e.target.value })
+                    }
+                    className="h-10 border-gray-200 focus:ring-green-500/20 focus:border-green-600 transition-all rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="course_subject"
+                    className="text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
+                    Course *
+                  </Label>
+                  <Input
+                    id="course_subject"
+                    value={classData.course_subject}
+                    onChange={(e) =>
+                      setClassData({
+                        ...classData,
+                        course_subject: e.target.value,
+                      })
+                    }
+                    className="h-10 border-gray-200 focus:ring-green-500/20 focus:border-green-600 transition-all rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="year"
+                    className="text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
+                    Year Level
+                  </Label>
+                  <Select
+                    value={classData.year || "none"}
+                    onValueChange={(value) =>
+                      setClassData({
+                        ...classData,
+                        year: value === "none" ? undefined : value,
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-10 border-gray-200 focus:ring-green-500/20 focus:border-green-600 transition-all rounded-xl">
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="1">1st Year</SelectItem>
+                      <SelectItem value="2">2nd Year</SelectItem>
+                      <SelectItem value="3">3rd Year</SelectItem>
+                      <SelectItem value="4">4th Year</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="room"
+                    className="text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
+                    Room *
+                  </Label>
+                  <Input
+                    id="room"
+                    type="number"
+                    value={classData.room}
+                    onChange={(e) =>
+                      setClassData({
+                        ...classData,
+                        room: e.target.value.slice(0, 3),
+                      })
+                    }
+                    className="h-10 border-gray-200 focus:ring-green-500/20 focus:border-green-600 transition-all rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="year">Year (Optional)</Label>
-                <Select
-                  value={classData.year || 'none'}
-                  onValueChange={(value) => setClassData({ ...classData, year: value === 'none' ? undefined : value })}
+        {/* Bottom Stats Section / Tabs */}
+        <div className="flex items-center gap-8 border-b border-gray-100 px-2 mt-4">
+          {tabItems.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 pb-4 pt-1 transition-all relative ${
+                  isActive
+                    ? "text-green-600 font-bold"
+                    : "text-gray-400 hover:text-gray-600 font-medium"
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? "text-green-600" : "text-gray-300"}`} />
+                <span className="text-sm">{tab.label}</span>
+                {isActive && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-green-500 rounded-full" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {activeTab === "students" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Student Roster */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              {/* Roster Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <h2 className="text-base font-bold text-gray-900">Student Roster</h2>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleImportStudents}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Import Excel
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowAddStudent(true)}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Student
+                  </Button>
+                </div>
+              </div>
+
+              {/* Edit Multiple Students button row */}
+              <div className="flex justify-end px-6 py-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-1.5 text-gray-500 hover:text-gray-700 text-xs font-medium"
                 >
-                  <SelectTrigger className="border-gray-300 focus:border-blue-500">
-                    <SelectValue placeholder="Select year" />
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Edit Multiple Students
+                </Button>
+              </div>
+
+              {/* Search bar */}
+              <div className="px-6 pb-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by ID or name..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="pl-10 h-10 border-gray-100 rounded-xl bg-gray-50/30"
+                  />
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-y border-gray-100 bg-gray-50/60">
+                      <th
+                        className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[130px] cursor-pointer select-none"
+                        onClick={() => handleSort("student_id")}
+                      >
+                        <div className="flex items-center gap-1">
+                          Student ID
+                          {sortBy === "student_id" && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th
+                        className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[150px] cursor-pointer select-none"
+                        onClick={() => handleSort("first_name")}
+                      >
+                        <div className="flex items-center gap-1">
+                          First Name
+                          {sortBy === "first_name" && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th
+                        className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[150px] cursor-pointer select-none"
+                        onClick={() => handleSort("last_name")}
+                      >
+                        <div className="flex items-center gap-1">
+                          Last Name
+                          {sortBy === "last_name" && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th
+                        className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[140px] cursor-pointer select-none"
+                        onClick={() => handleSort("middle_name")}
+                      >
+                        <div className="flex items-center gap-1">
+                          Middle Name
+                          {sortBy === "middle_name" && <ArrowUpDown className="w-3 h-3" />}
+                        </div>
+                      </th>
+                      <th className="w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredAndSortedStudents.map((student) => {
+                      const s = student as Student;
+                      return (
+                        <tr key={s.student_id} className="hover:bg-gray-50/60 transition-colors">
+                          <td className="px-6 py-3 text-gray-700 font-mono text-xs">{s.student_id}</td>
+                          <td className="px-4 py-3 text-gray-800 font-medium">{s.first_name}</td>
+                          <td className="px-4 py-3 text-gray-800">{s.last_name}</td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {s.middle_name || <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setStudentToDeleteId(s.student_id);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="h-8 w-8 p-0 text-red-500 bg-red-50 hover:bg-red-100 transition-all rounded-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {showAddStudent && (
+                      <tr className="border-t-2 border-green-200 bg-green-50/30">
+                        {/* Student ID */}
+                        <td className="px-6 py-2 align-top">
+                          <div>
+                            <Input
+                              value={newStudent.student_id}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const numeric = raw.replace(/[^0-9]/g, "");
+                                const val = numeric.slice(0, 9);
+                                setNewStudent({ ...newStudent, student_id: val });
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  student_id: validateStudentId(val, classData?.students ?? []),
+                                }));
+                              }}
+                              placeholder="Student ID"
+                              className={`border h-8 text-xs font-mono w-full ${
+                                fieldErrors.student_id
+                                  ? "border-red-400"
+                                  : newStudent.student_id.length === 9 && !fieldErrors.student_id
+                                  ? "border-green-400"
+                                  : ""
+                              }`}
+                              inputMode="numeric"
+                            />
+                            {fieldErrors.student_id && (
+                              <p className="text-[10px] text-red-500 mt-0.5 leading-tight">
+                                {fieldErrors.student_id}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        {/* First Name */}
+                        <td className="px-4 py-2 align-top">
+                          <div>
+                            <Input
+                              value={newStudent.first_name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewStudent({ ...newStudent, first_name: val });
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  first_name: validateName(val, "first_name", classData?.students ?? [], {
+                                    first_name: val,
+                                    last_name: newStudent.last_name,
+                                    middle_name: newStudent.middle_name,
+                                  }),
+                                }));
+                              }}
+                              placeholder="First Name"
+                              className={`border h-8 text-xs w-full ${
+                                fieldErrors.first_name
+                                  ? "border-red-400"
+                                  : newStudent.first_name.length >= 4 && !fieldErrors.first_name
+                                  ? "border-green-400"
+                                  : ""
+                              }`}
+                            />
+                            {fieldErrors.first_name && (
+                              <p className="text-[10px] text-red-500 mt-0.5 leading-tight">
+                                {fieldErrors.first_name}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        {/* Last Name */}
+                        <td className="px-4 py-2 align-top">
+                          <div>
+                            <Input
+                              value={newStudent.last_name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewStudent({ ...newStudent, last_name: val });
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  last_name: validateName(val, "last_name", classData?.students ?? [], {
+                                    first_name: newStudent.first_name,
+                                    last_name: val,
+                                    middle_name: newStudent.middle_name,
+                                  }),
+                                }));
+                              }}
+                              placeholder="Last Name"
+                              className={`border h-8 text-xs w-full ${
+                                fieldErrors.last_name
+                                  ? "border-red-400"
+                                  : newStudent.last_name.length >= 4 && !fieldErrors.last_name
+                                  ? "border-green-400"
+                                  : ""
+                              }`}
+                            />
+                            {fieldErrors.last_name && (
+                              <p className="text-[10px] text-red-500 mt-0.5 leading-tight">
+                                {fieldErrors.last_name}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        {/* Middle Name */}
+                        <td className="px-4 py-2 align-top">
+                          <div>
+                            <Input
+                              value={newStudent.middle_name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewStudent({ ...newStudent, middle_name: val });
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  middle_name: validateName(val, "middle_name", classData?.students ?? [], {
+                                    first_name: newStudent.first_name,
+                                    last_name: newStudent.last_name,
+                                    middle_name: val,
+                                  }),
+                                }));
+                              }}
+                              placeholder="Middle Name"
+                              className={`border h-8 text-xs w-full ${
+                                fieldErrors.middle_name ? "border-red-400" : ""
+                              }`}
+                            />
+                            {fieldErrors.middle_name && (
+                              <p className="text-[10px] text-red-500 mt-0.5 leading-tight">
+                                {fieldErrors.middle_name}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        {/* Actions */}
+                        <td className="px-4 py-2">
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleAddStudent}
+                              className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setShowAddStudent(false)}
+                              className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {filteredAndSortedStudents.length === 0 && !showAddStudent && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-10 text-center text-gray-400 text-sm">
+                          <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                          No students in this class yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {studentSearch.trim() && (
+                <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-400">
+                  Showing {filteredAndSortedStudents.length} of {classData.students.length} students
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "exams" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h3 className="text-xl font-bold text-[#0f172a]">Exams for this Class</h3>
+              <div className="flex items-center gap-3">
+                <Select onValueChange={handleTagExam}>
+                  <SelectTrigger className="w-[200px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600">
+                    <SelectValue placeholder="Tag Existing Exam..." />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="1">1st Year</SelectItem>
-                    <SelectItem value="2">2nd Year</SelectItem>
-                    <SelectItem value="3">3rd Year</SelectItem>
-                    <SelectItem value="4">4th Year</SelectItem>
+                  <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                    {allExams.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-gray-400">
+                        No exams available to tag
+                      </div>
+                    ) : (
+                      allExams.map((exam) => (
+                        <SelectItem
+                          key={exam.id}
+                          value={exam.id}
+                          className="focus:bg-green-50 focus:text-green-700"
+                        >
+                          {exam.title}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-600">Optional field - select academic year level</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="room">Room *</Label>
-                <Input
-                  id="room"
-                  type="number"
-                  value={classData.room}
-                  onChange={(e) => {
-                    const inputValue = e.target.value.replace(/[^0-9]/g, '');
-                    const value = inputValue.slice(0, 3);
-                    setClassData({ ...classData, room: value });
-                  }}
-                  placeholder="e.g., 101, 205, 312"
-                  className={!classData.room.trim() || !/^[0-9]{3}$/.test(classData.room.trim()) ? 'border-red-300 focus:border-red-500' : 'border-green-300 focus:border-green-500'}
-                />
-                <p className="text-xs text-gray-600">Exactly 3 digits required</p>
+                <Button
+                  onClick={() => setShowCreateExam(true)}
+                  className="flex items-center gap-2 h-10 px-6 bg-[#10B981] text-white rounded-xl font-bold text-sm hover:bg-[#059669] shadow-md shadow-green-500/10 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Exam</span>
+                </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Class Statistics */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Hash className="w-5 h-5" />
-              Class Statistics
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold">{classData.students.length}</div>
-                <div className="text-sm text-muted-foreground">Total Students</div>
-              </div>
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold">
-                  {new Date(classData.created_at).toLocaleDateString()}
+            {exams.length === 0 ? (
+              <div className="py-20 text-center bg-white border border-dashed border-gray-200 rounded-2xl">
+                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8 text-gray-300" />
                 </div>
-                <div className="text-sm text-muted-foreground">Created</div>
+                <p className="text-gray-500 font-medium">No exams tagged to this class yet.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Start by tagging an existing exam or creating a new one.
+                </p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exams.map((exam) => (
+                  <Card
+                    key={exam.id}
+                    className="group bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden flex flex-col h-full rounded-2xl border-b-4 border-b-green-500/10 hover:border-b-green-500/40 relative"
+                    onClick={() => router.push(`/exams/${exam.id}`)}
+                  >
+                    <CardContent className="p-6 flex flex-col h-full">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-green-100 transition-colors">
+                          <FileText className="w-6 h-6 text-green-600" />
+                        </div>
+                        <div className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-[10px] font-bold uppercase tracking-wider border border-green-100">
+                          {exam.num_items} Items
+                        </div>
+                      </div>
 
-      {/* Students List */}
-      <Card className="mt-4">
-        <CardHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Students ({classData.students.length})
-              </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAddStudent(true)}
-                className="flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Add Student
-              </Button>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by ID, name, or email..."
-                  value={studentSearch}
-                  onChange={(e) => setStudentSearch(e.target.value)}
-                  className="pl-10"
-                />
+                      <div className="flex-1">
+                        <h3 className="font-bold text-lg text-gray-900 group-hover:text-green-700 transition-colors line-clamp-1 mb-1">
+                          {exam.title}
+                        </h3>
+                        <p className="text-sm text-gray-500 font-medium line-clamp-1">
+                          {exam.subject}
+                        </p>
+
+                        <div className="mt-4 flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-500 transition-colors">
+                            <span className="text-sm font-bold opacity-30">#</span>
+                            <span className="text-xs font-mono font-bold tracking-tight text-gray-600">
+                              {exam.examCode || "NO-CODE"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <Calendar className="w-3.5 h-3.5 opacity-60" />
+                            <span className="text-[11px] font-bold">
+                              {new Date(exam.created_at).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+                            <Tag className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <span className="text-xs font-bold text-gray-700">
+                            1{" "}
+                            <span className="text-[10px] font-normal text-gray-400 uppercase tracking-tight">
+                              Class Tagged
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              <Select
-                value={`${sortBy}-${sortOrder}`}
-                onValueChange={(value) => {
-                  const [field, order] = value.split('-') as ['student_id' | 'first_name' | 'last_name' | 'email', 'asc' | 'desc'];
-                  setSortBy(field);
-                  setSortOrder(order);
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-[220px]">
-                  <div className="flex items-center gap-2">
-                    <ArrowUpDown className="w-4 h-4" />
-                    <SelectValue placeholder="Sort by" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="student_id-asc">Student ID (→)</SelectItem>
-                  <SelectItem value="student_id-desc">Student ID (←)</SelectItem>
-                  <SelectItem value="first_name-asc">First Name (A→Z)</SelectItem>
-                  <SelectItem value="first_name-desc">First Name (Z→A)</SelectItem>
-                  <SelectItem value="last_name-asc">Last Name (A→Z)</SelectItem>
-                  <SelectItem value="last_name-desc">Last Name (Z→A)</SelectItem>
-                  <SelectItem value="email-asc">Email (→)</SelectItem>
-                  <SelectItem value="email-desc">Email (←)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {studentSearch.trim() && (
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredAndSortedStudents.length} of {classData.students.length} students
-              </p>
             )}
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[120px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('student_id')}>
-                    <div className="flex items-center gap-1">
-                      Student ID
-                      {sortBy === 'student_id' && <ArrowUpDown className="w-3 h-3" />}
+        )}
+
+        {activeTab === "scan" && (
+          <div className="flex flex-col lg:flex-row gap-8 animate-in slide-in-from-bottom-2 duration-300 min-h-[500px]">
+            {/* Left: Scan Settings Card */}
+            <div className="w-full lg:w-[350px] shrink-0">
+               <Card className="p-8 rounded-[2rem] border border-gray-100 shadow-sm bg-white h-full flex flex-col">
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                      <Scan className="w-5 h-5 text-green-600" />
                     </div>
-                  </TableHead>
-                  <TableHead className="min-w-[150px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('first_name')}>
-                    <div className="flex items-center gap-1">
-                      First Name
-                      {sortBy === 'first_name' && <ArrowUpDown className="w-3 h-3" />}
+                    <div>
+                      <h3 className="text-lg font-bold text-[#1e293b]">Scan Settings</h3>
+                      <p className="text-xs text-gray-400 font-medium">Configure your capturing device</p>
                     </div>
-                  </TableHead>
-                  <TableHead className="min-w-[150px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('last_name')}>
-                    <div className="flex items-center gap-1">
-                      Last Name
-                      {sortBy === 'last_name' && <ArrowUpDown className="w-3 h-3" />}
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[200px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('email')}>
-                    <div className="flex items-center gap-1">
-                      Email
-                      {sortBy === 'email' && <ArrowUpDown className="w-3 h-3" />}
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-16">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAndSortedStudents.map((student) => (
-                  <TableRow key={student.student_id}>
-                    <TableCell>
-                      <Input
-                        value={student.student_id}
-                        onChange={(e) => updateStudentField(student.student_id, 'student_id', e.target.value)}
-                        className="border-0 p-1 h-8"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={student.first_name}
-                        onChange={(e) => updateStudentField(student.student_id, 'first_name', e.target.value)}
-                        className="border-0 p-1 h-8"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={student.last_name}
-                        onChange={(e) => updateStudentField(student.student_id, 'last_name', e.target.value)}
-                        className="border-0 p-1 h-8"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={student.email || ''}
-                        onChange={(e) => updateStudentField(student.student_id, 'email', e.target.value)}
-                        className="border-0 p-1 h-8"
-                        placeholder="Email"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveStudent(student.student_id)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {showAddStudent && (
-                  <TableRow className="border-t-2 border-blue-200 bg-blue-50/50">
-                    <TableCell>
-                      <Input
-                        value={newStudent.student_id}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 9);
-                          setNewStudent({ ...newStudent, student_id: value });
-                        }}
-                        placeholder="Student ID (9 digits)"
-                        className="border p-2 h-8"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={newStudent.first_name}
-                        onChange={(e) => setNewStudent({ ...newStudent, first_name: e.target.value })}
-                        placeholder="First Name"
-                        className="border p-2 h-8"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={newStudent.last_name}
-                        onChange={(e) => setNewStudent({ ...newStudent, last_name: e.target.value })}
-                        placeholder="Last Name"
-                        className="border p-2 h-8"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={newStudent.email}
-                        onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
-                        placeholder="Email (optional)"
-                        className="border p-2 h-8"
-                        type="email"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleAddStudent}
-                          className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
+                  </div>
+                  
+                  <div className="space-y-8 flex-1">
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Select Exam</label>
+                      <div className="relative group">
+                        <select 
+                          value={selectedScanExamId}
+                          onChange={(e) => setSelectedScanExamId(e.target.value)}
+                          className="w-full bg-[#f8fafc] border border-gray-200 rounded-2xl h-14 px-5 shadow-sm text-[15px] font-bold text-[#1e293b] focus:ring-4 focus:ring-green-500/10 focus:border-green-500 cursor-pointer appearance-none pr-12 transition-all outline-none"
                         >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setShowAddStudent(false);
-                            setNewStudent({ student_id: '', first_name: '', last_name: '', email: '' });
-                          }}
-                          className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
+                          <option value="">-- Choose an exam --</option>
+                          {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+                        </select>
+                        <div className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-green-500 transition-colors pointer-events-none">
+                          <ChevronRight className="w-5 h-5 rotate-90" />
+                        </div>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                    </div>
+
+                    <div className="bg-blue-50/50 rounded-2xl p-5 border border-blue-100/50">
+                      <div className="flex gap-3">
+                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                            <Tag className="w-4 h-4 text-blue-600" />
+                         </div>
+                         <div>
+                            <p className="text-[13px] font-bold text-blue-900 leading-tight">Ready to Scan</p>
+                            <p className="text-[11px] text-blue-700/70 mt-1 leading-relaxed">Ensure the answer sheet is well-lit and all four corners are visible in the frame.</p>
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button 
+                    disabled={!selectedScanExamId}
+                    className={`w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition-all mt-8 ${
+                      selectedScanExamId 
+                      ? "bg-[#10B981] hover:bg-[#059669] text-white shadow-xl shadow-green-500/20 active:scale-[0.98]" 
+                      : "bg-[#f1f5f9] text-gray-400 opacity-60 cursor-not-allowed border border-gray-100"
+                    }`}
+                    onClick={() => {
+                        window.location.href = `/exams/${selectedScanExamId}/scan-papers`;
+                    }}
+                  >
+                    <Scan className="w-6 h-6" />
+                    Simulate Scan
+                  </Button>
+               </Card>
+            </div>
+
+            {/* Right: Camera Box Placeholder */}
+            <div className="flex-1 bg-[#0F172A] rounded-[2.5rem] relative flex items-center justify-center border border-gray-800 shadow-2xl overflow-hidden group">
+               {/* Decorative elements */}
+               <div className="absolute top-8 left-8 flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">No Input Detected</span>
+               </div>
+               
+               {/* Inner dashed frame */}
+               <div className="w-[70%] h-[75%] border-2 border-dashed border-gray-800 rounded-3xl flex items-center justify-center group-hover:border-gray-700 transition-colors">
+                  <div className="text-center space-y-6 max-w-sm px-8">
+                    <div className="w-20 h-20 bg-gray-800/40 rounded-3xl flex items-center justify-center mx-auto mb-2 backdrop-blur-sm border border-gray-700/30">
+                       <Scan className="w-10 h-10 text-gray-600 group-hover:text-green-500 transition-colors" />
+                    </div>
+                    <div className="space-y-2">
+                       <h4 className="text-white font-bold text-lg">Scanner Interface</h4>
+                       <p className="text-gray-500 text-[14px] leading-relaxed">
+                         The camera feed will initialize once a scanning device is connected and an exam is selected.
+                       </p>
+                    </div>
+                    <div className="pt-4">
+                       <p className="text-gray-600 text-[11px] font-bold uppercase tracking-[0.2em] italic">
+                         Select an exam to begin
+                       </p>
+                    </div>
+                  </div>
+               </div>
+
+               {/* Frame corners */}
+               <div className="absolute top-12 right-12 w-8 h-8 border-r-2 border-t-2 border-gray-700 rounded-tr-xl" />
+               <div className="absolute bottom-12 left-12 w-8 h-8 border-l-2 border-b-2 border-gray-700 rounded-bl-xl" />
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
+
+        {activeTab === "stats" && (
+          <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-300">
+            {/* Top Stat Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-green-500/10">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                    <BarChart3 className="w-5 h-5 text-green-600" />
+                  </div>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Class Average</p>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-[38px] font-bold text-[#1e293b]">88</p>
+                  <span className="text-xl font-bold text-gray-300">%</span>
+                </div>
+              </Card>
+
+              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-blue-500/10">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                    <Users className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Pass Rate</p>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-[38px] font-bold text-[#1e293b]">100</p>
+                  <span className="text-xl font-bold text-gray-300">%</span>
+                </div>
+              </Card>
+
+              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-purple-500/10">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                    <Scan className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Total Scans</p>
+                </div>
+                <p className="text-[38px] font-bold text-[#1e293b]">{stats.scanPapersCount}</p>
+              </Card>
+            </div>
+
+            <div className="flex justify-end pr-2">
+              <Button variant="outline" className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-12 px-8 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]">
+                <Mail className="w-5 h-5 text-gray-400" />
+                <span>Send All Scores to Students</span>
+              </Button>
+            </div>
+
+            {/* Exam Breakdown Table */}
+            <Card className="border border-gray-100 shadow-sm rounded-[2rem] overflow-hidden bg-white">
+              <div className="p-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                  <div>
+                    <h3 className="text-lg font-bold text-[#1e293b]">Exam Performance Breakdown</h3>
+                    <p className="text-xs text-gray-400 font-medium">Detailed results for each exam assigned to this class</p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-50 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-[#f8fafc] border-none">
+                        <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider pl-8">Exam Title</TableHead>
+                        <TableHead className="text-[11px] font-bold text-gray-400 text-center h-14 uppercase tracking-wider">Papers Scanned</TableHead>
+                        <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-10">Average Score</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {exams.length > 0 ? exams.map(exam => (
+                        <TableRow key={exam.id} className="border-b border-gray-50 h-[75px] hover:bg-gray-50/50 transition-colors group">
+                          <TableCell className="pl-8">
+                            <div className="flex items-center gap-4">
+                               <div className="w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors">
+                                  <FileText className="w-4.5 h-4.5 text-gray-400 group-hover:text-green-500 transition-colors" />
+                               </div>
+                               <div>
+                                  <p className="text-[15px] font-bold text-[#1e293b] leading-tight">{exam.title}</p>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{exam.subject}</p>
+                               </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className="inline-flex items-center justify-center w-10 h-6 bg-gray-50 text-gray-700 rounded-full text-[13px] font-bold border border-gray-100">
+                              {exam.scannedCount || 0}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right pr-10">
+                            <span className="text-[16px] font-bold text-[#10B981]">
+                              {exam.averageScore || "0"} <span className="text-[11px] font-bold opacity-40">%</span>
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow>
+                          <TableCell colSpan={3} className="h-40 text-center">
+                            <div className="flex flex-col items-center justify-center text-gray-400">
+                               <BarChart3 className="w-8 h-8 opacity-20 mb-3" />
+                               <p className="text-sm font-bold opacity-40">No records to display yet</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+      </div>
+
+      {showCreateExam && (
+        <CreateExamModal 
+          isOpen={showCreateExam} 
+          onClose={() => setShowCreateExam(false)}
+          onCreateExam={handleCreateExam}
+          existingExamTitles={exams.map(e => e.title)}
+          fromTemplate={{
+            name: "",
+            totalQuestions: 50,
+            choicesPerItem: 4,
+            description: "",
+            folder: classData?.course_subject || ""
+          }}
+          classId={classId || ""}
+          className={classData?.class_name || ""}
+          folder={classData?.course_subject || ""}
+          simpleMode={true}
+        />
+      )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-2xl border-none shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold text-gray-900">
+              Confirm Student Removal
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500">
+              Are you sure you want to remove this student from the class? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel
+              onClick={() => {
+                setStudentToDeleteId(null);
+                setIsDeleteDialogOpen(false);
+              }}
+              className="rounded-xl border-gray-200 text-gray-600 font-semibold hover:bg-gray-50"
+            >
+              No
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (studentToDeleteId) {
+                  handleRemoveStudent(studentToDeleteId);
+                  setStudentToDeleteId(null);
+                  setIsDeleteDialogOpen(false);
+                }
+              }}
+              className="rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
+            >
+              Yes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
