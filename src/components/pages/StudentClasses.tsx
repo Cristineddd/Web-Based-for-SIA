@@ -62,6 +62,7 @@ import {
   X,
   FolderArchive,
 } from "lucide-react";
+import ClassDetailView from "./ClassDetailView";
 
 export default function StudentClasses() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -346,6 +347,9 @@ export default function StudentClasses() {
 
         setClasses([...classes, savedClass]);
         toast.success("Class added and saved successfully");
+
+        // Refresh page to update sidebar exam link status
+        window.location.reload();
       }
 
       setShowAddDialog(false);
@@ -1081,6 +1085,14 @@ export default function StudentClasses() {
       c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
       c.section_block.toLowerCase().includes(search.toLowerCase()),
   );
+
+  if (showViewDialog && selectedClass) {
+    return (
+      <div className="page-container">
+        <ClassDetailView classItem={selectedClass} onBack={() => setShowViewDialog(false)} />
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">
@@ -2079,95 +2091,6 @@ export default function StudentClasses() {
         </DialogContent>
       </Dialog>
 
-      {/* View Class Dialog */}
-      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{selectedClass?.class_name}</DialogTitle>
-            <DialogDescription>
-              {selectedClass?.course_subject} - Section{" "}
-              {selectedClass?.section_block}
-            </DialogDescription>
-          </DialogHeader>
-          {selectedClass && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
-                <div>
-                  <p className="text-sm text-muted-foreground">Schedule</p>
-                  <p className="font-medium">-</p>
-                  <p className="text-sm">-</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Room</p>
-                  <p className="font-medium">{selectedClass.room || "-"}</p>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-medium mb-3">
-                  Students ({selectedClass.students.length})
-                </h4>
-                {selectedClass.students.length > 0 ? (
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Student ID</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedClass.students.map((student, idx) => (
-                          <TableRow key={`${selectedClass.id}-student-${idx}`}>
-                            <TableCell>{student.student_id}</TableCell>
-                            <TableCell>{`${student.first_name} ${student.last_name}`}</TableCell>
-                            <TableCell>{student.email || "-"}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">
-                    No students enrolled
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (selectedClass) {
-                  // Load the selected class into edit mode
-                  setNewClass({
-                    class_name: selectedClass.class_name,
-                    course_subject: selectedClass.course_subject,
-                    section_block: selectedClass.section_block,
-                    room: selectedClass.room,
-                  });
-                  setStudents(selectedClass.students);
-                  setEditingClassId(selectedClass.id);
-                  setShowViewDialog(false);
-                  setShowAddDialog(true);
-                  setCurrentTab("basic");
-                }
-              }}
-              className="hover:bg-transparent hover:text-current"
-            >
-              Edit Class
-            </Button>
-            <Button
-              onClick={() => setShowViewDialog(false)}
-              className="hover:bg-transparent hover:text-current"
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

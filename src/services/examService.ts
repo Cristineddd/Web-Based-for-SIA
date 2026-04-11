@@ -48,6 +48,8 @@ export interface Exam {
   status?: "draft" | "final"; // Status to control editability
   institutionName?: string;
   logoUrl?: string;
+  scannedCount?: number;
+  averageScore?: string;
 }
 
 export interface GeneratedSheet {
@@ -142,6 +144,7 @@ export async function createExam(
       examType: formData.examType || "board",
       choicePoints: formData.choicePoints || {},
       examCode: examCode, // Unique code for template validation
+      isArchived: false,
       status: "draft", // New field: initial status is draft
     };
     const docRef = await addDoc(collection(db, "exams"), examData);
@@ -415,17 +418,22 @@ export async function updateExam(
   examId: string,
   updates: Partial<Exam>,
 ): Promise<void> {
+  const docRef = doc(db, "exams", examId);
   try {
-    // Enforce edit restriction at the service layer
-    const examSnap = await getDoc(doc(db, "exams", examId));
+    // Check if we're only updating archive status or other systemic fields
+    const systemicFields = ["isArchived", "archivedAt"];
+    const isOnlyArchiveUpdate = Object.keys(updates).every((key) =>
+      systemicFields.includes(key),
+    );
+
+    const examSnap = await getDoc(docRef);
     if (examSnap.exists()) {
       const examData = examSnap.data() as Exam;
-      if (!canEditExam(examData)) {
+      // Only enforce edit restriction if we are updating substantive content
+      if (!isOnlyArchiveUpdate && !canEditExam(examData)) {
         throw new Error(EDIT_RESTRICTION_MESSAGE);
       }
     }
-
-    const docRef = doc(db, "exams", examId);
 
     // Strip undefined values — Firestore rejects them
     const sanitized = Object.fromEntries(
@@ -598,35 +606,36 @@ export async function getExamsByClassId(classId: string): Promise<Exam[]> {
   try {
     const q = query(
       collection(db, "exams"),
-      where("classId", "==", classId),
-      where("isArchived", "==", false)
+      where("classId", "==", classId)
     );
     const querySnapshot = await getDocs(q);
     const exams: Exam[] = [];
 
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
-      exams.push({
-        id: docSnap.id,
-        title: data.title,
-        subject: data.subject,
-        num_items: data.num_items,
-        choices_per_item: data.choices_per_item,
-        created_at:
-          data.created_at ||
-          data.createdAt?.toDate?.().toISOString() ||
-          new Date().toISOString(),
-        answer_keys: data.answer_keys || [],
-        generated_sheets: data.generated_sheets || [],
-        createdBy: data.createdBy,
-        updatedAt:
-          data.updatedAt?.toDate?.().toISOString() ||
-          new Date().toISOString(),
-        className: data.className || undefined,
-        classId: data.classId || undefined,
-        isArchived: data.isArchived,
-        examCode: data.examCode,
-      });
+      // Filter out archived exams client-side to be safe with missing fields
+      if (data.isArchived !== true) {
+        exams.push({
+          id: docSnap.id,
+          title: data.title,
+          subject: data.subject,
+          num_items: data.num_items,
+          choices_per_item: data.choices_per_item,
+          created_at:
+            data.created_at ||
+            data.createdAt?.toDate?.().toISOString() ||
+            new Date().toISOString(),
+          answer_keys: data.answer_keys || [],
+          generated_sheets: data.generated_sheets || [],
+          createdBy: data.createdBy,
+          updatedAt:
+            data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
+          className: data.className || undefined,
+          classId: data.classId || undefined,
+          isArchived: data.isArchived || false,
+          examCode: data.examCode,
+        });
+      }
     });
 
     return exams;
@@ -639,29 +648,30 @@ export async function getExamsByClassId(classId: string): Promise<Exam[]> {
 /**
  * Get total scanned results count for all exams in a class
  */
-export async function getScannedResultsCountByClassId(classId: string): Promise<number> {
+export async function getScannedResultsCountByClassId(
+  classId: string,
+): Promise<number> {
   try {
     const q = query(
       collection(db, "exams"),
-      where("classId", "==", classId),
-      where("isArchived", "==", false)
+      where("classId", "==", classId)
     );
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) return 0;
 
-    const examIds = querySnapshot.docs.map(docSnap => docSnap.id);
-    
+    const examIds = querySnapshot.docs.map((docSnap) => docSnap.id);
+
     // Check results for each exam
     let totalCount = 0;
     for (const eid of examIds) {
       const rq = query(
         collection(db, "scannedResults"),
-        where("examId", "==", eid)
+        where("examId", "==", eid),
       );
       const rSnap = await getDocs(rq);
       totalCount += rSnap.size;
     }
-    
+
     return totalCount;
   } catch (error) {
     console.error("Error counting scanned results for class:", error);

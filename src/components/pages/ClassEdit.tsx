@@ -26,7 +26,9 @@ import {
   Edit3,
   FileText,
   Scan,
-  BarChart2,
+  ChevronRight,
+  Mail,
+  BarChart3,
 } from "lucide-react";
 import {
   getClassById,
@@ -43,7 +45,27 @@ import {
 } from "@/services/examService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { CreateExamModal } from "@/components/modals/CreateExamModal";
+import { AuditLogger } from "@/services/auditLogger";
 import { BackButton } from "@/components/ui/BackButton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import * as XLSX from "xlsx";
 
@@ -76,7 +98,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const [activeTab, setActiveTab] = useState<"students" | "exams" | "scan" | "stats">("students");
   const [exams, setExams] = useState<Exam[]>([]);
   const [allExams, setAllExams] = useState<Exam[]>([]);
-  const [isLoadingExams, setIsLoadingExams] = useState(false);
   const [newStudent, setNewStudent] = useState({
     student_id: "",
     first_name: "",
@@ -97,6 +118,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     "student_id" | "first_name" | "last_name" | "middle_name"
   >("student_id");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [showCreateExam, setShowCreateExam] = useState(false);
+  const [selectedScanExamId, setSelectedScanExamId] = useState("");
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!classId) {
@@ -146,6 +171,41 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         fetchAllExams();
     }
   }, [activeTab, classId, user?.id]);
+
+  const handleCreateExam = async (formData: any) => {
+    try {
+      if (!user?.id || !user.instructorId) {
+        toast.error("You must be logged in to create an exam");
+        return;
+      }
+
+      const examData = {
+        ...formData,
+        instructorId: user.instructorId,
+        createdBy: user.id,
+        classId: classId,
+        className: classData?.class_name || "",
+        created_at: new Date().toISOString(),
+      };
+
+      const { createExam } = await import("@/services/examService");
+      const newExam = await createExam(examData, user.id, user.instructorId);
+
+      if (user.email) {
+        AuditLogger.logActivity(user.id, user.email, "exam_created", `Created exam: ${formData.name}`, {
+          entityId: newExam.id,
+          entityType: "exam",
+        }).catch(console.error);
+      }
+
+      setExams((prev) => [newExam, ...prev]);
+      toast.success(`Exam "${formData.name}" created successfully`);
+      setShowCreateExam(false);
+    } catch (error) {
+      console.error("Error creating exam:", error);
+      toast.error("Failed to create exam");
+    }
+  };
 
   const handleSave = async () => {
     if (!classData) return;
@@ -644,7 +704,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     if (!selectedExam) return;
 
     try {
-        setIsLoadingExams(true);
+
         await updateExam(examId, {
             classId: classData.id,
             className: classData.class_name
@@ -662,8 +722,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     } catch (err) {
         console.error(err);
         toast.error("Failed to tag exam");
-    } finally {
-        setIsLoadingExams(false);
     }
   };
 
@@ -698,7 +756,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     { id: "students", label: `Students (${classData?.students?.length || 0})`, icon: Users },
     { id: "exams", label: `Exams (${stats.examCount})`, icon: FileText },
     { id: "scan", label: "Scan Papers", icon: Scan },
-    { id: "stats", label: "Stats", icon: BarChart2 }
+    { id: "stats", label: "Stats", icon: BarChart3 }
   ] as const;
 
   if (loading) {
@@ -1051,8 +1109,11 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleRemoveStudent(s.student_id)}
-                              className="h-7 w-7 p-0 text-gray-300 hover:text-red-500 hover:bg-red-50"
+                              onClick={() => {
+                                setStudentToDeleteId(s.student_id);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="h-8 w-8 p-0 text-red-500 bg-red-50 hover:bg-red-100 transition-all rounded-lg"
                             >
                               <X className="w-4 h-4" />
                             </Button>
@@ -1261,8 +1322,8 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   </SelectContent>
                 </Select>
                 <Button
-                  onClick={() => router.push(`/exams?create=true&classId=${classData.id}`)}
-                  className="flex items-center gap-2 h-10 px-6 bg-[#22c55e] text-white rounded-xl font-bold text-sm hover:bg-[#16a34a] shadow-md shadow-green-500/10 transition-all"
+                  onClick={() => setShowCreateExam(true)}
+                  className="flex items-center gap-2 h-10 px-6 bg-[#10B981] text-white rounded-xl font-bold text-sm hover:bg-[#059669] shadow-md shadow-green-500/10 transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Create Exam</span>
@@ -1347,20 +1408,270 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           </div>
         )}
 
-        {(activeTab === "scan" || activeTab === "stats") && (
-          <div className="py-20 text-center bg-white border border-gray-200 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Scan className="w-8 h-8 text-gray-300" />
+        {activeTab === "scan" && (
+          <div className="flex flex-col lg:flex-row gap-8 animate-in slide-in-from-bottom-2 duration-300 min-h-[500px]">
+            {/* Left: Scan Settings Card */}
+            <div className="w-full lg:w-[350px] shrink-0">
+               <Card className="p-8 rounded-[2rem] border border-gray-100 shadow-sm bg-white h-full flex flex-col">
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                      <Scan className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-[#1e293b]">Scan Settings</h3>
+                      <p className="text-xs text-gray-400 font-medium">Configure your capturing device</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-8 flex-1">
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Select Exam</label>
+                      <div className="relative group">
+                        <select 
+                          value={selectedScanExamId}
+                          onChange={(e) => setSelectedScanExamId(e.target.value)}
+                          className="w-full bg-[#f8fafc] border border-gray-200 rounded-2xl h-14 px-5 shadow-sm text-[15px] font-bold text-[#1e293b] focus:ring-4 focus:ring-green-500/10 focus:border-green-500 cursor-pointer appearance-none pr-12 transition-all outline-none"
+                        >
+                          <option value="">-- Choose an exam --</option>
+                          {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+                        </select>
+                        <div className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-green-500 transition-colors pointer-events-none">
+                          <ChevronRight className="w-5 h-5 rotate-90" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50/50 rounded-2xl p-5 border border-blue-100/50">
+                      <div className="flex gap-3">
+                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                            <Tag className="w-4 h-4 text-blue-600" />
+                         </div>
+                         <div>
+                            <p className="text-[13px] font-bold text-blue-900 leading-tight">Ready to Scan</p>
+                            <p className="text-[11px] text-blue-700/70 mt-1 leading-relaxed">Ensure the answer sheet is well-lit and all four corners are visible in the frame.</p>
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button 
+                    disabled={!selectedScanExamId}
+                    className={`w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition-all mt-8 ${
+                      selectedScanExamId 
+                      ? "bg-[#10B981] hover:bg-[#059669] text-white shadow-xl shadow-green-500/20 active:scale-[0.98]" 
+                      : "bg-[#f1f5f9] text-gray-400 opacity-60 cursor-not-allowed border border-gray-100"
+                    }`}
+                    onClick={() => {
+                        window.location.href = `/exams/${selectedScanExamId}/scan-papers`;
+                    }}
+                  >
+                    <Scan className="w-6 h-6" />
+                    Simulate Scan
+                  </Button>
+               </Card>
             </div>
-            <p className="text-gray-500 font-medium">
-              {activeTab === "scan" ? "Scan Papers Feature" : "Statistics Feature"}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              This section is currently being updated to match the new design.
-            </p>
+
+            {/* Right: Camera Box Placeholder */}
+            <div className="flex-1 bg-[#0F172A] rounded-[2.5rem] relative flex items-center justify-center border border-gray-800 shadow-2xl overflow-hidden group">
+               {/* Decorative elements */}
+               <div className="absolute top-8 left-8 flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">No Input Detected</span>
+               </div>
+               
+               {/* Inner dashed frame */}
+               <div className="w-[70%] h-[75%] border-2 border-dashed border-gray-800 rounded-3xl flex items-center justify-center group-hover:border-gray-700 transition-colors">
+                  <div className="text-center space-y-6 max-w-sm px-8">
+                    <div className="w-20 h-20 bg-gray-800/40 rounded-3xl flex items-center justify-center mx-auto mb-2 backdrop-blur-sm border border-gray-700/30">
+                       <Scan className="w-10 h-10 text-gray-600 group-hover:text-green-500 transition-colors" />
+                    </div>
+                    <div className="space-y-2">
+                       <h4 className="text-white font-bold text-lg">Scanner Interface</h4>
+                       <p className="text-gray-500 text-[14px] leading-relaxed">
+                         The camera feed will initialize once a scanning device is connected and an exam is selected.
+                       </p>
+                    </div>
+                    <div className="pt-4">
+                       <p className="text-gray-600 text-[11px] font-bold uppercase tracking-[0.2em] italic">
+                         Select an exam to begin
+                       </p>
+                    </div>
+                  </div>
+               </div>
+
+               {/* Frame corners */}
+               <div className="absolute top-12 right-12 w-8 h-8 border-r-2 border-t-2 border-gray-700 rounded-tr-xl" />
+               <div className="absolute bottom-12 left-12 w-8 h-8 border-l-2 border-b-2 border-gray-700 rounded-bl-xl" />
+            </div>
+          </div>
+        )}
+
+        {activeTab === "stats" && (
+          <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-300">
+            {/* Top Stat Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-green-500/10">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                    <BarChart3 className="w-5 h-5 text-green-600" />
+                  </div>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Class Average</p>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-[38px] font-bold text-[#1e293b]">88</p>
+                  <span className="text-xl font-bold text-gray-300">%</span>
+                </div>
+              </Card>
+
+              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-blue-500/10">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                    <Users className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Pass Rate</p>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-[38px] font-bold text-[#1e293b]">100</p>
+                  <span className="text-xl font-bold text-gray-300">%</span>
+                </div>
+              </Card>
+
+              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-purple-500/10">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                    <Scan className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Total Scans</p>
+                </div>
+                <p className="text-[38px] font-bold text-[#1e293b]">{stats.scanPapersCount}</p>
+              </Card>
+            </div>
+
+            <div className="flex justify-end pr-2">
+              <Button variant="outline" className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-12 px-8 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]">
+                <Mail className="w-5 h-5 text-gray-400" />
+                <span>Send All Scores to Students</span>
+              </Button>
+            </div>
+
+            {/* Exam Breakdown Table */}
+            <Card className="border border-gray-100 shadow-sm rounded-[2rem] overflow-hidden bg-white">
+              <div className="p-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                  <div>
+                    <h3 className="text-lg font-bold text-[#1e293b]">Exam Performance Breakdown</h3>
+                    <p className="text-xs text-gray-400 font-medium">Detailed results for each exam assigned to this class</p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-50 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-[#f8fafc] border-none">
+                        <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider pl-8">Exam Title</TableHead>
+                        <TableHead className="text-[11px] font-bold text-gray-400 text-center h-14 uppercase tracking-wider">Papers Scanned</TableHead>
+                        <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-10">Average Score</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {exams.length > 0 ? exams.map(exam => (
+                        <TableRow key={exam.id} className="border-b border-gray-50 h-[75px] hover:bg-gray-50/50 transition-colors group">
+                          <TableCell className="pl-8">
+                            <div className="flex items-center gap-4">
+                               <div className="w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors">
+                                  <FileText className="w-4.5 h-4.5 text-gray-400 group-hover:text-green-500 transition-colors" />
+                               </div>
+                               <div>
+                                  <p className="text-[15px] font-bold text-[#1e293b] leading-tight">{exam.title}</p>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{exam.subject}</p>
+                               </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className="inline-flex items-center justify-center w-10 h-6 bg-gray-50 text-gray-700 rounded-full text-[13px] font-bold border border-gray-100">
+                              {exam.scannedCount || 0}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right pr-10">
+                            <span className="text-[16px] font-bold text-[#10B981]">
+                              {exam.averageScore || "0"} <span className="text-[11px] font-bold opacity-40">%</span>
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow>
+                          <TableCell colSpan={3} className="h-40 text-center">
+                            <div className="flex flex-col items-center justify-center text-gray-400">
+                               <BarChart3 className="w-8 h-8 opacity-20 mb-3" />
+                               <p className="text-sm font-bold opacity-40">No records to display yet</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </Card>
           </div>
         )}
       </div>
+
+      {showCreateExam && (
+        <CreateExamModal 
+          isOpen={showCreateExam} 
+          onClose={() => setShowCreateExam(false)}
+          onCreateExam={handleCreateExam}
+          existingExamTitles={exams.map(e => e.title)}
+          fromTemplate={{
+            name: "",
+            totalQuestions: 50,
+            choicesPerItem: 4,
+            description: "",
+            folder: classData?.course_subject || ""
+          }}
+          classId={classId || ""}
+          className={classData?.class_name || ""}
+          folder={classData?.course_subject || ""}
+          simpleMode={true}
+        />
+      )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-2xl border-none shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold text-gray-900">
+              Confirm Student Removal
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500">
+              Are you sure you want to remove this student from the class? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel
+              onClick={() => {
+                setStudentToDeleteId(null);
+                setIsDeleteDialogOpen(false);
+              }}
+              className="rounded-xl border-gray-200 text-gray-600 font-semibold hover:bg-gray-50"
+            >
+              No
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (studentToDeleteId) {
+                  handleRemoveStudent(studentToDeleteId);
+                  setStudentToDeleteId(null);
+                  setIsDeleteDialogOpen(false);
+                }
+              }}
+              className="rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
+            >
+              Yes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -154,6 +154,9 @@ export default function ClassManagement() {
           entityName: classToAdd.class_name,
         },
       );
+
+      // Refresh page to update sidebar exam link status
+      window.location.reload();
     } catch (error) {
       console.error("Error saving class to Firebase:", error);
       setClasses((prevClasses) => prevClasses.filter((c) => c.id !== tempId));
@@ -413,7 +416,7 @@ export default function ClassManagement() {
 
                 {/* Year */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <label className="text-xs font-semibold  text-gray-500 uppercase tracking-wide">
                     YEAR LEVEL <span className="text-red-500">*</span>
                   </label>
                   <Select
@@ -423,15 +426,15 @@ export default function ClassManagement() {
                     }
                   >
                     <SelectTrigger
-                      className={`h-9 text-sm border rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors ${
+                      className={`h-9 text-sm border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500  transition-colors ${
                         newClass.year
-                          ? "border-green-400 bg-green-50/40"
+                          ? "border-green-400 bg-green-50"
                           : "border-gray-200"
                       }`}
                     >
                       <SelectValue placeholder="Select year level" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-white">
                       <SelectItem
                         value="1"
                         className="focus:bg-green-50 focus:text-green-700"

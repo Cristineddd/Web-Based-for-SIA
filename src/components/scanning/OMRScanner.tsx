@@ -1149,7 +1149,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     width: number,
     height: number,
     grayscale?: Uint8Array,
-    templateType?: 20 | 50 | 100
+    templateType?: 20 | 50 | 100 | 150
   ): {
     found: boolean;
     confidence: number;
@@ -1595,213 +1595,229 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   }
 
   const getTemplateLayout = (numQuestions: number): TemplateLayout => {
-    const templateType = numQuestions <= 20 ? 20 : numQuestions <= 50 ? 50 : 100;
+    const templateType = numQuestions <= 20 ? 20 : numQuestions <= 50 ? 50 : numQuestions <= 100 ? 100 : 150;
 
     if (templateType === 20) {
-      // Mini sheet 105 × 148.5 mm
-      // Marker centers: TL (7, 19)  BR (98, 126)  →  frame 91 × 107 mm
-      const fw = 91, fh = 107;
+      // Mini sheet 210 × 148.5 mm (half A4 - horizontal split)
+      // Corner markers at cornerInset=2, markerSize=8
+      // Top-left marker center: (2+4, 2+4) = (6, 6)
+      // Top-right marker center: (210-2-4, 6) = (204, 6)
+      // Bottom marker center: (6, 148.5-2-4) = (6, 142.5)
+      // fw = 204 - 6 = 198, fh = 142.5 - 6 = 136.5
+      //
+      // Student ID: margin=10, idPad=2, idLabelW=6, idColSpacing=4.8, 9 columns
+      // idBorderX = 10, idContentX = 12, idStartX = 18
+      // First ID bubble at (18, ~37) relative to sheet top-left
+      // First ID bubble from TL marker center: (18-6, 37-6) = (12, 31)
+      //
+      // Answer section: bubbleSpacing=5.5, ansRowH=5.2, numW=10
+      // bubbleSize=3.5
+      const fw = 198, fh = 136.5;
+      
+      // ID section: firstColNX = (idStartX - 6) / fw = 12 / 198
+      // ID first row after header+boxes: ~37mm from top, from TL marker: 37-6 = 31
+      // Answer blocks: currentY starts after ID section (~55mm)
+      // Block starts with regMark, then header (+5), then first bubble row
+      // First bubble Y from TL marker center
+      // colWidth = (210 - 2 * 10) / 2 = 95mm per column for 20-item
+      
       return {
         id: {
-          firstColNX: 11 / fw,
-          firstRowNY: 15 / fh,
-          colSpacingNX: 4.5 / fw,
-          rowSpacingNY: 3.5 / fh,
+          firstColNX: 12 / fw,
+          firstRowNY: 31 / fh,
+          colSpacingNX: 4.8 / fw,  // 9 columns
+          rowSpacingNY: 4.0 / fh,
         },
         answerBlocks: [
           {
             startQ: 1, endQ: 10,
-            firstBubbleNX: 13 / fw, firstBubbleNY: 58 / fh,
-            bubbleSpacingNX: 4.8 / fw, rowSpacingNY: 4.5 / fh,
+            // bx = startX + margin + 0 * colWidth = 10, first bubble at bx + numW = 20
+            // From TL marker center: 20 - 6 = 14
+            // Y: after ID section (~55) + regMark + header(5) = ~62, from TL: 62-6 = 56
+            firstBubbleNX: 14 / fw, firstBubbleNY: 56 / fh,
+            bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh,
           },
           {
             startQ: 11, endQ: 20,
-            firstBubbleNX: 55.5 / fw, firstBubbleNY: 58 / fh,
-            bubbleSpacingNX: 4.8 / fw, rowSpacingNY: 4.5 / fh,
+            // bx = 10 + 1 * 95 = 105, first bubble at 105 + 10 = 115
+            // From TL marker center: 115 - 6 = 109
+            firstBubbleNX: 109 / fw, firstBubbleNY: 56 / fh,
+            bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh,
           },
         ],
-        bubbleDiameterNX: 3.2 / fw,
-        bubbleDiameterNY: 3.2 / fh,
+        bubbleDiameterNX: 3.5 / fw,
+        bubbleDiameterNY: 3.5 / fh,
       };
     }
 
     if (templateType === 50) {
-      // Half-page sheet 105 × 297 mm
-      // Marker centers: TL (7, 19)  BR (98, 230)  →  frame 91 × 211 mm
-      const fw = 91, fh = 211;
+      // Half-page sheet 210 × 148.5 mm (half A4 - horizontal split)
+      // Same marker layout as 20-item
+      const fw = 198, fh = 136.5;
+      
+      // 5 blocks across: blockWidth = (210 - 2*10) / 5 = 38mm
+      
       return {
         id: {
-          firstColNX: 11 / fw,
-          firstRowNY: 15 / fh,
-          colSpacingNX: 4.5 / fw,
-          rowSpacingNY: 3.5 / fh,
+          firstColNX: 12 / fw,
+          firstRowNY: 31 / fh,
+          colSpacingNX: 4.8 / fw,  // 9 columns
+          rowSpacingNY: 4.0 / fh,
         },
         answerBlocks: [
-          // Left column: Q1–10, Q11–20, Q21–30
+          // All 5 blocks in a single row
           {
             startQ: 1, endQ: 10,
-            firstBubbleNX: 13 / fw, firstBubbleNY: 58 / fh,
-            bubbleSpacingNX: 4.8 / fw, rowSpacingNY: 4.5 / fh,
+            // bx = 10 + 0 * 38 = 10, first bubble at 10 + 10 = 20, from TL: 14
+            firstBubbleNX: 14 / fw, firstBubbleNY: 56 / fh,
+            bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh,
           },
           {
             startQ: 11, endQ: 20,
-            firstBubbleNX: 13 / fw, firstBubbleNY: 110 / fh,
-            bubbleSpacingNX: 4.8 / fw, rowSpacingNY: 4.5 / fh,
+            // bx = 10 + 1 * 38 = 48, first bubble at 48 + 10 = 58, from TL: 52
+            firstBubbleNX: 52 / fw, firstBubbleNY: 56 / fh,
+            bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh,
           },
           {
             startQ: 21, endQ: 30,
-            firstBubbleNX: 13 / fw, firstBubbleNY: 162 / fh,
-            bubbleSpacingNX: 4.8 / fw, rowSpacingNY: 4.5 / fh,
+            // bx = 10 + 2 * 38 = 86, first bubble at 86 + 10 = 96, from TL: 90
+            firstBubbleNX: 90 / fw, firstBubbleNY: 56 / fh,
+            bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh,
           },
-          // Right column: Q31–40, Q41–50
           {
             startQ: 31, endQ: 40,
-            firstBubbleNX: 55.5 / fw, firstBubbleNY: 58 / fh,
-            bubbleSpacingNX: 4.8 / fw, rowSpacingNY: 4.5 / fh,
+            // bx = 10 + 3 * 38 = 124, first bubble at 124 + 10 = 134, from TL: 128
+            firstBubbleNX: 128 / fw, firstBubbleNY: 56 / fh,
+            bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh,
           },
           {
             startQ: 41, endQ: 50,
-            firstBubbleNX: 55.5 / fw, firstBubbleNY: 110 / fh,
-            bubbleSpacingNX: 4.8 / fw, rowSpacingNY: 4.5 / fh,
+            // bx = 10 + 4 * 38 = 162, first bubble at 162 + 10 = 172, from TL: 166
+            firstBubbleNX: 166 / fw, firstBubbleNY: 56 / fh,
+            bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh,
           },
         ],
-        bubbleDiameterNX: 3.2 / fw,
-        bubbleDiameterNY: 3.2 / fh,
+        bubbleDiameterNX: 3.5 / fw,
+        bubbleDiameterNY: 3.5 / fh,
       };
     }
 
     // 100‑question full page  210 × 297 mm
     //
-    // PDF LAYOUT TRACE (with logo + exam code):
-    //   Top markers: rect(3,3,7,7) & rect(200,3,7,7) → centers at (6.5, 6.5) & (203.5, 6.5)
-    //   currentY = 12 → +logoSize(12)+4 = 28 → +examCode(5) = 33 → +Name/Date(5) = 38
-    //   idTopY = 38, +7 → 45 (ID boxes), +idBoxH(5)+3 = 53 → idBubbleY = 53
-    //   ID first bubble column: idStartX = 10(margin)+3(pad)+8(label) = 21
-    //   ID bottom = 53 + 10*4.8 + 2 = 103, +4 → gridStartY = 107
-    //   Grid row 0: by=107, header+4.5 → first bubble at 111.5
-    //   Grid row 1: by=107+56=163, header+4.5 → first bubble at 167.5
-    //   Row 1 last qY = 163 + 4.5 + 10*4.8 = 215.5
-    //   bmY = 215.5 + 3 = 218.5 → bottom marker centers at (6.5, 222) & (203.5, 222)
+    // UPDATED PDF LAYOUT (templatePdfGenerator.ts):
+    //   margin=10, cornerInset=2, markerSize=8
+    //   Top-left marker: rect(2, 2, 8, 8) → center at (6, 6)
+    //   Top-right marker: rect(200, 2, 8, 8) → center at (204, 6)
+    //   Bottom markers: center at (6, 291) & (204, 291)
+    //   fw = 204 - 6 = 198, fh = 291 - 6 = 285
     //
-    //   fw = 203.5 - 6.5 = 197  ✓
-    //   fh = 222 - 6.5 = 215.5
+    //   Header: currentY starts at cornerInset + 3 = 5
+    //   After logo (10) + 2 = 17
+    //   After exam code + 4 = 21
+    //   After name/date + 4 = 25
+    //   ID section: idStartX = margin + idPad + idLabelW = 10 + 2 + 6 = 18
+    //   ID bubbles first row Y ≈ 36.5 (after boxes)
+    //   ID bottom ≈ 78, grid starts at ≈ 81
     //
-    // All NY values are (pageY - 6.5) / fh
-    // All NX values are (pageX - 6.5) / fw
+    //   bubbleGap=5.5, rowH=5.2, numW=10, bubbleSize=3.5
+    //   qBlockW = 10 + 4*5.5 + 3.5 = 35.5mm
+    //   colGap = (190 - 5*35.5) / 6 ≈ 2.08mm
+    //   Block col 0: bx = 10 + 2.08 = 12.08, first bubble at 22.08
+    //   Block col 1: bx = 12.08 + 35.5 + 2.08 = 49.66, first bubble at 59.66
+    //   etc.
+    //   blockVGap = 10 * 5.2 + 10 = 62mm
     //
-    // EXACT COORDINATE DERIVATION from drawFullSheet():
-    //   margin=10, inset=3, markerSize=7, lx=10, rx=200, usableW=190
-    //   bubbleGap=5.0, rowH=4.8, numW=12 (space for question numbers)
-    //   qBlockW = 12 + (5-1)*5.0 + 3.8 = 35.8mm
-    //   colGap = (190 - 4*35.8) / 5 = 9.36mm
-    //
-    // Top section (Q41-50, Q71-80):
-    //   idBorderW = (8 + 10*4.5) + 2*3 = 59mm, afterIdX = 10+59 = 69mm
-    //   remainW = 200-69 = 131mm, topGap = (131 - 2*35.8)/2 = 29.7mm
-    //   b41x = 69 + 29.7/2 = 83.85mm → first bubble at 83.85+12 = 95.85mm page
-    //   b71x = 83.85 + 35.8 + 29.7 = 149.35mm → first bubble at 161.35mm page
-    //
-    // Bottom grid (4 cols × 2 rows):
-    //   col0: bx = 10 + 9.36 = 19.36mm → first bubble at 31.36mm page
-    //   col1: bx = 10 + 9.36 + 45.16 = 64.52mm → first bubble at 76.52mm page
-    //   col2: bx = 10 + 9.36 + 90.32 = 109.68mm → first bubble at 121.68mm page
-    //   col3: bx = 10 + 9.36 + 135.48 = 154.84mm → first bubble at 166.84mm page
-    //
-    // NX = (pageX - 6.5) / fw, NY = (pageY - 6.5) / fh
-    const fw = 197, fh = 215.5;
+    // NX = (pageX - 6) / fw, NY = (pageY - 6) / fh
+    const fw = 198, fh = 285;
+    
+    // Calculate block positions
+    // bubbleGap=5.5, rowH=5.2, numW=10, bubbleSize=3.5
+    // qBlockW = 10 + 4*5.5 + 3.5 = 35.5mm
+    // blockVGap = 10 * rowH + 10 = 62mm
+    const qBlockW = 35.5;
+    const colGap = 2.08;
+    const numW = 10;
+    const blockVGap = 62;
+    
+    // First bubble X positions for each column (from page left edge)
+    const col0X = 10 + colGap + numW; // 22.08
+    const col1X = 10 + colGap + (qBlockW + colGap) + numW; // 59.66
+    const col2X = 10 + colGap + 2 * (qBlockW + colGap) + numW; // 97.24
+    const col3X = 10 + colGap + 3 * (qBlockW + colGap) + numW; // 134.82
+    const col4X = 10 + colGap + 4 * (qBlockW + colGap) + numW; // 172.4
+    
+    // Grid starts at Y ≈ 81, first bubble after header (+5) = 86
+    const gridStartY = 81;
+    const row0FirstBubbleY = gridStartY + 5; // 86
+    const row1FirstBubbleY = gridStartY + blockVGap + 5; // 148
+    
+    if (templateType === 100) {
+      return {
+        id: {
+          // idStartX = 18 → from TL marker: 18 - 6 = 12
+          firstColNX: 12 / fw,
+          // ID bubbles start at Y ≈ 36.5 → from TL marker: 36.5 - 6 = 30.5
+          firstRowNY: 30.5 / fh,
+          colSpacingNX: 4.8 / fw,
+          rowSpacingNY: 4.0 / fh,
+        },
+        answerBlocks: [
+          // Col 0: Q1-10, Q11-20 (down)
+          { startQ: 1, endQ: 10, firstBubbleNX: (col0X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          { startQ: 11, endQ: 20, firstBubbleNX: (col0X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          // Col 1: Q21-30, Q31-40 (down)
+          { startQ: 21, endQ: 30, firstBubbleNX: (col1X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          { startQ: 31, endQ: 40, firstBubbleNX: (col1X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          // Col 2: Q41-50, Q51-60 (down)
+          { startQ: 41, endQ: 50, firstBubbleNX: (col2X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          { startQ: 51, endQ: 60, firstBubbleNX: (col2X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          // Col 3: Q61-70, Q71-80 (down)
+          { startQ: 61, endQ: 70, firstBubbleNX: (col3X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          { startQ: 71, endQ: 80, firstBubbleNX: (col3X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          // Col 4: Q81-90, Q91-100 (down)
+          { startQ: 81, endQ: 90, firstBubbleNX: (col4X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+          { startQ: 91, endQ: 100, firstBubbleNX: (col4X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        ],
+        bubbleDiameterNX: 3.5 / fw,
+        bubbleDiameterNY: 3.5 / fh,
+      };
+    }
+    
+    // 150 Questions - Full page with 5 cols × 3 rows
+    // Same layout as 100-item but with 3 rows
+    const row2FirstBubbleY = gridStartY + 2 * blockVGap + 5; // 210
+    
     return {
       id: {
-        // idStartX=21 page mm → (21 - 6.5) = 14.5 mm from TL marker center
-        firstColNX: 14.5 / fw,
-        // idBubbleY=53 page mm → (53 - 6.5) = 46.5 mm from TL marker center
-        firstRowNY: 46.5 / fh,
-        colSpacingNX: 4.5 / fw,
-        rowSpacingNY: 4.8 / fh,
+        firstColNX: 12 / fw,
+        firstRowNY: 30.5 / fh,
+        colSpacingNX: 4.8 / fw,
+        rowSpacingNY: 4.0 / fh,
       },
       answerBlocks: [
-        // Top row (beside ID section) — aligned to idBubbleY
-        // drawQBlock header at Y=53, +4.5 → first bubble Y = 57.5 → NY = 51/fh
-        {
-          startQ: 41, endQ: 50,
-          // b41x=83.85, first bubble = 83.85+12 = 95.85 → NX = (95.85-6.5)/fw = 89.35/fw
-          firstBubbleNX: 89.35 / fw,
-          firstBubbleNY: 51 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        {
-          startQ: 71, endQ: 80,
-          // b71x=149.35, first bubble = 149.35+12 = 161.35 → NX = (161.35-6.5)/fw = 154.85/fw
-          firstBubbleNX: 154.85 / fw,
-          firstBubbleNY: 51 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        // Bottom grid – row 0: by=107, header+4.5 → first bubble at Y=111.5 → NY = 105/fh
-        {
-          startQ: 1, endQ: 10,
-          // col0: bx=19.36, first bubble = 31.36 → NX = 24.86/fw
-          firstBubbleNX: 24.86 / fw,
-          firstBubbleNY: 105 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        {
-          startQ: 21, endQ: 30,
-          // col1: bx=64.52, first bubble = 76.52 → NX = 70.02/fw
-          firstBubbleNX: 70.02 / fw,
-          firstBubbleNY: 105 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        {
-          startQ: 51, endQ: 60,
-          // col2: bx=109.68, first bubble = 121.68 → NX = 115.18/fw
-          firstBubbleNX: 115.18 / fw,
-          firstBubbleNY: 105 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        {
-          startQ: 81, endQ: 90,
-          // col3: bx=154.84, first bubble = 166.84 → NX = 160.34/fw
-          firstBubbleNX: 160.34 / fw,
-          firstBubbleNY: 105 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        // Bottom grid – row 1: by=163, header+4.5 → first bubble at Y=167.5 → NY = 161/fh
-        {
-          startQ: 11, endQ: 20,
-          firstBubbleNX: 24.86 / fw,
-          firstBubbleNY: 161 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        {
-          startQ: 31, endQ: 40,
-          firstBubbleNX: 70.02 / fw,
-          firstBubbleNY: 161 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        {
-          startQ: 61, endQ: 70,
-          firstBubbleNX: 115.18 / fw,
-          firstBubbleNY: 161 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
-        {
-          startQ: 91, endQ: 100,
-          firstBubbleNX: 160.34 / fw,
-          firstBubbleNY: 161 / fh,
-          bubbleSpacingNX: 5.0 / fw,
-          rowSpacingNY: 4.8 / fh,
-        },
+        // Col 0: Q1-10, Q11-20, Q21-30 (down)
+        { startQ: 1, endQ: 10, firstBubbleNX: (col0X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 11, endQ: 20, firstBubbleNX: (col0X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 21, endQ: 30, firstBubbleNX: (col0X - 6) / fw, firstBubbleNY: (row2FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        // Col 1: Q31-40, Q41-50, Q51-60 (down)
+        { startQ: 31, endQ: 40, firstBubbleNX: (col1X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 41, endQ: 50, firstBubbleNX: (col1X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 51, endQ: 60, firstBubbleNX: (col1X - 6) / fw, firstBubbleNY: (row2FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        // Col 2: Q61-70, Q71-80, Q81-90 (down)
+        { startQ: 61, endQ: 70, firstBubbleNX: (col2X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 71, endQ: 80, firstBubbleNX: (col2X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 81, endQ: 90, firstBubbleNX: (col2X - 6) / fw, firstBubbleNY: (row2FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        // Col 3: Q91-100, Q101-110, Q111-120 (down)
+        { startQ: 91, endQ: 100, firstBubbleNX: (col3X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 101, endQ: 110, firstBubbleNX: (col3X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 111, endQ: 120, firstBubbleNX: (col3X - 6) / fw, firstBubbleNY: (row2FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        // Col 4: Q121-130, Q131-140, Q141-150 (down)
+        { startQ: 121, endQ: 130, firstBubbleNX: (col4X - 6) / fw, firstBubbleNY: (row0FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 131, endQ: 140, firstBubbleNX: (col4X - 6) / fw, firstBubbleNY: (row1FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
+        { startQ: 141, endQ: 150, firstBubbleNX: (col4X - 6) / fw, firstBubbleNY: (row2FirstBubbleY - 6) / fh, bubbleSpacingNX: 5.5 / fw, rowSpacingNY: 5.2 / fh },
       ],
-      bubbleDiameterNX: 3.8 / fw,
-      bubbleDiameterNY: 3.8 / fh,
+      bubbleDiameterNX: 3.5 / fw,
+      bubbleDiameterNY: 3.5 / fh,
     };
   };
 
@@ -1863,7 +1879,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const dummyBinary = new Uint8Array(0); // not used by new marker detector
     
     // Determine template type BEFORE finding markers (needed for position heuristics)
-    const templateType = numQuestions <= 20 ? 20 : numQuestions <= 50 ? 50 : 100;
+    const templateType = numQuestions <= 20 ? 20 : numQuestions <= 50 ? 50 : numQuestions <= 100 ? 100 : 150;
     
     const markers = findCornerMarkers(dummyBinary, width, height, rawGrayscale, templateType);
     console.log('[OMR] Corner markers found:', markers.found,

@@ -94,6 +94,7 @@ export default function Exams() {
     examCode: "",
     institutionName: "",
     logoUrl: "",
+    classId: "",
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
@@ -308,6 +309,7 @@ export default function Exams() {
         className: formData.className,
         examType: formData.examType || "board",
         status: "draft",
+        isArchived: false,
       };
 
       // Add to UI immediately (optimistic)
@@ -370,10 +372,11 @@ export default function Exams() {
       subject: exam.subject,
       num_items: exam.num_items,
       choices_per_item: exam.choices_per_item || 4,
-      examType: exam.examType || "board",
+      examType: (exam.examType as any) || "board",
       examCode: exam.examCode || "",
       institutionName: exam.institutionName || "",
       logoUrl: exam.logoUrl || "",
+      classId: exam.classId || "",
     });
   };
 
@@ -396,7 +399,7 @@ export default function Exams() {
       setIsSavingEdit(true);
 
       // Update exam fields in Firestore
-      await updateExam(editingExam.id, {
+      const updated: Partial<Exam> = {
         title: editForm.title.trim(),
         subject: editForm.subject.trim(),
         num_items: editForm.num_items,
@@ -405,7 +408,11 @@ export default function Exams() {
         examCode: editForm.examCode.trim().toUpperCase(),
         institutionName: editForm.institutionName,
         logoUrl: editForm.logoUrl,
-      });
+        classId: editForm.classId || null,
+        className: editForm.classId ? classById[editForm.classId]?.class_name : null,
+      };
+
+      await updateExam(editingExam.id, updated);
 
       // Delete any existing template linked to this exam so a new one can be generated
       const templateQuery = query(
@@ -674,6 +681,7 @@ export default function Exams() {
         onCreateExam={handleCreateExam}
         fromTemplate={templateData}
         existingExamTitles={exams.map((e) => e.title)}
+        simpleMode={true}
       />
 
       {/* Edit Exam Dialog */}
@@ -835,6 +843,25 @@ export default function Exams() {
                       {opt.label}
                     </button>
                   ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Tagged Class
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  <select
+                    value={editForm.classId}
+                    onChange={(e) => setEditForm({ ...editForm, classId: e.target.value })}
+                    className="w-full h-10 px-3 rounded-md border-2 border-muted bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  >
+                    <option value="">No Class (Unallocated)</option>
+                    {Object.values(classById).map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        {cls.class_name} ({cls.course_subject})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
