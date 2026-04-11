@@ -160,9 +160,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   }, [stream]);
 
   // Get the template type from question count
-  const getTemplateType = (): 20 | 50 | 100 => {
+  const getTemplateType = (): 20 | 50 | 100 | 150 => {
     const numQ = exam?.num_items || 20;
-    return numQ <= 20 ? 20 : numQ <= 50 ? 50 : 100;
+    return numQ <= 20 ? 20 : numQ <= 50 ? 50 : numQ <= 100 ? 100 : 150;
   };
 
   // Start camera
@@ -173,6 +173,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       const constraints: MediaTrackConstraints = templateType === 20
         ? { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
         : templateType === 50
+        ? { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+        : (templateType === 100 || templateType === 150)
         ? { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
         : { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } };
 
@@ -218,7 +220,10 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   // Get the guide frame crop region as fractions of the video dimensions
   const getGuideCropRegion = (videoWidth: number, videoHeight: number): { x: number; y: number; w: number; h: number } => {
     const t = getTemplateType();
-    const paperAspect = t === 50 ? (105 / 297) : t === 100 ? (210 / 297) : (105 / 148.5); // w/h
+    // Paper aspect ratio (width / height):
+    // - 20/50-item: half-page landscape → 210mm / 148.5mm
+    // - 100/150-item: full-page portrait → 210mm / 297mm
+    const paperAspect = (t === 100 || t === 150) ? (210 / 297) : (210 / 148.5);
 
     // Match the canvas overlay PAD=0.12 → fit inside 76% of each dimension
     const maxWfrac = 0.76;
@@ -359,38 +364,47 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     // Adaptive threshold: normalize global brightness to handle dark/bright scenes
     const globalBrightness = rectAvgLive(0, 0, dw, dh);
-    // A "dark enough" marker: below 55% of global brightness
-    const darkThreshold = Math.min(100, globalBrightness * 0.55);
-    // A "bright enough" paper ring: above 65% of global brightness
-    const brightThreshold = Math.max(110, globalBrightness * 0.65);
+    // A "dark enough" marker: below 60% of global brightness (relaxed from 55%)
+    const darkThreshold = Math.min(120, globalBrightness * 0.60);
+    // A "bright enough" paper ring: above 60% of global brightness (relaxed from 65%)
+    const brightThreshold = Math.max(100, globalBrightness * 0.60);
 
-    // Marker is ~3.3% of paper width → ~15px at 480px wide
-    const markerSize = Math.max(8, Math.round(dw * 0.033));
-    const half = Math.floor(markerSize / 2);
-    // Use fine step (1/4 of marker size) for better sub-pixel coverage
-    const step = Math.max(2, Math.floor(markerSize / 4));
-    
+    // Get template type first
     const t = getTemplateType();
+    
+    // Marker size varies by template:
+    // - 50/20-item (half-page): 8mm on 210mm paper → 3.8% of width
+    // - 100/150-item (full-page): 8mm on 210mm paper → 3.8% of width
+    const markerPct = t === 100 || t === 150 ? 0.038 : 0.038;
+    const markerSize = Math.max(10, Math.round(dw * markerPct));
+    const half = Math.floor(markerSize / 2);
+    // Use fine step (1/3 of marker size) for better sub-pixel coverage
+    const step = Math.max(2, Math.floor(markerSize / 3));
+    
     // Search windows match the exact marker positions from templatePdfGenerator:
-    //   50-item: yTop≈7.4%, yBot≈79.5%  →  search top 0–20%, bottom 65–100%
-    //   20-item: yTop≈14.8%, yBot≈88.9% →  search top 0–28%, bottom 75–100%
-    //   100-item: yTop≈2.2%, yBot≈74.7% → search top 0–15%, bottom 60–85%
-    // X margins cover left/right 20-25% of paper to catch the 3.1% / 96.9% positions.
+    //   50-item: half-page 210×148.5mm, markers at corners with 2mm inset
+    //     topY ≈ 2/148.5 = 1.35%, bottomY ≈ 138.5/148.5 = 93.3%
+    //   20-item: half-page 210×148.5mm, same positions
+    //   100-item: full-page 210×297mm, topY ≈ 2/297 = 0.67%, bottomY ≈ 287/297 = 96.6%
+    //   150-item: full-page 210×297mm, same positions as 100
+    // X margins: markers at 2mm (0.95%) and 200mm (95.2%) from 210mm width
     let marginX: number, topH: number, botY1: number, botY2: number;
-    if (t === 100) {
-      marginX = Math.round(dw * 0.25);  // wider — markers at 3.1%/96.9% of paper width
-      topH    = Math.round(dh * 0.20);  // more headroom at top
-      botY1   = Math.round(dh * 0.55);  // start earlier
-      botY2   = dh;                     // go all the way to bottom edge
-    } else if (t === 50) {
+    if (t === 100 || t === 150) {
+      // Full-page templates
+      marginX = Math.round(dw * 0.25);  // search 0-25% and 75-100%
+      topH    = Math.round(dh * 0.18);  // search 0-18% to cover 0.67%
+      botY1   = Math.round(dh * 0.88);  // search 88-100% to cover 96.6%
+      botY2   = dh;
+    } else if (t === 50 || t === 20) {
+      // Half-page templates (both have same marker positions)
+      marginX = Math.round(dw * 0.25);  // search 0-25% and 75-100%
+      topH    = Math.round(dh * 0.18);  // search 0-18% to cover 1.35%
+      botY1   = Math.round(dh * 0.82);  // search 82-100% to cover 93.3%
+      botY2   = dh;
+    } else {
+      // Fallback
       marginX = Math.round(dw * 0.25);
       topH    = Math.round(dh * 0.20);
-      botY1   = Math.round(dh * 0.65);
-      botY2   = Math.round(dh * 0.95);
-    } else {
-      // 20-item
-      marginX = Math.round(dw * 0.25);
-      topH    = Math.round(dh * 0.28);
       botY1   = Math.round(dh * 0.75);
       botY2   = dh;
     }
@@ -424,7 +438,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           const q2 = rectAvgLive(cx,         cy - half, cx + half, cy);
           const q3 = rectAvgLive(cx - half, cy,         cx, cy + half);
           const q4 = rectAvgLive(cx,         cy,         cx + half, cy + half);
-          if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 70) continue;
+          // Relaxed from 70 to 85 for better tolerance
+          if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 85) continue;
 
           // 3. At least ONE surrounding side must be bright (on paper, not desk)
           const ringInner = Math.floor(half * 1.2);
@@ -450,16 +465,17 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         }
       }
 
-      if (bestContrast > 30) {
+      // Relaxed contrast threshold from 30 to 20 for better detection
+      if (bestContrast > 20) {
         cornersFound++;
         foundCorners.push(region.name);
         bestPos[region.name] = { cx: bestCx, cy: bestCy };
       }
     }
     
-    // Periodic log for debugging (kept at low frequency)
-    if (Math.random() < 0.05) {
-      console.log(`[LiveScan] ${dw}x${dh} t=${t} found=${foundCorners.join(',') || 'none'} (${cornersFound}/4)`);
+    // Periodic log for debugging (increased frequency for troubleshooting)
+    if (Math.random() < 0.1) {
+      console.log(`[LiveScan] ${dw}x${dh} t=${t} found=${foundCorners.join(',') || 'none'} (${cornersFound}/4) markerSize=${markerSize} darkTh=${darkThreshold.toFixed(0)} brightTh=${brightThreshold.toFixed(0)} globalBright=${globalBrightness.toFixed(0)}`);
     }
     
     const allFound = cornersFound >= 4;
@@ -509,7 +525,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     // Paper guide area — fit paper aspect ratio centered in the viewport
     const t = getTemplateType();
-    const paperAspect = t === 50 ? 105 / 297 : t === 100 ? 210 / 297 : 105 / 148.5;
+    const paperAspect = (t === 100 || t === 150) ? 210 / 297 : 210 / 148.5;
     const PAD = 0.12;
     const maxW = vw * (1 - PAD * 2);
     const maxH = vh * (1 - PAD * 2);
@@ -525,25 +541,22 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     // Marker positions as fractions of paper width/height —
     // Derived exactly from templatePdfGenerator.ts drawMiniSheet/drawFullSheet:
     //
-    // Mini sheet (20 & 50-item): markerSize=4mm, inset=5mm
-    //   X: left center = (5+2)/paperW, right center = (paperW-5-2)/paperW
-    //   Y top: topBlackSquareY ≈ 22mm from top → 22/paperH
-    //   Y bot (50-item, 105×297): maxQY≈234mm → bottomY=236/297≈0.795
-    //   Y bot (20-item, 105×148.5): maxQY≈130mm → bottomY=132/148.5≈0.889
+    // Mini sheet (20 & 50-item): 210×148.5mm, markerSize=8mm, cornerInset=2mm
+    //   X: left center = (2+4)/210 = 2.86%, right center = (200+4)/210 = 97.14%
+    //   Y top: (2+4)/148.5 = 4.04%
+    //   Y bot: (138.5+4)/148.5 = 95.96%
     //
-    // Full sheet (100-item, 210×297): markerSize=7mm, inset=3mm
-    //   X: (3+3.5)/210=0.031, (210-3-3.5)/210=0.969
-    //   Y top: startY+inset+markerSize/2 = 3+3.5 = 6.5mm → 6.5/297=0.022
-    //   Y bot: bmY=maxQY+3, maxQY≈215.5 → bmY=218.5, center=222mm → 222/297=0.747
+    // Full sheet (100 & 150-item): 210×297mm, markerSize=8mm, cornerInset=2mm
+    //   X: left center = (2+4)/210 = 2.86%, right center = (200+4)/210 = 97.14%
+    //   Y top: (2+4)/297 = 2.02%
+    //   Y bot: (287+4)/297 = 98.0%
     let mxL: number, mxR: number, myT: number, myB: number;
-    if (t === 100) {
-      mxL = 0.031; mxR = 0.969; myT = 0.022; myB = 0.747;
-    } else if (t === 50) {
-      // 105×297mm
-      mxL = 0.067; mxR = 0.933; myT = 0.074; myB = 0.795;
+    if (t === 100 || t === 150) {
+      // Full-page: 210x297mm
+      mxL = 0.0286; mxR = 0.9714; myT = 0.0202; myB = 0.9798;
     } else {
-      // 20-item, 105×148.5mm
-      mxL = 0.067; mxR = 0.933; myT = 0.148; myB = 0.889;
+      // Half-page (20 or 50): 210x148.5mm
+      mxL = 0.0286; mxR = 0.9714; myT = 0.0404; myB = 0.9596;
     }
 
     const boxSz = Math.round(Math.min(vw, vh) * 0.08);
@@ -1390,19 +1403,22 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             if (wRatio < 0.85 || hRatio < 0.85) continue;
             
             // Aspect ratio check - varies by template type
-            // 100-item: marker frame is 197mm wide x 215.5mm tall → aspect ≈ 0.91
-            // 20/50-item: marker frame is more square-ish
+            // Template frames (marker center to marker center):
+            // - 100/150-item: fw=198mm, fh=285mm → aspect ratio = 198/285 ≈ 0.69
+            // - 20/50-item: fw=198mm, fh=136.5mm → aspect ratio = 198/136.5 ≈ 1.45
             const avgW = (topW + botW) / 2;
             const avgH = (leftH + rightH) / 2;
             const aspect = avgW / avgH;
             
-            // For 100-item, the marker frame aspect ratio is ~0.91 (fw/fh = 197/215.5)
-            // Enforce stricter aspect ratio for 100-item templates
-            if (templateType === 100) {
-              // 100-item should have aspect ratio 0.7-1.1 (allowing for rotation/perspective)
-              if (aspect < 0.7 || aspect > 1.1) continue;
+            // Apply template-specific aspect ratio constraints
+            if (templateType === 100 || templateType === 150) {
+              // Full-page templates: aspect ratio ~0.69 (allowing for rotation/perspective)
+              if (aspect < 0.55 || aspect > 0.90) continue;
+            } else if (templateType === 50 || templateType === 20) {
+              // Half-page templates: aspect ratio ~1.45 (more landscape)
+              if (aspect < 1.10 || aspect > 1.90) continue;
             } else {
-              // Other templates: allow wider range
+              // Fallback: allow wider range
               if (aspect < 0.4 || aspect > 2.0) continue;
             }
             
@@ -1421,25 +1437,43 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             const rectQuality = wRatio * hRatio;
             const areaFraction = (avgW * avgH) / (width * height); // 0–1
 
-            // For 100-item templates, add aspect ratio bonus
+            // Aspect ratio bonus for matching expected paper dimensions
             let aspectBonus = 1.0;
-            if (templateType === 100) {
-              const expectedAspect = 0.91;
+            let expectedAspect = 1.0;
+            
+            if (templateType === 100 || templateType === 150) {
+              expectedAspect = 0.69; // 198/285 for full-page
               const aspectDiff = Math.abs(aspect - expectedAspect);
+              aspectBonus = Math.max(0.5, 1.0 - aspectDiff);
+            } else if (templateType === 50 || templateType === 20) {
+              expectedAspect = 1.45; // 198/136.5 for half-page
+              const aspectDiff = Math.abs(aspect - expectedAspect) / 1.45; // normalize
               aspectBonus = Math.max(0.5, 1.0 - aspectDiff);
             }
 
-            // Position bonus for 100-item (bottom markers not at very bottom)
+            // Position bonus: prefer markers that are positioned correctly for the template
             let positionBonus = 1.0;
-            if (templateType === 100) {
-              const bottomY = (bl.y + br.y) / 2;
-              const topY2   = (tl.y + tr.y) / 2;
-              const frameHeightRatio = (bottomY - topY2) / height;
-              const bottomYRatio     = bottomY / height;
-              if (bottomYRatio > 0.95)      positionBonus = 0.3;
-              else if (bottomYRatio < 0.50) positionBonus = 0.5;
-              else if (frameHeightRatio < 0.35) positionBonus = 0.4;
-              else positionBonus = 1.0 + frameHeightRatio * 0.5;
+            const bottomY = (bl.y + br.y) / 2;
+            const bottomYRatio = bottomY / height;
+            
+            if (templateType === 100 || templateType === 150) {
+              // Full-page: bottom markers around 98% of height
+              if (bottomYRatio > 0.95 && bottomYRatio < 0.99) {
+                positionBonus = 1.2; // reward correct position
+              } else if (bottomYRatio > 0.99) {
+                positionBonus = 0.3; // penalize markers at very bottom edge
+              } else if (bottomYRatio < 0.85) {
+                positionBonus = 0.6; // penalize markers too high
+              }
+            } else if (templateType === 50 || templateType === 20) {
+              // Half-page: bottom markers around 96% of height
+              if (bottomYRatio > 0.93 && bottomYRatio < 0.99) {
+                positionBonus = 1.2; // reward correct position
+              } else if (bottomYRatio > 0.99) {
+                positionBonus = 0.3; // penalize markers at very bottom edge
+              } else if (bottomYRatio < 0.85) {
+                positionBonus = 0.6; // penalize markers too high
+              }
             }
 
             // Area is raised to the power of 2 so that a rectangle that is 10%
