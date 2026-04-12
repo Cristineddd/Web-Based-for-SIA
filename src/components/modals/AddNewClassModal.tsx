@@ -32,7 +32,6 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
     year: '',
     room: '',
     semester: '',
-    school_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -66,7 +65,6 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
           year: formData.year.trim() || undefined,
           room: formData.room.trim(),
           semester: formData.semester.trim(),
-          school_year: formData.school_year.trim(),
           students: [],
           created_at: new Date().toISOString(),
         },
@@ -82,7 +80,6 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
         year: '',
         room: '',
         semester: '',
-        school_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
       });
 
       onClassCreated(newClass);
@@ -237,19 +234,6 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
             />
           </div>
 
-          {/* School Year */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-semibold text-gray-700">
-              School Year <span className="text-xs text-gray-400 font-normal">(Auto-populated)</span>
-            </label>
-            <Input
-              type="text"
-              value={formData.school_year}
-              onChange={(e) => handleInputChange('school_year', e.target.value)}
-              disabled={loading}
-              className="text-sm bg-gray-50"
-            />
-          </div>
 
         </div>
 

@@ -31,12 +31,11 @@ export interface Class {
   year?: string; // Optional year field
   room?: string;
   semester?: string;
-  school_year?: string;
   students: Student[];
   created_at: string;
   createdBy?: string;
   instructorId?: string; // Instructor ID for the class creator
-  updatedAt?: string;
+  updatedAt?: string; 
   isArchived?: boolean;
 }
 
