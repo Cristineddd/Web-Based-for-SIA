@@ -202,7 +202,7 @@ export default function ClassManagement() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Manage your classes</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex w-full sm:w-auto justify-end gap-3">
           <Button
             onClick={() => setShowAddDialog(true)}
             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
