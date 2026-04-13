@@ -19,14 +19,13 @@ import {
   Save,
   Users,
   Upload,
+  Download,
   Plus,
   X,
   Search,
   ArrowUpDown,
   Edit3,
   FileText,
-  Scan,
-  ChevronRight,
   Mail,
   BarChart3,
 } from "lucide-react";
@@ -38,7 +37,6 @@ import {
 } from "@/services/classService";
 import {
   getExamsByClassId,
-  getScannedResultsCountByClassId,
   getExams,
   updateExam,
   type Exam,
@@ -93,9 +91,8 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [stats, setStats] = useState({
     examCount: 0,
-    scanPapersCount: 0,
   });
-  const [activeTab, setActiveTab] = useState<"students" | "exams" | "scan" | "stats">("students");
+  const [activeTab, setActiveTab] = useState<"students" | "exams" | "stats">("students");
   const [exams, setExams] = useState<Exam[]>([]);
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [newStudent, setNewStudent] = useState({
@@ -119,7 +116,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   >("student_id");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [showCreateExam, setShowCreateExam] = useState(false);
-  const [selectedScanExamId, setSelectedScanExamId] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
 
@@ -131,10 +127,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
     const fetchClassData = async () => {
       try {
-        const [data, fetchedExams, scanCount] = await Promise.all([
+        const [data, fetchedExams] = await Promise.all([
           getClassById(classId),
           getExamsByClassId(classId),
-          getScannedResultsCountByClassId(classId),
         ]);
 
         if (data) {
@@ -142,7 +137,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
             setExams(fetchedExams);
             setStats({
               examCount: fetchedExams.length,
-              scanPapersCount: scanCount,
             });
         }
       } catch (error) {
@@ -204,6 +198,37 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     } catch (error) {
       console.error("Error creating exam:", error);
       toast.error("Failed to create exam");
+    }
+  };
+
+  const handleExportRoster = () => {
+    const students = classData?.students || [];
+    if (students.length === 0) {
+      toast.error("No students to export");
+      return;
+    }
+    try {
+      const headers = ["Student ID", "First Name", "Last Name", "Email"];
+      const rows = students.map((s) => [
+        `"${s.student_id || ""}"`,
+        `"${s.first_name || ""}"`,
+        `"${s.last_name || ""}"`,
+        `"${(s as any).email || ""}"`,
+      ]);
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.setAttribute("download", `${classData?.class_name || "class"}_${classData?.course_subject || "roster"}.csv`);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${students.length} student(s) successfully`);
+    } catch (err) {
+      console.error("Export error:", err);
+      toast.error("Failed to export roster");
     }
   };
 
@@ -755,7 +780,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const tabItems = [
     { id: "students", label: `Students (${classData?.students?.length || 0})`, icon: Users },
     { id: "exams", label: `Exams (${stats.examCount})`, icon: FileText },
-    { id: "scan", label: "Scan Papers", icon: Scan },
     { id: "stats", label: "Stats", icon: BarChart3 }
   ] as const;
 
@@ -793,10 +817,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
       <div className="space-y-6">
         {/* Class Information Panel */}
-        <Card className="border-gray-200 shadow-sm rounded-xl border-l-[6px] border-l-green-500">
-          <CardHeader className="bg-white px-8 pt-6 pb-2">
+        <Card className="border border-gray-100 shadow-sm rounded-xl bg-white">
+          <CardHeader className="bg-white px-6 pt-6 pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-[1.1rem] font-bold text-gray-900 border-none">
+              <CardTitle className="text-[17px] font-bold text-[#1e293b] border-none">
                 Class Information
               </CardTitle>
               <div className="flex items-center gap-2">
@@ -805,9 +829,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsEditingInfo(true)}
-                    className="h-9 px-4 text-gray-600 hover:bg-gray-100 transition-all rounded-lg font-medium flex items-center gap-2"
+                    className="h-9 px-3 text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-all rounded-lg font-bold flex items-center gap-1.5"
                   >
-                    <Edit3 className="w-4 h-4" />
+                    <Edit3 className="w-3.5 h-3.5" />
                     Edit Info
                   </Button>
                 ) : (
@@ -816,7 +840,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       variant="ghost"
                       size="sm"
                       onClick={() => setIsEditingInfo(false)}
-                      className="h-9 px-4 text-gray-500 hover:bg-gray-100 transition-all rounded-lg font-medium"
+                      className="h-9 px-3 text-gray-400 hover:bg-gray-50 transition-all rounded-lg font-medium"
                     >
                       Cancel
                     </Button>
@@ -827,9 +851,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                         setIsEditingInfo(false);
                       }}
                       disabled={saving}
-                      className="h-9 px-4 bg-green-600 hover:bg-green-700 text-white transition-all rounded-lg font-medium flex items-center gap-2 shadow-sm"
+                      className="h-9 px-4 bg-green-500 hover:bg-green-600 text-white transition-all rounded-lg font-bold flex items-center gap-1.5 shadow-sm"
                     >
-                      <Save className="w-4 h-4" />
+                      <Save className="w-3.5 h-3.5" />
                       {saving ? "Saving..." : "Save Changes"}
                     </Button>
                   </div>
@@ -837,41 +861,41 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="px-8 pb-8 pt-4">
+          <CardContent className="px-6 pb-6 pt-4">
             {!isEditingInfo ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-400">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0 bg-white rounded-xl border border-gray-100">
+                <div className="space-y-1.5 pl-5 py-5">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     Program
                   </label>
-                  <p className="text-sm font-bold text-gray-900">
+                  <p className="text-[15px] font-bold text-[#1e293b]">
                     {classData.class_name}
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-400">
+                <div className="space-y-1.5 border-l border-gray-100 pl-5 py-5">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     Course
                   </label>
-                  <p className="text-sm font-bold text-gray-900">
+                  <p className="text-[15px] font-bold text-[#1e293b] truncate pr-2">
                     {classData.course_subject}
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-400">
+                <div className="space-y-1.5 border-l border-gray-100 pl-5 py-5">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     Year Level
                   </label>
-                  <p className="text-sm font-bold text-gray-900">
+                  <p className="text-[15px] font-bold text-[#1e293b]">
                     {classData.year
                       ? `${classData.year}${classData.year === "1" ? "st" : classData.year === "2" ? "nd" : classData.year === "3" ? "rd" : "th"} Year`
-                      : "---"}
+                      : "—"}
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-400">
+                <div className="space-y-1.5 border-l border-gray-100 pl-5 py-5">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     Room
                   </label>
-                  <p className="text-sm font-bold text-gray-900">
-                    {classData.room || "---"}
+                  <p className="text-[15px] font-bold text-[#1e293b]">
+                    {classData.room || "—"}
                   </p>
                 </div>
               </div>
@@ -998,6 +1022,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <h2 className="text-base font-bold text-gray-900">Student Roster</h2>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportRoster}
+                    className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export
+                  </Button>
                   <div className="relative">
                     <input
                       type="file"
@@ -1408,104 +1441,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           </div>
         )}
 
-        {activeTab === "scan" && (
-          <div className="flex flex-col lg:flex-row gap-8 animate-in slide-in-from-bottom-2 duration-300 min-h-[500px]">
-            {/* Left: Scan Settings Card */}
-            <div className="w-full lg:w-[350px] shrink-0">
-               <Card className="p-8 rounded-[2rem] border border-gray-100 shadow-sm bg-white h-full flex flex-col">
-                  <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                      <Scan className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-[#1e293b]">Scan Settings</h3>
-                      <p className="text-xs text-gray-400 font-medium">Configure your capturing device</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-8 flex-1">
-                    <div className="space-y-3">
-                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Select Exam</label>
-                      <div className="relative group">
-                        <select 
-                          value={selectedScanExamId}
-                          onChange={(e) => setSelectedScanExamId(e.target.value)}
-                          className="w-full bg-[#f8fafc] border border-gray-200 rounded-2xl h-14 px-5 shadow-sm text-[15px] font-bold text-[#1e293b] focus:ring-4 focus:ring-green-500/10 focus:border-green-500 cursor-pointer appearance-none pr-12 transition-all outline-none"
-                        >
-                          <option value="">-- Choose an exam --</option>
-                          {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
-                        </select>
-                        <div className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-green-500 transition-colors pointer-events-none">
-                          <ChevronRight className="w-5 h-5 rotate-90" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-blue-50/50 rounded-2xl p-5 border border-blue-100/50">
-                      <div className="flex gap-3">
-                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                            <Tag className="w-4 h-4 text-blue-600" />
-                         </div>
-                         <div>
-                            <p className="text-[13px] font-bold text-blue-900 leading-tight">Ready to Scan</p>
-                            <p className="text-[11px] text-blue-700/70 mt-1 leading-relaxed">Ensure the answer sheet is well-lit and all four corners are visible in the frame.</p>
-                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button 
-                    disabled={!selectedScanExamId}
-                    className={`w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition-all mt-8 ${
-                      selectedScanExamId 
-                      ? "bg-[#10B981] hover:bg-[#059669] text-white shadow-xl shadow-green-500/20 active:scale-[0.98]" 
-                      : "bg-[#f1f5f9] text-gray-400 opacity-60 cursor-not-allowed border border-gray-100"
-                    }`}
-                    onClick={() => {
-                        window.location.href = `/exams/${selectedScanExamId}/scan-papers`;
-                    }}
-                  >
-                    <Scan className="w-6 h-6" />
-                    Simulate Scan
-                  </Button>
-               </Card>
-            </div>
-
-            {/* Right: Camera Box Placeholder */}
-            <div className="flex-1 bg-[#0F172A] rounded-[2.5rem] relative flex items-center justify-center border border-gray-800 shadow-2xl overflow-hidden group">
-               {/* Decorative elements */}
-               <div className="absolute top-8 left-8 flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">No Input Detected</span>
-               </div>
-               
-               {/* Inner dashed frame */}
-               <div className="w-[70%] h-[75%] border-2 border-dashed border-gray-800 rounded-3xl flex items-center justify-center group-hover:border-gray-700 transition-colors">
-                  <div className="text-center space-y-6 max-w-sm px-8">
-                    <div className="w-20 h-20 bg-gray-800/40 rounded-3xl flex items-center justify-center mx-auto mb-2 backdrop-blur-sm border border-gray-700/30">
-                       <Scan className="w-10 h-10 text-gray-600 group-hover:text-green-500 transition-colors" />
-                    </div>
-                    <div className="space-y-2">
-                       <h4 className="text-white font-bold text-lg">Scanner Interface</h4>
-                       <p className="text-gray-500 text-[14px] leading-relaxed">
-                         The camera feed will initialize once a scanning device is connected and an exam is selected.
-                       </p>
-                    </div>
-                    <div className="pt-4">
-                       <p className="text-gray-600 text-[11px] font-bold uppercase tracking-[0.2em] italic">
-                         Select an exam to begin
-                       </p>
-                    </div>
-                  </div>
-               </div>
-
-               {/* Frame corners */}
-               <div className="absolute top-12 right-12 w-8 h-8 border-r-2 border-t-2 border-gray-700 rounded-tr-xl" />
-               <div className="absolute bottom-12 left-12 w-8 h-8 border-l-2 border-b-2 border-gray-700 rounded-bl-xl" />
-            </div>
-          </div>
-        )}
-
         {activeTab === "stats" && (
           <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-300">
             {/* Top Stat Cards */}
@@ -1534,16 +1469,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   <p className="text-[38px] font-bold text-[#1e293b]">100</p>
                   <span className="text-xl font-bold text-gray-300">%</span>
                 </div>
-              </Card>
-
-              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-purple-500/10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-                    <Scan className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Total Scans</p>
-                </div>
-                <p className="text-[38px] font-bold text-[#1e293b]">{stats.scanPapersCount}</p>
               </Card>
             </div>
 
@@ -1672,6 +1597,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }

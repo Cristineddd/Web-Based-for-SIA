@@ -907,19 +907,19 @@ export default function Exams() {
 
       {/* Archive Dialog */}
       <AlertDialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Archive Exam</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-xl font-bold text-gray-900">Archive Exam</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-gray-600 leading-relaxed">
               Are you sure you want to archive this exam? It will be moved to
               the Archive page and you can restore it later.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="gap-3">
+            <AlertDialogCancel className="h-11 px-6 border-gray-200 text-gray-700 font-medium hover:bg-gray-50">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleArchive}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className="h-11 px-6 bg-green-600 text-white font-medium hover:bg-green-700"
             >
               Archive
             </AlertDialogAction>

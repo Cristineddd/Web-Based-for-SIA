@@ -1496,15 +1496,15 @@ export default function Results() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
-                  placeholder="Search exams..."
+                  placeholder="Search exams by title, subject, or template ID..."
                   value={examSearch}
                   onChange={(e) => {
                     setExamSearch(e.target.value);
                     updateURL({ es: e.target.value || null });
                   }}
-                  className="pl-9 h-10 bg-white border-gray-200"
+                  className="pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-base focus:outline-none focus:ring-0 focus:border-gray-300 border-2"
                 />
               </div>
               {/* Subject filter */}
@@ -1516,7 +1516,7 @@ export default function Results() {
                     updateURL({ subj: v === "all" ? null : v });
                   }}
                 >
-                  <SelectTrigger className="w-[180px] h-10 bg-white border-gray-200">
+                  <SelectTrigger className="w-[200px] h-14 bg-white border-gray-200 shadow-sm rounded-xl border-2">
                     <SelectValue placeholder="All Subjects" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1535,9 +1535,9 @@ export default function Results() {
                   variant="ghost"
                   size="sm"
                   onClick={clearExamFilters}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-10 text-xs"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-14 px-6 rounded-xl font-medium"
                 >
-                  <RotateCcw className="h-3 w-3 mr-1" />
+                  <RotateCcw className="h-4 w-4 mr-2" />
                   Clear ({examFilterCount})
                 </Button>
               )}

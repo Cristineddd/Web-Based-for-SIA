@@ -20,6 +20,7 @@ import {
   FileText,
   BarChart3,
   Upload,
+  Download,
   Pencil,
   Mail,
   ChevronRight,
@@ -110,6 +111,37 @@ export default function ClassDetailView({
     fetchExams();
   }, [classItem.id, classItem.instructorId, classItem.class_name]);
 
+  const handleExportRoster = () => {
+    const students = classItem.students || [];
+    if (students.length === 0) {
+      toast.error("No students to export");
+      return;
+    }
+    try {
+      const headers = ["Student ID", "First Name", "Last Name", "Email"];
+      const rows = students.map((s) => [
+        `"${s.student_id || ""}"`,
+        `"${s.first_name || ""}"`,
+        `"${s.last_name || ""}"`,
+        `"${s.email || ""}"`,
+      ]);
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.setAttribute("download", `${classItem.class_name}_${classItem.course_subject}_roster.csv`);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${students.length} student(s) successfully`);
+    } catch (err) {
+      console.error("Export error:", err);
+      toast.error("Failed to export roster");
+    }
+  };
+
   const filteredStudents = useMemo(() => {
     return (classItem.students || []).filter(
       (s) =>
@@ -152,24 +184,26 @@ export default function ClassDetailView({
         </div>
       </div>
 
-      {/* Class Information Card exactly as in screenshot */}
+      {/* Class Information Card — pure white, no inner tinted box */}
       <Card className="border border-gray-100 shadow-sm overflow-hidden rounded-xl bg-white">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="px-6 pt-6 pb-2">
+          <div className="flex items-center justify-between mb-5">
             <h2 className="text-[17px] font-bold text-[#1e293b]">
               Class Information
             </h2>
             <Button
               variant="ghost"
               size="sm"
-              className="text-gray-500 font-bold flex items-center gap-1.5 hover:bg-transparent"
+              className="text-gray-400 font-bold flex items-center gap-1.5 hover:bg-gray-50 hover:text-gray-600"
             >
               <Pencil className="w-3.5 h-3.5" />
               Edit Info
             </Button>
           </div>
+        </div>
 
-          <div className="grid grid-cols-4 bg-[#f8fafc]/50 rounded-lg p-5 border border-[#f1f5f9]">
+        <div className="px-6 pb-6">
+          <div className="grid grid-cols-4 bg-white rounded-xl p-5 border border-gray-100">
             <div className="space-y-1.5 border-l-4 border-green-500 pl-4">
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                 Program
@@ -178,15 +212,15 @@ export default function ClassDetailView({
                 {classItem.class_name}
               </p>
             </div>
-            <div className="space-y-1.5 pl-4">
+            <div className="space-y-1.5 border-l border-gray-100 pl-6">
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                 Course
               </p>
-              <p className="text-[15px] font-bold text-[#1e293b] text-ellipsis overflow-hidden whitespace-nowrap">
+              <p className="text-[15px] font-bold text-[#1e293b] truncate">
                 {classItem.course_subject}
               </p>
             </div>
-            <div className="space-y-1.5 pl-4">
+            <div className="space-y-1.5 border-l border-gray-100 pl-6">
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                 Year Level
               </p>
@@ -194,12 +228,12 @@ export default function ClassDetailView({
                 {classItem.year || "3rd Year"}
               </p>
             </div>
-            <div className="space-y-1.5 pl-4 text-left">
+            <div className="space-y-1.5 border-l border-gray-100 pl-6">
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                 Room
               </p>
               <p className="text-[15px] font-bold text-[#1e293b]">
-                {classItem.room || "311"}
+                {classItem.room || "—"}
               </p>
             </div>
           </div>
@@ -247,6 +281,14 @@ export default function ClassDetailView({
                 Student Roster
               </h3>
               <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleExportRoster}
+                  className="rounded-lg h-9 border-gray-200 text-gray-600 text-[13px] font-bold hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4 text-gray-400" />
+                  Export
+                </Button>
                 <Button
                   variant="outline"
                   className="rounded-lg h-9 border-gray-200 text-gray-600 text-[13px] font-bold hover:bg-gray-50 flex items-center gap-2"
@@ -450,67 +492,119 @@ export default function ClassDetailView({
         {activeTab === "scan" && (
           <div className="flex gap-6 animate-in slide-in-from-bottom-2 duration-700">
             {/* Left: Scan Settings Card */}
-            <div className="w-[320px] shrink-0">
+            <div className="w-[300px] shrink-0">
               <Card className="p-6 rounded-2xl border border-gray-100 shadow-sm bg-white h-fit">
-                <h3 className="text-[16px] font-bold text-[#1e293b] mb-6">
-                  Scan Settings
-                </h3>
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-7">
+                  <div className="w-9 h-9 bg-green-50 rounded-xl flex items-center justify-center">
+                    <Scan className="w-4.5 h-4.5 text-green-600" />
+                  </div>
+                  <h3 className="text-[16px] font-bold text-[#1e293b]">
+                    Scan Settings
+                  </h3>
+                </div>
 
-                <div className="space-y-6">
-                  <div className="space-y-2.5">
-                    <label className="text-[13px] font-bold text-gray-500 block">
+                <div className="space-y-5">
+                  {/* Divider */}
+                  <div className="h-px bg-gray-100" />
+
+                  {/* Select Exam */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest block">
                       Select Exam
                     </label>
                     <div className="relative">
                       <select
                         value={selectedScanExamId}
                         onChange={(e) => setSelectedScanExamId(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl h-12 px-4 shadow-sm text-[14px] font-bold text-[#1e293b] focus:ring-2 focus:ring-[#10B981]/20 focus:border-[#10B981] cursor-pointer appearance-none pr-10"
+                        className="w-full bg-white border border-gray-200 rounded-xl h-11 px-4 text-[13px] font-semibold text-[#1e293b] focus:outline-none focus:border-green-500 cursor-pointer appearance-none pr-9 transition-all"
                       >
-                        <option value="">-- Select an exam --</option>
+                        <option value="">-- Choose an exam --</option>
                         {exams.map((e) => (
                           <option key={e.id} value={e.id}>
                             {e.title}
                           </option>
                         ))}
                       </select>
-                      <ChevronRight className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 rotate-90" />
+                      <ChevronRight className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 rotate-90 pointer-events-none" />
                     </div>
                   </div>
 
+                  {/* Start Button */}
                   <Button
                     disabled={!selectedScanExamId}
-                    className={`w-full h-12 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`w-full h-11 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 transition-all ${
                       selectedScanExamId
-                        ? "bg-[#10B981] hover:bg-[#059669] text-white shadow-lg shadow-green-500/20"
-                        : "bg-[#86efac] text-gray-500 opacity-60 cursor-not-allowed"
+                        ? "bg-green-500 hover:bg-green-600 text-white shadow-md shadow-green-500/20"
+                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
                     }`}
                     onClick={() => {
                       window.location.href = `/exams/${selectedScanExamId}/scan-papers`;
                     }}
                   >
-                    <Scan className="w-5 h-5" />
-                    Simulate Scan
+                    <Scan className="w-4 h-4" />
+                    Start Scanning
                   </Button>
+
+                  {/* Info note */}
+                  {!selectedScanExamId && (
+                    <p className="text-[11px] text-gray-400 text-center leading-relaxed">
+                      Choose an exam above to enable scanning
+                    </p>
+                  )}
                 </div>
               </Card>
             </div>
 
-            {/* Right: Camera Box Placeholder */}
-            <div className="flex-1 bg-[#0F172A] rounded-2xl relative min-h-[500px] flex items-center justify-center border border-gray-800 shadow-2xl overflow-hidden">
-              {/* Inner dashed frame */}
-              <div className="w-[60%] h-[85%] border border-dashed border-gray-700 rounded-lg flex items-center justify-center">
-                <div className="text-center space-y-4">
-                  <div className="w-12 h-12 flex items-center justify-center mx-auto mb-2 opacity-50">
-                    <Scan className="w-10 h-10 text-gray-500" />
-                  </div>
-                  <p className="text-gray-500 text-[14px] leading-relaxed">
-                    Camera view would appear here.
-                  </p>
-                  <p className="text-gray-600 text-[12px] leading-relaxed italic">
-                    Select an exam and student to simulate scanning.
-                  </p>
+            {/* Right: Camera Preview */}
+            <div className="flex-1 bg-[#0f1117] rounded-2xl relative min-h-[460px] flex flex-col items-center justify-center border border-gray-800 shadow-xl overflow-hidden">
+              {/* Status bar */}
+              <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
+                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-[11px] font-bold text-white/70 uppercase tracking-widest">
+                    No Input Detected
+                  </span>
                 </div>
+                <div className="bg-black/40 backdrop-blur-sm rounded-full px-3 py-1.5">
+                  <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">
+                    Scanner Interface
+                  </span>
+                </div>
+              </div>
+
+              {/* Corner brackets */}
+              <div className="relative w-[55%] aspect-[3/4] max-h-[320px]">
+                {/* TL */}
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-white/20 rounded-tl-lg" />
+                {/* TR */}
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-white/20 rounded-tr-lg" />
+                {/* BL */}
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-white/20 rounded-bl-lg" />
+                {/* BR */}
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-white/20 rounded-br-lg" />
+
+                {/* Center content */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
+                    <Scan className="w-7 h-7 text-white/20" />
+                  </div>
+                  <div className="text-center space-y-1.5">
+                    <p className="text-white/50 text-[13px] font-semibold">
+                      Camera Preview
+                    </p>
+                    <p className="text-white/25 text-[11px] max-w-[200px] leading-relaxed">
+                      Select an exam and click Start Scanning
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom label */}
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">
+                  GC Smart Check · Scanner
+                </span>
               </div>
             </div>
           </div>

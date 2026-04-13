@@ -184,6 +184,7 @@ export async function getClasses(userId?: string): Promise<Class[]> {
           data.createdAt?.toDate?.()?.toISOString() ||
           new Date().toISOString(),
         createdBy: data.createdBy,
+        instructorId: data.instructorId,
         updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
         isArchived: data.isArchived || false,
       });
