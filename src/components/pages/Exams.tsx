@@ -641,7 +641,7 @@ export default function Exams() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-300 hover:text-green-600 hover:bg-green-50 rounded-lg"
+                        className="h-8 w-8 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -653,7 +653,7 @@ export default function Exams() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                        className="h-8 w-8 text-gray-600 hover:text-red-500 hover:bg-red-50 rounded-lg"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();

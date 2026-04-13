@@ -345,7 +345,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               Welcome back, {displayName}!
@@ -354,7 +354,7 @@ export default function Dashboard() {
               Here&apos;s what&apos;s happening with your classes today.
             </p>
           </div>
-          <div className="flex justify-end items-center w-full sm:w-auto">
+          <div className="self-end sm:self-auto">
             <Link href="/classes">
               <Button className="bg-green-600 hover:bg-green-700 text-white rounded-xl py-2 px-4 shadow-sm transition-all active:scale-95">
                 <Plus className="w-4 h-4" />
@@ -456,7 +456,7 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-2">
                   {stats.recentClasses.map((cls) => (
-                    <Link key={cls.id} href={`/classes`}>
+                    <Link key={cls.id} href={`/classes/edit/${cls.id}`}>
                       <div className="p-3 rounded-lg border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-colors duration-150 cursor-pointer">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
