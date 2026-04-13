@@ -352,29 +352,31 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Header Section */}
-        <div className="flex items-start gap-4">
-          <Link
-            href="/exams"
-            className="mt-1.5 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0f172a] tracking-tight">
-              {exam.title}
-            </h1>
-            <p className="text-sm sm:text-base font-semibold text-gray-400 mt-1">
-              {exam.subject}
-            </p>
+        <div className="flex items-end justify-between gap-4">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+            <Link
+              href="/exams"
+              className="mt-1 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 flex-shrink-0"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-3xl font-extrabold text-[#0f172a] tracking-tight leading-tight">
+                {exam.title}
+              </h1>
+              <p className="text-xs sm:text-base font-semibold text-gray-400 mt-0.5">
+                {exam.subject}
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-end gap-2 flex-shrink-0">
             {exam.status !== "final" && (
               <button
                 onClick={() => setShowFinalizeConfirm(true)}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#22c55e] text-white rounded-xl font-bold text-sm hover:bg-[#16a34a] transition-all shadow-md shadow-green-500/10"
+                className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-[#22c55e] text-white rounded-xl font-bold text-xs sm:text-sm hover:bg-[#16a34a] transition-all shadow-md shadow-green-500/10 whitespace-nowrap w-full sm:w-auto"
               >
-                <CheckCircle className="w-4 h-4" />
+                <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Finalize</span>
               </button>
             )}
@@ -382,9 +384,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             {canEditExam(exam) && (
               <button
                 onClick={() => setIsEditing(true)}
-                className="flex items-center gap-2 px-6 py-2.5 border border-gray-200 bg-white text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 border border-gray-200 bg-white text-gray-600 rounded-xl font-bold text-xs sm:text-sm hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm whitespace-nowrap w-full sm:w-auto"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Edit</span>
               </button>
             )}

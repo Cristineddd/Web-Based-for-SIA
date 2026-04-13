@@ -73,6 +73,7 @@ interface ExamWithStatus extends Exam {
 
 export default function Exams() {
   const { user } = useAuth();
+  const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const router = useRouter();
   const searchParams = useSearchParams();
   const [exams, setExams] = useState<ExamWithStatus[]>([]);
@@ -409,7 +410,9 @@ export default function Exams() {
         institutionName: editForm.institutionName,
         logoUrl: editForm.logoUrl,
         classId: editForm.classId || null,
-        className: editForm.classId ? classById[editForm.classId]?.class_name : null,
+        className: editForm.classId
+          ? classById[editForm.classId]?.class_name
+          : null,
       };
 
       await updateExam(editingExam.id, updated);
@@ -518,22 +521,24 @@ export default function Exams() {
   return (
     <div className="page-container">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+      <div className="flex items-end justify-between gap-4 mb-8">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
             Exams
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Create and manage your exams and answer keys.
+          <p className="text-xs text-gray-500 mt-0.5">
+            Create and manage your exams and answer keys
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-lg font-semibold transition-all shadow-sm"
-        >
-          <Plus className="w-5 h-5" />
-          Create Exam
-        </button>
+        <div className="shrink-0">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-green-600 hover:bg-green-700 text-white rounded-xl py-2 px-3 sm:px-4 shadow-sm transition-all active:scale-95 text-xs sm:text-sm font-semibold whitespace-nowrap flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            Create Exam
+          </button>
+        </div>
       </div>
 
       {/* Search Bar - Full Width */}
@@ -605,7 +610,7 @@ export default function Exams() {
                     <p className="text-sm text-gray-500 font-medium line-clamp-1">
                       {course}
                     </p>
-                    
+
                     <div className="mt-4 flex flex-col gap-2">
                       <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-500 transition-colors">
                         <span className="text-sm font-bold opacity-30">#</span>
@@ -616,9 +621,14 @@ export default function Exams() {
                       <div className="flex items-center gap-2 text-gray-400">
                         <Calendar className="w-3.5 h-3.5 opacity-60" />
                         <span className="text-[11px] font-bold">
-                          {new Date(exam.created_at).toLocaleDateString('en-US', { 
-                            month: 'short', day: 'numeric', year: 'numeric' 
-                          })}
+                          {new Date(exam.created_at).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            },
+                          )}
                         </span>
                       </div>
                     </div>
@@ -852,7 +862,9 @@ export default function Exams() {
                 <div className="grid grid-cols-1 gap-2">
                   <select
                     value={editForm.classId}
-                    onChange={(e) => setEditForm({ ...editForm, classId: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, classId: e.target.value })
+                    }
                     className="w-full h-10 px-3 rounded-md border-2 border-muted bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                   >
                     <option value="">No Class (Unallocated)</option>

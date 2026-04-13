@@ -95,7 +95,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     examCount: 0,
     scanPapersCount: 0,
   });
-  const [activeTab, setActiveTab] = useState<"students" | "exams" | "scan" | "stats">("students");
+  const [activeTab, setActiveTab] = useState<
+    "students" | "exams" | "scan" | "stats"
+  >("students");
   const [exams, setExams] = useState<Exam[]>([]);
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [newStudent, setNewStudent] = useState({
@@ -121,7 +123,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const [showCreateExam, setShowCreateExam] = useState(false);
   const [selectedScanExamId, setSelectedScanExamId] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
+  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!classId) {
@@ -138,12 +142,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         ]);
 
         if (data) {
-            setClassData(data);
-            setExams(fetchedExams);
-            setStats({
-              examCount: fetchedExams.length,
-              scanPapersCount: scanCount,
-            });
+          setClassData(data);
+          setExams(fetchedExams);
+          setStats({
+            examCount: fetchedExams.length,
+            scanPapersCount: scanCount,
+          });
         }
       } catch (error) {
         console.error("Error fetching class:", error);
@@ -159,16 +163,16 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
   useEffect(() => {
     if (activeTab === "exams" && classId) {
-        const fetchAllExams = async () => {
-            try {
-                const data = await getExams(user?.id);
-                // Filter out exams already in this class
-                setAllExams(data.filter(e => e.classId !== classId));
-            } catch (err) {
-                console.error(err);
-            }
-        };
-        fetchAllExams();
+      const fetchAllExams = async () => {
+        try {
+          const data = await getExams(user?.id);
+          // Filter out exams already in this class
+          setAllExams(data.filter((e) => e.classId !== classId));
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      fetchAllExams();
     }
   }, [activeTab, classId, user?.id]);
 
@@ -192,10 +196,16 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       const newExam = await createExam(examData, user.id, user.instructorId);
 
       if (user.email) {
-        AuditLogger.logActivity(user.id, user.email, "exam_created", `Created exam: ${formData.name}`, {
-          entityId: newExam.id,
-          entityType: "exam",
-        }).catch(console.error);
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "exam_created",
+          `Created exam: ${formData.name}`,
+          {
+            entityId: newExam.id,
+            entityType: "exam",
+          },
+        ).catch(console.error);
       }
 
       setExams((prev) => [newExam, ...prev]);
@@ -516,14 +526,27 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           return;
         }
 
+        const updatedStudents = [...classData.students, ...parsed];
         setClassData({
           ...classData,
-          students: [...classData.students, ...parsed],
+          students: updatedStudents,
         });
 
-        toast.success(
-          `Imported ${parsed.length} student(s). Click “Save Changes” to finalize.`,
-        );
+        // Auto-save immediately — matching the manual add behavior
+        try {
+          updateClass(classData.id, {
+            students: updatedStudents,
+            updatedAt: new Date().toISOString(),
+          });
+          toast.success(
+            `Imported and saved ${parsed.length} student(s) successfully.`,
+          );
+        } catch (error) {
+          console.error("Auto-save after import failed:", error);
+          toast.error(
+            `Imported ${parsed.length} students locally, but failed to save to database. Please click "Save Changes" to retry.`,
+          );
+        }
       } catch (err) {
         console.error("Error importing students:", err);
         toast.error(
@@ -699,29 +722,28 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
   const handleTagExam = async (examId: string) => {
     if (!classData || !examId) return;
-    
-    const selectedExam = allExams.find(e => e.id === examId);
+
+    const selectedExam = allExams.find((e) => e.id === examId);
     if (!selectedExam) return;
 
     try {
+      await updateExam(examId, {
+        classId: classData.id,
+        className: classData.class_name,
+      });
 
-        await updateExam(examId, {
-            classId: classData.id,
-            className: classData.class_name
-        });
-        
-        toast.success(`Tagged "${selectedExam.title}" to this class`);
-        
-        // Refresh exams
-        const updatedExams = await getExamsByClassId(classData.id);
-        setExams(updatedExams);
-        setStats(prev => ({ ...prev, examCount: updatedExams.length }));
-        
-        // Update allExams (remove the tagged one)
-        setAllExams(prev => prev.filter(e => e.id !== examId));
+      toast.success(`Tagged "${selectedExam.title}" to this class`);
+
+      // Refresh exams
+      const updatedExams = await getExamsByClassId(classData.id);
+      setExams(updatedExams);
+      setStats((prev) => ({ ...prev, examCount: updatedExams.length }));
+
+      // Update allExams (remove the tagged one)
+      setAllExams((prev) => prev.filter((e) => e.id !== examId));
     } catch (err) {
-        console.error(err);
-        toast.error("Failed to tag exam");
+      console.error(err);
+      toast.error("Failed to tag exam");
     }
   };
 
@@ -753,10 +775,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     : [];
 
   const tabItems = [
-    { id: "students", label: `Students (${classData?.students?.length || 0})`, icon: Users },
+    {
+      id: "students",
+      label: `Students (${classData?.students?.length || 0})`,
+      icon: Users,
+    },
     { id: "exams", label: `Exams (${stats.examCount})`, icon: FileText },
     { id: "scan", label: "Scan Papers", icon: Scan },
-    { id: "stats", label: "Stats", icon: BarChart3 }
+    { id: "stats", label: "Stats", icon: BarChart3 },
   ] as const;
 
   if (loading) {
@@ -980,7 +1006,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                     : "text-gray-400 hover:text-gray-600 font-medium"
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? "text-green-600" : "text-gray-300"}`} />
+                <Icon
+                  className={`w-4 h-4 ${isActive ? "text-green-600" : "text-gray-300"}`}
+                />
                 <span className="text-sm">{tab.label}</span>
                 {isActive && (
                   <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-green-500 rounded-full" />
@@ -996,7 +1024,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
               {/* Roster Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                <h2 className="text-base font-bold text-gray-900">Student Roster</h2>
+                <h2 className="text-base font-bold text-gray-900">
+                  Student Roster
+                </h2>
                 <div className="flex items-center gap-2">
                   <div className="relative">
                     <input
@@ -1061,7 +1091,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       >
                         <div className="flex items-center gap-1">
                           Student ID
-                          {sortBy === "student_id" && <ArrowUpDown className="w-3 h-3" />}
+                          {sortBy === "student_id" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
                         </div>
                       </th>
                       <th
@@ -1070,7 +1102,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       >
                         <div className="flex items-center gap-1">
                           First Name
-                          {sortBy === "first_name" && <ArrowUpDown className="w-3 h-3" />}
+                          {sortBy === "first_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
                         </div>
                       </th>
                       <th
@@ -1079,7 +1113,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       >
                         <div className="flex items-center gap-1">
                           Last Name
-                          {sortBy === "last_name" && <ArrowUpDown className="w-3 h-3" />}
+                          {sortBy === "last_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
                         </div>
                       </th>
                       <th
@@ -1088,7 +1124,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       >
                         <div className="flex items-center gap-1">
                           Middle Name
-                          {sortBy === "middle_name" && <ArrowUpDown className="w-3 h-3" />}
+                          {sortBy === "middle_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
                         </div>
                       </th>
                       <th className="w-12"></th>
@@ -1098,12 +1136,23 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                     {filteredAndSortedStudents.map((student) => {
                       const s = student as Student;
                       return (
-                        <tr key={s.student_id} className="hover:bg-gray-50/60 transition-colors">
-                          <td className="px-6 py-3 text-gray-700 font-mono text-xs">{s.student_id}</td>
-                          <td className="px-4 py-3 text-gray-800 font-medium">{s.first_name}</td>
-                          <td className="px-4 py-3 text-gray-800">{s.last_name}</td>
+                        <tr
+                          key={s.student_id}
+                          className="hover:bg-gray-50/60 transition-colors"
+                        >
+                          <td className="px-6 py-3 text-gray-700 font-mono text-xs">
+                            {s.student_id}
+                          </td>
+                          <td className="px-4 py-3 text-gray-800 font-medium">
+                            {s.first_name}
+                          </td>
+                          <td className="px-4 py-3 text-gray-800">
+                            {s.last_name}
+                          </td>
                           <td className="px-4 py-3 text-gray-500">
-                            {s.middle_name || <span className="text-gray-300">—</span>}
+                            {s.middle_name || (
+                              <span className="text-gray-300">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <Button
@@ -1132,19 +1181,26 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                                 const raw = e.target.value;
                                 const numeric = raw.replace(/[^0-9]/g, "");
                                 const val = numeric.slice(0, 9);
-                                setNewStudent({ ...newStudent, student_id: val });
+                                setNewStudent({
+                                  ...newStudent,
+                                  student_id: val,
+                                });
                                 setFieldErrors((prev) => ({
                                   ...prev,
-                                  student_id: validateStudentId(val, classData?.students ?? []),
+                                  student_id: validateStudentId(
+                                    val,
+                                    classData?.students ?? [],
+                                  ),
                                 }));
                               }}
                               placeholder="Student ID"
                               className={`border h-8 text-xs font-mono w-full ${
                                 fieldErrors.student_id
                                   ? "border-red-400"
-                                  : newStudent.student_id.length === 9 && !fieldErrors.student_id
-                                  ? "border-green-400"
-                                  : ""
+                                  : newStudent.student_id.length === 9 &&
+                                      !fieldErrors.student_id
+                                    ? "border-green-400"
+                                    : ""
                               }`}
                               inputMode="numeric"
                             />
@@ -1162,23 +1218,32 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                               value={newStudent.first_name}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                setNewStudent({ ...newStudent, first_name: val });
+                                setNewStudent({
+                                  ...newStudent,
+                                  first_name: val,
+                                });
                                 setFieldErrors((prev) => ({
                                   ...prev,
-                                  first_name: validateName(val, "first_name", classData?.students ?? [], {
-                                    first_name: val,
-                                    last_name: newStudent.last_name,
-                                    middle_name: newStudent.middle_name,
-                                  }),
+                                  first_name: validateName(
+                                    val,
+                                    "first_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: val,
+                                      last_name: newStudent.last_name,
+                                      middle_name: newStudent.middle_name,
+                                    },
+                                  ),
                                 }));
                               }}
                               placeholder="First Name"
                               className={`border h-8 text-xs w-full ${
                                 fieldErrors.first_name
                                   ? "border-red-400"
-                                  : newStudent.first_name.length >= 4 && !fieldErrors.first_name
-                                  ? "border-green-400"
-                                  : ""
+                                  : newStudent.first_name.length >= 4 &&
+                                      !fieldErrors.first_name
+                                    ? "border-green-400"
+                                    : ""
                               }`}
                             />
                             {fieldErrors.first_name && (
@@ -1195,23 +1260,32 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                               value={newStudent.last_name}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                setNewStudent({ ...newStudent, last_name: val });
+                                setNewStudent({
+                                  ...newStudent,
+                                  last_name: val,
+                                });
                                 setFieldErrors((prev) => ({
                                   ...prev,
-                                  last_name: validateName(val, "last_name", classData?.students ?? [], {
-                                    first_name: newStudent.first_name,
-                                    last_name: val,
-                                    middle_name: newStudent.middle_name,
-                                  }),
+                                  last_name: validateName(
+                                    val,
+                                    "last_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: newStudent.first_name,
+                                      last_name: val,
+                                      middle_name: newStudent.middle_name,
+                                    },
+                                  ),
                                 }));
                               }}
                               placeholder="Last Name"
                               className={`border h-8 text-xs w-full ${
                                 fieldErrors.last_name
                                   ? "border-red-400"
-                                  : newStudent.last_name.length >= 4 && !fieldErrors.last_name
-                                  ? "border-green-400"
-                                  : ""
+                                  : newStudent.last_name.length >= 4 &&
+                                      !fieldErrors.last_name
+                                    ? "border-green-400"
+                                    : ""
                               }`}
                             />
                             {fieldErrors.last_name && (
@@ -1228,14 +1302,22 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                               value={newStudent.middle_name}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                setNewStudent({ ...newStudent, middle_name: val });
+                                setNewStudent({
+                                  ...newStudent,
+                                  middle_name: val,
+                                });
                                 setFieldErrors((prev) => ({
                                   ...prev,
-                                  middle_name: validateName(val, "middle_name", classData?.students ?? [], {
-                                    first_name: newStudent.first_name,
-                                    last_name: newStudent.last_name,
-                                    middle_name: val,
-                                  }),
+                                  middle_name: validateName(
+                                    val,
+                                    "middle_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: newStudent.first_name,
+                                      last_name: newStudent.last_name,
+                                      middle_name: val,
+                                    },
+                                  ),
                                 }));
                               }}
                               placeholder="Middle Name"
@@ -1273,21 +1355,26 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                         </td>
                       </tr>
                     )}
-                    {filteredAndSortedStudents.length === 0 && !showAddStudent && (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-10 text-center text-gray-400 text-sm">
-                          <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                          No students in this class yet.
-                        </td>
-                      </tr>
-                    )}
+                    {filteredAndSortedStudents.length === 0 &&
+                      !showAddStudent && (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="px-6 py-10 text-center text-gray-400 text-sm"
+                          >
+                            <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                            No students in this class yet.
+                          </td>
+                        </tr>
+                      )}
                   </tbody>
                 </table>
               </div>
 
               {studentSearch.trim() && (
                 <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-400">
-                  Showing {filteredAndSortedStudents.length} of {classData.students.length} students
+                  Showing {filteredAndSortedStudents.length} of{" "}
+                  {classData.students.length} students
                 </div>
               )}
             </div>
@@ -1297,7 +1384,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         {activeTab === "exams" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h3 className="text-xl font-bold text-[#0f172a]">Exams for this Class</h3>
+              <h3 className="text-xl font-bold text-[#0f172a]">
+                Exams for this Class
+              </h3>
               <div className="flex items-center gap-3">
                 <Select onValueChange={handleTagExam}>
                   <SelectTrigger className="w-[200px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600">
@@ -1336,7 +1425,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-8 h-8 text-gray-300" />
                 </div>
-                <p className="text-gray-500 font-medium">No exams tagged to this class yet.</p>
+                <p className="text-gray-500 font-medium">
+                  No exams tagged to this class yet.
+                </p>
                 <p className="text-xs text-gray-400 mt-1">
                   Start by tagging an existing exam or creating a new one.
                 </p>
@@ -1369,7 +1460,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
                         <div className="mt-4 flex flex-col gap-2">
                           <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-500 transition-colors">
-                            <span className="text-sm font-bold opacity-30">#</span>
+                            <span className="text-sm font-bold opacity-30">
+                              #
+                            </span>
                             <span className="text-xs font-mono font-bold tracking-tight text-gray-600">
                               {exam.examCode || "NO-CODE"}
                             </span>
@@ -1377,11 +1470,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                           <div className="flex items-center gap-2 text-gray-400">
                             <Calendar className="w-3.5 h-3.5 opacity-60" />
                             <span className="text-[11px] font-bold">
-                              {new Date(exam.created_at).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
+                              {new Date(exam.created_at).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                },
+                              )}
                             </span>
                           </div>
                         </div>
@@ -1412,96 +1508,116 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           <div className="flex flex-col lg:flex-row gap-8 animate-in slide-in-from-bottom-2 duration-300 min-h-[500px]">
             {/* Left: Scan Settings Card */}
             <div className="w-full lg:w-[350px] shrink-0">
-               <Card className="p-8 rounded-[2rem] border border-gray-100 shadow-sm bg-white h-full flex flex-col">
-                  <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                      <Scan className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-[#1e293b]">Scan Settings</h3>
-                      <p className="text-xs text-gray-400 font-medium">Configure your capturing device</p>
-                    </div>
+              <Card className="p-8 rounded-[2rem] border border-gray-100 shadow-sm bg-white h-full flex flex-col">
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                    <Scan className="w-5 h-5 text-green-600" />
                   </div>
-                  
-                  <div className="space-y-8 flex-1">
-                    <div className="space-y-3">
-                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Select Exam</label>
-                      <div className="relative group">
-                        <select 
-                          value={selectedScanExamId}
-                          onChange={(e) => setSelectedScanExamId(e.target.value)}
-                          className="w-full bg-[#f8fafc] border border-gray-200 rounded-2xl h-14 px-5 shadow-sm text-[15px] font-bold text-[#1e293b] focus:ring-4 focus:ring-green-500/10 focus:border-green-500 cursor-pointer appearance-none pr-12 transition-all outline-none"
-                        >
-                          <option value="">-- Choose an exam --</option>
-                          {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
-                        </select>
-                        <div className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-green-500 transition-colors pointer-events-none">
-                          <ChevronRight className="w-5 h-5 rotate-90" />
-                        </div>
-                      </div>
-                    </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-[#1e293b]">
+                      Scan Settings
+                    </h3>
+                    <p className="text-xs text-gray-400 font-medium">
+                      Configure your capturing device
+                    </p>
+                  </div>
+                </div>
 
-                    <div className="bg-blue-50/50 rounded-2xl p-5 border border-blue-100/50">
-                      <div className="flex gap-3">
-                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                            <Tag className="w-4 h-4 text-blue-600" />
-                         </div>
-                         <div>
-                            <p className="text-[13px] font-bold text-blue-900 leading-tight">Ready to Scan</p>
-                            <p className="text-[11px] text-blue-700/70 mt-1 leading-relaxed">Ensure the answer sheet is well-lit and all four corners are visible in the frame.</p>
-                         </div>
+                <div className="space-y-8 flex-1">
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">
+                      Select Exam
+                    </label>
+                    <div className="relative group">
+                      <select
+                        value={selectedScanExamId}
+                        onChange={(e) => setSelectedScanExamId(e.target.value)}
+                        className="w-full bg-[#f8fafc] border border-gray-200 rounded-2xl h-14 px-5 shadow-sm text-[15px] font-bold text-[#1e293b] focus:ring-4 focus:ring-green-500/10 focus:border-green-500 cursor-pointer appearance-none pr-12 transition-all outline-none"
+                      >
+                        <option value="">-- Choose an exam --</option>
+                        {exams.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.title}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-green-500 transition-colors pointer-events-none">
+                        <ChevronRight className="w-5 h-5 rotate-90" />
                       </div>
                     </div>
                   </div>
 
-                  <Button 
-                    disabled={!selectedScanExamId}
-                    className={`w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition-all mt-8 ${
-                      selectedScanExamId 
-                      ? "bg-[#10B981] hover:bg-[#059669] text-white shadow-xl shadow-green-500/20 active:scale-[0.98]" 
+                  <div className="bg-blue-50/50 rounded-2xl p-5 border border-blue-100/50">
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                        <Tag className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-[13px] font-bold text-blue-900 leading-tight">
+                          Ready to Scan
+                        </p>
+                        <p className="text-[11px] text-blue-700/70 mt-1 leading-relaxed">
+                          Ensure the answer sheet is well-lit and all four
+                          corners are visible in the frame.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  disabled={!selectedScanExamId}
+                  className={`w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition-all mt-8 ${
+                    selectedScanExamId
+                      ? "bg-[#10B981] hover:bg-[#059669] text-white shadow-xl shadow-green-500/20 active:scale-[0.98]"
                       : "bg-[#f1f5f9] text-gray-400 opacity-60 cursor-not-allowed border border-gray-100"
-                    }`}
-                    onClick={() => {
-                        window.location.href = `/exams/${selectedScanExamId}/scan-papers`;
-                    }}
-                  >
-                    <Scan className="w-6 h-6" />
-                    Simulate Scan
-                  </Button>
-               </Card>
+                  }`}
+                  onClick={() => {
+                    window.location.href = `/exams/${selectedScanExamId}/scan-papers`;
+                  }}
+                >
+                  <Scan className="w-6 h-6" />
+                  Simulate Scan
+                </Button>
+              </Card>
             </div>
 
             {/* Right: Camera Box Placeholder */}
             <div className="flex-1 bg-[#0F172A] rounded-[2.5rem] relative flex items-center justify-center border border-gray-800 shadow-2xl overflow-hidden group">
-               {/* Decorative elements */}
-               <div className="absolute top-8 left-8 flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">No Input Detected</span>
-               </div>
-               
-               {/* Inner dashed frame */}
-               <div className="w-[70%] h-[75%] border-2 border-dashed border-gray-800 rounded-3xl flex items-center justify-center group-hover:border-gray-700 transition-colors">
-                  <div className="text-center space-y-6 max-w-sm px-8">
-                    <div className="w-20 h-20 bg-gray-800/40 rounded-3xl flex items-center justify-center mx-auto mb-2 backdrop-blur-sm border border-gray-700/30">
-                       <Scan className="w-10 h-10 text-gray-600 group-hover:text-green-500 transition-colors" />
-                    </div>
-                    <div className="space-y-2">
-                       <h4 className="text-white font-bold text-lg">Scanner Interface</h4>
-                       <p className="text-gray-500 text-[14px] leading-relaxed">
-                         The camera feed will initialize once a scanning device is connected and an exam is selected.
-                       </p>
-                    </div>
-                    <div className="pt-4">
-                       <p className="text-gray-600 text-[11px] font-bold uppercase tracking-[0.2em] italic">
-                         Select an exam to begin
-                       </p>
-                    </div>
-                  </div>
-               </div>
+              {/* Decorative elements */}
+              <div className="absolute top-8 left-8 flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
+                  No Input Detected
+                </span>
+              </div>
 
-               {/* Frame corners */}
-               <div className="absolute top-12 right-12 w-8 h-8 border-r-2 border-t-2 border-gray-700 rounded-tr-xl" />
-               <div className="absolute bottom-12 left-12 w-8 h-8 border-l-2 border-b-2 border-gray-700 rounded-bl-xl" />
+              {/* Inner dashed frame */}
+              <div className="w-[70%] h-[75%] border-2 border-dashed border-gray-800 rounded-3xl flex items-center justify-center group-hover:border-gray-700 transition-colors">
+                <div className="text-center space-y-6 max-w-sm px-8">
+                  <div className="w-20 h-20 bg-gray-800/40 rounded-3xl flex items-center justify-center mx-auto mb-2 backdrop-blur-sm border border-gray-700/30">
+                    <Scan className="w-10 h-10 text-gray-600 group-hover:text-green-500 transition-colors" />
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-white font-bold text-lg">
+                      Scanner Interface
+                    </h4>
+                    <p className="text-gray-500 text-[14px] leading-relaxed">
+                      The camera feed will initialize once a scanning device is
+                      connected and an exam is selected.
+                    </p>
+                  </div>
+                  <div className="pt-4">
+                    <p className="text-gray-600 text-[11px] font-bold uppercase tracking-[0.2em] italic">
+                      Select an exam to begin
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Frame corners */}
+              <div className="absolute top-12 right-12 w-8 h-8 border-r-2 border-t-2 border-gray-700 rounded-tr-xl" />
+              <div className="absolute bottom-12 left-12 w-8 h-8 border-l-2 border-b-2 border-gray-700 rounded-bl-xl" />
             </div>
           </div>
         )}
@@ -1515,7 +1631,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
                     <BarChart3 className="w-5 h-5 text-green-600" />
                   </div>
-                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Class Average</p>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">
+                    Class Average
+                  </p>
                 </div>
                 <div className="flex items-baseline gap-1">
                   <p className="text-[38px] font-bold text-[#1e293b]">88</p>
@@ -1528,7 +1646,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
                     <Users className="w-5 h-5 text-blue-600" />
                   </div>
-                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Pass Rate</p>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">
+                    Pass Rate
+                  </p>
                 </div>
                 <div className="flex items-baseline gap-1">
                   <p className="text-[38px] font-bold text-[#1e293b]">100</p>
@@ -1541,14 +1661,21 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
                     <Scan className="w-5 h-5 text-purple-600" />
                   </div>
-                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Total Scans</p>
+                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">
+                    Total Scans
+                  </p>
                 </div>
-                <p className="text-[38px] font-bold text-[#1e293b]">{stats.scanPapersCount}</p>
+                <p className="text-[38px] font-bold text-[#1e293b]">
+                  {stats.scanPapersCount}
+                </p>
               </Card>
             </div>
 
             <div className="flex justify-end pr-2">
-              <Button variant="outline" className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-12 px-8 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]">
+              <Button
+                variant="outline"
+                className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-12 px-8 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
+              >
                 <Mail className="w-5 h-5 text-gray-400" />
                 <span>Send All Scores to Students</span>
               </Button>
@@ -1559,8 +1686,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               <div className="p-8">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h3 className="text-lg font-bold text-[#1e293b]">Exam Performance Breakdown</h3>
-                    <p className="text-xs text-gray-400 font-medium">Detailed results for each exam assigned to this class</p>
+                    <h3 className="text-lg font-bold text-[#1e293b]">
+                      Exam Performance Breakdown
+                    </h3>
+                    <p className="text-xs text-gray-400 font-medium">
+                      Detailed results for each exam assigned to this class
+                    </p>
                   </div>
                 </div>
 
@@ -1568,42 +1699,62 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-[#f8fafc] border-none">
-                        <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider pl-8">Exam Title</TableHead>
-                        <TableHead className="text-[11px] font-bold text-gray-400 text-center h-14 uppercase tracking-wider">Papers Scanned</TableHead>
-                        <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-10">Average Score</TableHead>
+                        <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider pl-8">
+                          Exam Title
+                        </TableHead>
+                        <TableHead className="text-[11px] font-bold text-gray-400 text-center h-14 uppercase tracking-wider">
+                          Papers Scanned
+                        </TableHead>
+                        <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-10">
+                          Average Score
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {exams.length > 0 ? exams.map(exam => (
-                        <TableRow key={exam.id} className="border-b border-gray-50 h-[75px] hover:bg-gray-50/50 transition-colors group">
-                          <TableCell className="pl-8">
-                            <div className="flex items-center gap-4">
-                               <div className="w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors">
+                      {exams.length > 0 ? (
+                        exams.map((exam) => (
+                          <TableRow
+                            key={exam.id}
+                            className="border-b border-gray-50 h-[75px] hover:bg-gray-50/50 transition-colors group"
+                          >
+                            <TableCell className="pl-8">
+                              <div className="flex items-center gap-4">
+                                <div className="w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors">
                                   <FileText className="w-4.5 h-4.5 text-gray-400 group-hover:text-green-500 transition-colors" />
-                               </div>
-                               <div>
-                                  <p className="text-[15px] font-bold text-[#1e293b] leading-tight">{exam.title}</p>
-                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{exam.subject}</p>
-                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <span className="inline-flex items-center justify-center w-10 h-6 bg-gray-50 text-gray-700 rounded-full text-[13px] font-bold border border-gray-100">
-                              {exam.scannedCount || 0}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right pr-10">
-                            <span className="text-[16px] font-bold text-[#10B981]">
-                              {exam.averageScore || "0"} <span className="text-[11px] font-bold opacity-40">%</span>
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      )) : (
+                                </div>
+                                <div>
+                                  <p className="text-[15px] font-bold text-[#1e293b] leading-tight">
+                                    {exam.title}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                    {exam.subject}
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-6 bg-gray-50 text-gray-700 rounded-full text-[13px] font-bold border border-gray-100">
+                                {exam.scannedCount || 0}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right pr-10">
+                              <span className="text-[16px] font-bold text-[#10B981]">
+                                {exam.averageScore || "0"}{" "}
+                                <span className="text-[11px] font-bold opacity-40">
+                                  %
+                                </span>
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
                         <TableRow>
                           <TableCell colSpan={3} className="h-40 text-center">
                             <div className="flex flex-col items-center justify-center text-gray-400">
-                               <BarChart3 className="w-8 h-8 opacity-20 mb-3" />
-                               <p className="text-sm font-bold opacity-40">No records to display yet</p>
+                              <BarChart3 className="w-8 h-8 opacity-20 mb-3" />
+                              <p className="text-sm font-bold opacity-40">
+                                No records to display yet
+                              </p>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1618,17 +1769,17 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       </div>
 
       {showCreateExam && (
-        <CreateExamModal 
-          isOpen={showCreateExam} 
+        <CreateExamModal
+          isOpen={showCreateExam}
           onClose={() => setShowCreateExam(false)}
           onCreateExam={handleCreateExam}
-          existingExamTitles={exams.map(e => e.title)}
+          existingExamTitles={exams.map((e) => e.title)}
           fromTemplate={{
             name: "",
             totalQuestions: 50,
             choicesPerItem: 4,
             description: "",
-            folder: classData?.course_subject || ""
+            folder: classData?.course_subject || "",
           }}
           classId={classId || ""}
           className={classData?.class_name || ""}
@@ -1637,14 +1788,18 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         />
       )}
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
         <AlertDialogContent className="rounded-2xl border-none shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold text-gray-900">
               Confirm Student Removal
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-500">
-              Are you sure you want to remove this student from the class? This action cannot be undone.
+              Are you sure you want to remove this student from the class? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
