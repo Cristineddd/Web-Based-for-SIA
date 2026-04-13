@@ -1496,6 +1496,24 @@ export default function Results() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               {/* Search */}
               <div className="relative flex-1">
+                <style>{`
+                  input:-webkit-autofill,
+                  input:-webkit-autofill:focus,
+                  input:-webkit-autofill:hover,
+                  input:-webkit-autofill:active {
+                    -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+                    box-shadow: 0 0 0 1000px #fff inset !important;
+                    border: 1px solid #e5e7eb !important;
+                    outline: none !important;
+                  }
+                  .results-search-override,
+                  .results-search-override:focus,
+                  .results-search-override:active {
+                    border-color: #e5e7eb !important;
+                    box-shadow: none !important;
+                    outline: none !important;
+                  }
+                `}</style>
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
                   placeholder="Search exams by title, subject, or template ID..."
@@ -1504,7 +1522,8 @@ export default function Results() {
                     setExamSearch(e.target.value);
                     updateURL({ es: e.target.value || null });
                   }}
-                  className="pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-base focus:outline-none focus:ring-0 focus:border-gray-300 border-2"
+                  className="results-search-override pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-lg focus:outline-none focus:ring-0 focus:border-gray-300 border-2"
+                  autoComplete="off"
                 />
               </div>
               {/* Subject filter */}
@@ -2241,7 +2260,7 @@ export default function Results() {
 
       {/* Class Cards */}
       {classResults.length === 0 ? (
-        <Card className="p-12 border text-center">
+        <Card className="p-12 border text-center bg-white">
           <Folder className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-semibold text-gray-700">
             No Classes Found

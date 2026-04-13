@@ -2440,15 +2440,21 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         <BackButton href={`/exams/${examId}`} asLink>
           Back to Exam
         </BackButton>
-        <Card className="p-12 text-center">
-          <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900">Answer Key Required</h2>
-          <p className="text-gray-600 mt-2">Please set up the answer key before scanning papers.</p>
-          <Link href={`/exams/${examId}/edit-key`}>
-            <Button className="mt-4 bg-[#1a472a] hover:bg-[#2d6b47]">
-              Set Up Answer Key
-            </Button>
-          </Link>
+        <Card className="border border-gray-100 shadow-sm rounded-2xl bg-white">
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mb-5">
+              <AlertCircle className="w-7 h-7 text-amber-500" />
+            </div>
+            <h2 className="text-[17px] font-bold text-[#1e293b] mb-2">Answer Key Required</h2>
+            <p className="text-sm text-gray-400 max-w-xs leading-relaxed mb-6">
+              Please set up the answer key before scanning papers.
+            </p>
+            <Link href={`/exams/${examId}/edit-key`}>
+              <Button className="h-10 px-6 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-sm shadow-green-500/20 transition-all">
+                Set Up Answer Key
+              </Button>
+            </Link>
+          </div>
         </Card>
       </div>
     );
