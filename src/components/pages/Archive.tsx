@@ -10,7 +10,7 @@ import {
   Calendar,
   AlertCircle,
   Loader2,
-  FolderArchive,
+  Archive as ArchiveIcon,
   Layers,
   FileText,
   GraduationCap,
@@ -22,15 +22,12 @@ import {
   getArchivedClasses,
   updateClass,
   deleteClass,
-  Class,
 } from "@/services/classService";
 import {
   getArchivedExams,
   updateExam,
   deleteExam,
-  Exam,
 } from "@/services/examService";
-import { AuditLogger } from "@/services/auditLogger";
 import {
   ReportHistoryService,
   type ReportHistoryEntry,
@@ -45,15 +42,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 type ArchivedItem = {
   id: string;
@@ -169,7 +157,7 @@ export default function Archive() {
     <div className="page-container">
       {/* Header matches screenshot 2 */}
       <div className="space-y-1">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
           Archive
         </h1>
         <p className="text-sm text-gray-500 mt-1">
@@ -185,7 +173,7 @@ export default function Archive() {
         /* Empty State */
         <div className="w-full h-[400px] flex flex-col items-center justify-center border-2 border-dashed border-[#E2E8F0] rounded-xl bg-white/50">
           <div className="w-12 h-12 bg-[#F1F5F9] rounded-lg flex items-center justify-center mb-6">
-            <FolderArchive className="w-6 h-6 text-[#94A3B8]" />
+            <ArchiveIcon className="w-6 h-6 text-[#94A3B8]" />
           </div>
           <h2 className="text-[16px] font-bold text-[#334155] mb-2">
             Archive is empty

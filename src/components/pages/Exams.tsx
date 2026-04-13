@@ -9,7 +9,7 @@ import {
   Plus,
   Search,
   FileText,
-  FolderArchive,
+  Archive,
   Pencil,
   RefreshCw,
   Tag,
@@ -520,7 +520,7 @@ export default function Exams() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
             Exams
           </h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -538,12 +538,33 @@ export default function Exams() {
 
       {/* Search Bar - Full Width */}
       <div className="relative mb-8">
+        <style>{`
+          /* Autofill override */
+          input:-webkit-autofill,
+          input:-webkit-autofill:focus,
+          input:-webkit-autofill:hover,
+          input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+            box-shadow: 0 0 0 1000px #fff inset !important;
+            border: 1px solid #e5e7eb !important; /* gray-200 */
+            outline: none !important;
+          }
+          /* Super-specific override for search input border */
+          .search-override,
+          .search-override:focus,
+          .search-override:active {
+            border-color: #e5e7eb !important; /* gray-200 */
+            box-shadow: none !important;
+            outline: none !important;
+          }
+        `}</style>
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <Input
           placeholder="Search exams by title, subject, or template ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-lg focus:ring-green-500/20 focus:border-green-500"
+          className="search-override pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-lg focus:outline-none focus:ring-0 focus:border-gray-300 border-2"
+          autoComplete="off"
         />
       </div>
 
@@ -653,14 +674,14 @@ export default function Exams() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-600 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                        className="h-8 w-8 text-gray-600 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           setArchiveId(exam.id);
                         }}
                       >
-                        <FolderArchive className="w-4 h-4" />
+                        <Archive className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -686,7 +707,7 @@ export default function Exams() {
 
       {/* Edit Exam Dialog */}
       {editingExam && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
@@ -914,7 +935,7 @@ export default function Exams() {
         <AlertDialogContent className="border-2 border-warning">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-warning">
-              <FolderArchive className="w-5 h-5" />
+              <Archive className="w-5 h-5" />
               Duplicate Batch Detected
             </AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">

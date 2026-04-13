@@ -236,6 +236,15 @@
     }
   }
 
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
   .gradient-primary {
     background-color: hsl(var(--primary));
     transition: background-color 0.2s;

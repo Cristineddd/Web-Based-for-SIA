@@ -100,7 +100,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
+                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
                     required
                     autoFocus
                   />
@@ -191,7 +191,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-12 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
+                    className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-12 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
                     required
                     autoFocus
                   />
@@ -257,12 +257,12 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
       {showForgotModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div 
-          className="absolute inset-0 bg-black/50" 
+          className="absolute inset-0 bg-black/10 backdrop-blur-sm" 
           onClick={closeModal}
         />
         <div 
-          className="relative w-full max-w-md rounded-2xl p-8 bg-white border border-gray-200"
-          style={{ boxShadow: '0 20px 40px -12px rgba(22, 163, 74, 0.3)' }}
+          className="relative w-full max-w-md rounded-2xl p-8 bg-white border border-green-200 shadow-lg"
+          style={{ boxShadow: '0 20px 40px -12px rgba(22, 163, 74, 0.15)' }}
         >
           <button
             onClick={closeModal}
@@ -301,7 +301,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                   placeholder="Enter your email"
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
-                  className="h-14 text-base rounded-xl pl-12 pr-4 border-2 border-gray-200 focus:border-green-600 focus-visible:ring-2 focus-visible:ring-offset-0"
+                  className="h-14 text-base rounded-xl pl-12 pr-4 border-2 border-gray-200 focus:border-green-400 focus-visible:ring-green-100 focus-visible:ring-2 focus-visible:ring-offset-0"
                   required
                   autoFocus
                 />

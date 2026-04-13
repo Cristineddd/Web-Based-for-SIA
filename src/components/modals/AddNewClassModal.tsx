@@ -97,7 +97,7 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
   const isFormValid = formData.class_name.trim().length >= 4 && formData.course_subject.trim().length >= 5;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[88vh]">
 
         {/* Header */}

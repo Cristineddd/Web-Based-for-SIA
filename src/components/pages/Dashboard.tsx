@@ -12,7 +12,6 @@ import {
   FileText,
   Users,
   BookOpen,
-  TrendingUp,
   Clock,
   ChevronRight,
   Hash,
@@ -331,33 +330,25 @@ export default function Dashboard() {
       iconBg: "bg-emerald-50",
       sub: "Created this semester",
     },
-    {
-      title: "Average Score",
-      value: stats.averageScore > 0 ? `${stats.averageScore}%` : "N/A",
-      icon: TrendingUp,
-      iconColor: "text-emerald-600",
-      iconBg: "bg-emerald-50",
-      sub: stats.averageScore > 0 ? "Across all exams" : "No scores yet",
-    },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
-        <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               Welcome back, {displayName}!
             </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-sm text-gray-500 mt-1">
               Here&apos;s what&apos;s happening with your classes today.
             </p>
           </div>
           <div className="self-end sm:self-auto">
             <Link href="/classes">
-              <Button className="bg-green-600 hover:bg-green-700 text-white rounded-xl py-2 px-4 shadow-sm transition-all active:scale-95">
-                <Plus className="w-4 h-4" />
+              <Button className="bg-green-600 hover:bg-green-700 text-white rounded-xl py-2.5 px-5 shadow-sm transition-all active:scale-95">
+                <Plus className="w-4 h-4 mr-1.5" />
                 Create Class
               </Button>
             </Link>
@@ -366,43 +357,43 @@ export default function Dashboard() {
 
         {/* Pending role notice */}
         {!userRole && (
-          <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center gap-2 text-yellow-800 text-xs">
-            <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+          <div className="mb-6 p-4 rounded-xl bg-yellow-50 border border-yellow-200 flex items-center gap-3 text-yellow-800 text-sm">
+            <Clock className="w-4 h-4 flex-shrink-0" />
             Your account is pending role assignment. Please contact an
             administrator.
           </div>
         )}
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {statCards.map((stat) => {
             const Icon = stat.icon;
             return (
               <Card
                 key={stat.title}
-                className="bg-white border border-gray-200 shadow-sm rounded-xl"
+                className="bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition-shadow"
               >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex flex-col min-w-0">
-                      <p className="text-xs text-gray-500 font-medium">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <p className="text-sm text-gray-500 font-medium">
                         {stat.title}
                       </p>
-                      <p className="text-2xl font-bold text-gray-900 mt-0.5 leading-none">
+                      <p className="text-3xl font-bold text-gray-900 mt-2 leading-none">
                         {loading ? (
-                          <span className="inline-block w-8 h-6 bg-gray-100 animate-pulse rounded" />
+                          <span className="inline-block w-10 h-8 bg-gray-100 animate-pulse rounded" />
                         ) : (
                           stat.value
                         )}
                       </p>
-                      <p className="text-[10px] text-gray-400 mt-1 min-h-[14px]">
+                      <p className="text-xs text-gray-400 mt-2 min-h-[16px]">
                         {stat.sub ?? ""}
                       </p>
                     </div>
                     <div
-                      className={`w-9 h-9 rounded-lg ${stat.iconBg} flex items-center justify-center flex-shrink-0`}
+                      className={`w-12 h-12 rounded-xl ${stat.iconBg} flex items-center justify-center flex-shrink-0`}
                     >
-                      <Icon className={`w-[18px] h-[18px] ${stat.iconColor}`} />
+                      <Icon className={`w-6 h-6 ${stat.iconColor}`} />
                     </div>
                   </div>
                 </CardContent>
@@ -412,90 +403,96 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Classes + Recent Exams */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Classes */}
-          <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
-              <CardTitle className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-green-600" />
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 px-6 pt-6">
+              <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-green-600" />
                 Recent Classes
               </CardTitle>
               <Link href="/classes">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2"
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50 text-sm font-medium h-8 px-3"
                 >
                   View All
                 </Button>
               </Link>
             </CardHeader>
-            <CardContent className="px-4 pb-4 pt-0">
+            <CardContent className="px-6 pb-6 pt-2">
               {loading ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="h-14 bg-gray-100 rounded-lg animate-pulse"
+                      className="h-20 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 rounded-xl animate-pulse"
                     />
                   ))}
                 </div>
               ) : stats.recentClasses.length === 0 ? (
-                <div className="text-center py-7 border-2 border-dashed border-gray-200 rounded-xl">
-                  <BookOpen className="w-6 h-6 mx-auto mb-1.5 text-gray-300" />
-                  <p className="text-xs text-gray-400">No classes yet</p>
+                <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                  <div className="w-12 h-12 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
+                    <BookOpen className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-700 mb-1">No classes yet</p>
+                  <p className="text-xs text-gray-500 mb-4">Get started by creating your first class</p>
                   <Link href="/classes">
                     <Button
-                      variant="link"
-                      className="mt-1 text-xs text-green-600 h-auto p-0"
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white"
                     >
-                      Create your first class
+                      <Plus className="w-4 h-4 mr-1.5" />
+                      Create Class
                     </Button>
                   </Link>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                   {stats.recentClasses.map((cls) => (
-                    <Link key={cls.id} href={`/classes/edit/${cls.id}`}>
-                      <div className="p-3 rounded-lg border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-colors duration-150 cursor-pointer">
-                        <div className="flex items-center justify-between gap-2">
+                    <div key={cls.id}>
+                      <Link href={`/classes`}>
+                        <div className="p-4 rounded-xl border border-gray-200 hover:border-green-400 hover:bg-green-50/50 transition-all duration-150 cursor-pointer group">
+                        <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-semibold text-xs text-gray-800 truncate">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <p className="font-semibold text-sm text-gray-800 truncate group-hover:text-green-700">
                                 {cls.class_name}
                               </p>
                               {cls.year && (
-                                <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
                                   {cls.year}
                                 </span>
                               )}
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-0.5">
+                            <p className="text-xs text-gray-500 mb-2">
                               {cls.course_subject}
                             </p>
-                            <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
+                            <div className="flex items-center gap-3 text-xs text-gray-400">
                               {cls.section_block && (
-                                <span className="flex items-center gap-0.5">
-                                  <Users className="w-2.5 h-2.5" />
+                                <span className="flex items-center gap-1">
+                                  <Users className="w-3 h-3" />
                                   {cls.section_block}
                                 </span>
                               )}
                               {cls.room && (
-                                <span className="flex items-center gap-0.5">
-                                  <Tag className="w-2.5 h-2.5" />
+                                <span className="flex items-center gap-1">
+                                  <Tag className="w-3 h-3" />
                                   {cls.room}
                                 </span>
                               )}
-                              <span className="flex items-center gap-0.5">
-                                <Users className="w-2.5 h-2.5" />
+                              <span className="flex items-center gap-1 font-medium">
+                                <Users className="w-3 h-3" />
                                 {cls.students?.length || 0} students
                               </span>
                             </div>
                           </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+                          <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-green-600 flex-shrink-0 transition-colors" />
                         </div>
                       </div>
                     </Link>
+                    </div>
                   ))}
                 </div>
               )}
@@ -503,72 +500,77 @@ export default function Dashboard() {
           </Card>
 
           {/* Recent Exams */}
-          <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
-              <CardTitle className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-green-600" />
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 px-6 pt-6">
+              <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-green-600" />
                 Recent Exams
               </CardTitle>
               <Link href="/exams">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-green-600 hover:text-green-700 hover:bg-green-50 text-xs font-medium h-7 px-2"
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50 text-sm font-medium h-8 px-3"
                 >
                   View All
                 </Button>
               </Link>
             </CardHeader>
-            <CardContent className="px-4 pb-4 pt-0">
+            <CardContent className="px-6 pb-6 pt-2">
               {loading ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="h-14 bg-gray-100 rounded-lg animate-pulse"
+                      className="h-20 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 rounded-xl animate-pulse"
                     />
                   ))}
                 </div>
               ) : stats.recentExams.length === 0 ? (
-                <div className="text-center py-7 border-2 border-dashed border-gray-200 rounded-xl">
-                  <FileText className="w-6 h-6 mx-auto mb-1.5 text-gray-300" />
-                  <p className="text-xs text-gray-400">No exams created yet</p>
+                <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                  <div className="w-12 h-12 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
+                    <FileText className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-700 mb-1">No exams yet</p>
+                  <p className="text-xs text-gray-500 mb-4">Create your first exam to get started</p>
                   <Button
-                    variant="link"
-                    className="mt-1 text-xs text-green-600 h-auto p-0"
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
                     onClick={() => setShowCreateModal(true)}
                   >
-                    Create your first exam
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Create Exam
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                   {stats.recentExams.map((exam) => (
-                    <Link key={exam.id} href={`/exams/${exam.id}`}>
-                      <div className="p-3 rounded-lg border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-colors duration-150 cursor-pointer">
-                        <div className="flex items-center justify-between gap-2">
+                    <div key={exam.id}>
+                      <Link href={`/exams/${exam.id}`}>
+                        <div className="p-4 rounded-xl border border-gray-200 hover:border-green-400 hover:bg-green-50/50 transition-all duration-150 cursor-pointer group">
+                        <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-semibold text-xs text-gray-800 truncate">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <p className="font-semibold text-sm text-gray-800 truncate group-hover:text-green-700">
                                 {exam.title}
                               </p>
-                              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
                                 {exam.num_items} Items
                               </span>
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-0.5">
+                            <p className="text-xs text-gray-500 mb-2">
                               {exam.subject}
                             </p>
-                            <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
+                            <div className="flex items-center gap-3 text-xs text-gray-400">
                               {exam.examCode && (
-                                <span className="flex items-center gap-0.5">
-                                  <Hash className="w-2.5 h-2.5" />
+                                <span className="flex items-center gap-1">
+                                  <Hash className="w-3 h-3" />
                                   {exam.examCode}
                                 </span>
                               )}
                               {exam.created_at && (
-                                <span className="flex items-center gap-0.5">
-                                  <CalendarDays className="w-2.5 h-2.5" />
+                                <span className="flex items-center gap-1">
+                                  <CalendarDays className="w-3 h-3" />
                                   {new Date(exam.created_at).toLocaleDateString(
                                     "en-US",
                                     {
@@ -581,10 +583,11 @@ export default function Dashboard() {
                               )}
                             </div>
                           </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+                          <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-green-600 flex-shrink-0 transition-colors" />
                         </div>
                       </div>
                     </Link>
+                    </div>
                   ))}
                 </div>
               )}
@@ -603,7 +606,7 @@ export default function Dashboard() {
       {/* Class Picker Modal */}
       {showClassPicker && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm p-4"
           onClick={() => setShowClassPicker(false)}
         >
           <div

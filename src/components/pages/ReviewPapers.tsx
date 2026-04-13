@@ -389,7 +389,7 @@ export default function ReviewPapersPage({ params }: ReviewPapersProps) {
       <div className="flex items-center gap-3 sm:gap-4">
         <BackButton href={`/exams/${examId}`} asLink />
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
             <FileText className="w-6 h-6 flex-shrink-0 text-green-600" />
             Review Papers
           </h1>

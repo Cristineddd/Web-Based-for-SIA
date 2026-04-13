@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,7 @@ import {
   Search,
   Filter,
   RotateCcw,
-  FolderArchive,
+  Archive,
   Loader2,
   Table2,
 } from "lucide-react";
@@ -265,7 +265,7 @@ function SendResultsPanel({
   const isDone = deliveryResults !== null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full max-w-md bg-[#1a472a] shadow-xl z-50 flex flex-col">
+    <div className="fixed inset-y-0 right-0 w-full max-w-md bg-green-600 shadow-xl z-50 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-green-800 flex items-center justify-between">
         <div className="flex items-center gap-3 text-white">
@@ -299,7 +299,7 @@ function SendResultsPanel({
               {failedCount === 0 ? (
                 <>
                   <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                    <Check className="w-8 h-8 text-green-600" />
+                    <Check className="w-8 h-8 text-green-700" />
                   </div>
                   <h3 className="text-xl font-semibold text-white">
                     All Emails Sent!
@@ -775,7 +775,6 @@ export default function Results() {
               totalMaxScore += data.max_score || 0;
             });
           } catch (err) {
-            console.error("Error fetching grades:", err);
           }
 
           const averageScore =
@@ -1336,15 +1335,12 @@ export default function Results() {
     return (
       <div className="page-container">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
             Results &amp; Analytics
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             View and export grading results by class
           </p>
-        </div>
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     );
@@ -1353,11 +1349,11 @@ export default function Results() {
   // Render exam list for selected class
   if (selectedClass && !selectedExam) {
     return (
-      <div className="page-container">
+      <div className="page-container bg-white min-h-screen">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               Results &amp; Analytics
             </h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -1381,7 +1377,7 @@ export default function Results() {
             <ChevronLeft className="w-5 h-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h2 className="text-2xl sm:text-3xl font-bold text-[#1a472a] leading-tight truncate">
+            <h2 className="text-xl sm:text-2xl font-bold text-green-700 leading-tight truncate">
               {selectedClass.className}
             </h2>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -1396,9 +1392,9 @@ export default function Results() {
           </div>
         </div>
 
-        {/* Batch Export Action Bar */}
-        {classExamsList.length > 0 && (
-          <div className="flex items-center justify-between bg-gray-50 border rounded-lg px-4 py-3">
+        {/* Batch Export Action Bar - Only show when exams are selected */}
+        {classExamsList.length > 0 && selectedExamIds.size > 0 && (
+          <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3 mb-4">
             <div className="flex items-center gap-3">
               <Checkbox
                 checked={
@@ -1407,62 +1403,56 @@ export default function Results() {
                 }
                 onCheckedChange={toggleAllExams}
                 aria-label="Select all exams"
+                className="transition-all duration-200"
               />
-              <span className="text-sm text-gray-700">
-                {selectedExamIds.size > 0
-                  ? `${selectedExamIds.size} exam${selectedExamIds.size > 1 ? "s" : ""} selected`
-                  : "Select exams for batch export"}
+              <span className="text-sm font-medium text-gray-700">
+                {selectedExamIds.size} exam{selectedExamIds.size > 1 ? "s" : ""} selected
               </span>
             </div>
             <div className="flex items-center gap-2 relative">
-              {selectedExamIds.size > 0 && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedExamIds(new Set())}
-                    className="text-gray-500 hover:text-gray-700"
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedExamIds(new Set())}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white animate-in fade-in-50 duration-200"
+                onClick={() => setBatchFormatPicker((v) => !v)}
+                disabled={batchExporting}
+              >
+                <Archive className="w-4 h-4 mr-2" />
+                Export Selected
+              </Button>
+              {/* Format picker dropdown */}
+              {batchFormatPicker && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[180px]">
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                    onClick={() => handleBatchExport("pdf")}
                   >
-                    <X className="w-4 h-4 mr-1" />
-                    Clear
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="bg-[#1a472a] hover:bg-[#2d6b47] text-white"
-                    onClick={() => setBatchFormatPicker((v) => !v)}
-                    disabled={batchExporting}
+                    <FileText className="w-4 h-4 text-red-500" />
+                    PDF Reports
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                    onClick={() => handleBatchExport("excel")}
                   >
-                    <FolderArchive className="w-4 h-4 mr-2" />
-                    Export {selectedExamIds.size} Exam
-                    {selectedExamIds.size > 1 ? "s" : ""} as ZIP
-                  </Button>
-                  {/* Format picker dropdown */}
-                  {batchFormatPicker && (
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[180px]">
-                      <button
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => handleBatchExport("pdf")}
-                      >
-                        <FileText className="w-4 h-4 text-red-500" />
-                        PDF Reports
-                      </button>
-                      <button
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => handleBatchExport("excel")}
-                      >
-                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                        Excel Spreadsheets
-                      </button>
-                      <button
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => handleBatchExport("both")}
-                      >
-                        <Download className="w-4 h-4 text-blue-600" />
-                        Both (PDF + Excel)
-                      </button>
-                    </div>
-                  )}
-                </>
+                    <FileSpreadsheet className="w-4 h-4 text-green-700" />
+                    Excel Spreadsheets
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                    onClick={() => handleBatchExport("both")}
+                  >
+                    <Download className="w-4 h-4 text-blue-600" />
+                    Both (PDF + Excel)
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1470,10 +1460,10 @@ export default function Results() {
 
         {/* Batch Export Progress Modal */}
         {batchProgress && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
             <Card className="w-full max-w-md p-6 mx-4 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#1a472a] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center">
                   {batchProgress.percent < 100 ? (
                     <Loader2 className="w-5 h-5 text-white animate-spin" />
                   ) : (
@@ -1481,7 +1471,7 @@ export default function Results() {
                   )}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-[#1a472a]">Batch Export</h3>
+                  <h3 className="font-semibold text-green-700">Batch Export</h3>
                   <p className="text-sm text-gray-500">
                     {batchProgress.completed} of {batchProgress.total} exams
                   </p>
@@ -1492,7 +1482,7 @@ export default function Results() {
                 {batchProgress.step}
               </p>
               {batchProgress.percent >= 100 && (
-                <p className="text-sm text-green-600 font-medium">
+                <p className="text-sm text-green-700 font-medium">
                   Download complete!
                 </p>
               )}
@@ -1502,11 +1492,11 @@ export default function Results() {
 
         {/* Exam Search & Filter Bar */}
         {classExamsList.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-3 mb-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search exams..."
                   value={examSearch}
@@ -1514,7 +1504,7 @@ export default function Results() {
                     setExamSearch(e.target.value);
                     updateURL({ es: e.target.value || null });
                   }}
-                  className="pl-9"
+                  className="pl-9 h-10 bg-white border-gray-200"
                 />
               </div>
               {/* Subject filter */}
@@ -1526,7 +1516,7 @@ export default function Results() {
                     updateURL({ subj: v === "all" ? null : v });
                   }}
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-[180px] h-10 bg-white border-gray-200">
                     <SelectValue placeholder="All Subjects" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1545,7 +1535,7 @@ export default function Results() {
                   variant="ghost"
                   size="sm"
                   onClick={clearExamFilters}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9 text-xs"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-10 text-xs"
                 >
                   <RotateCcw className="h-3 w-3 mr-1" />
                   Clear ({examFilterCount})
@@ -1593,7 +1583,7 @@ export default function Results() {
             </Button>
           </Card>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {filteredExamsList.map((exam) => {
               const stats = examStats[exam.id];
               const scanned = stats?.scannedCount || 0;
@@ -1606,76 +1596,91 @@ export default function Results() {
               return (
                 <Card
                   key={exam.id}
-                  className={`p-5 border-2 transition-all cursor-pointer group ${
+                  className={`p-5 border transition-all cursor-pointer group relative ${
                     isSelected
-                      ? "border-[#1a472a] bg-[#1a472a]/5 shadow-sm"
-                      : "border-slate-100 hover:border-[#1a472a]/30 hover:shadow-md"
+                      ? "border-green-500 bg-green-50/30 shadow-sm"
+                      : "border-gray-200 hover:border-green-400 hover:shadow-md bg-white"
                   }`}
-                  onClick={() => fetchStudentResults(selectedClass, exam)}
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
                       <div
                         onClick={(e) => {
                           e.stopPropagation();
                         }}
-                        className="flex items-center mt-1"
+                        className="flex items-center flex-shrink-0"
                       >
                         <Checkbox
                           checked={isSelected}
                           onCheckedChange={() => toggleExamSelection(exam.id)}
                           aria-label={`Select ${exam.title}`}
+                          className={`transition-all duration-200 ${isSelected ? 'scale-110' : ''}`}
                         />
                       </div>
-                      <div className="w-12 h-12 bg-[#1a472a]/10 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-[#1a472a]/20 transition-colors">
-                        <FileText className="w-6 h-6 text-[#1a472a]" />
+                      <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-green-100 transition-colors">
+                        <FileText className="w-6 h-6 text-green-600" />
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-lg font-bold text-[#1a472a] truncate">
+                      <div className="min-w-0 flex-1" onClick={() => fetchStudentResults(selectedClass, exam)}>
+                        <h3 className="text-base font-bold text-gray-900 truncate mb-0.5">
                           {exam.title}
                         </h3>
-                        <p className="text-sm text-gray-500 font-medium">
+                        <p className="text-[13px] text-gray-500">
                           {exam.subject || "General"} • {exam.num_items} items
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-4 flex-shrink-0">
                       <div className="hidden md:flex flex-col items-end">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
-                          Completion
+                        <p className="text-[11px] uppercase tracking-[0.05em] font-semibold text-gray-400 mb-1">
+                          COMPLETION
                         </p>
-                        <p className="text-lg font-bold text-[#1a472a] leading-none mb-1">
+                        <p className="text-lg font-bold text-green-700 leading-none mb-1">
                           {progressPercent}%
                         </p>
-                        <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-[#1a472a] rounded-full transition-all duration-300"
+                            className="h-full bg-green-600 rounded-full transition-all duration-300"
                             style={{ width: `${progressPercent}%` }}
                           />
                         </div>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-[#1a472a] transition-colors" />
+                      <button
+                        onClick={() => fetchStudentResults(selectedClass, exam)}
+                        className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-all"
+                        title="View details"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                      <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1">
-                        Scanned
-                      </p>
-                      <p className="text-lg font-bold text-[#1a472a]">
-                        {scanned}{" "}
-                        <span className="text-xs font-normal text-gray-400">
-                          / {total}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                      <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1">
-                        Average Score
-                      </p>
-                      <p className="text-lg font-bold text-[#1a472a]">{avg}%</p>
-                    </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    {scanned === 0 && total > 0 ? (
+                      <div className="col-span-2 bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+                        <Info className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+                        <p className="text-xs text-gray-500">No scans yet. Start scanning to see results.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <p className="text-[11px] uppercase tracking-[0.05em] font-semibold text-gray-400 mb-1">
+                            SCANNED
+                          </p>
+                          <p className="text-lg font-bold text-green-700">
+                            {scanned}{" "}
+                            <span className="text-xs font-normal text-gray-400">
+                              / {total}
+                            </span>
+                          </p>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <p className="text-[11px] uppercase tracking-[0.05em] font-semibold text-gray-400 mb-1">
+                            AVERAGE SCORE
+                          </p>
+                          <p className="text-lg font-bold text-green-700">{avg}%</p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </Card>
               );
@@ -1693,7 +1698,7 @@ export default function Results() {
         {/* Header with Export Buttons aligned to the right */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               Results &amp; Analytics
             </h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -1718,7 +1723,7 @@ export default function Results() {
               variant="outline"
               size="sm"
               onClick={() => setExportModalType("Excel")}
-              className="border-green-200 text-green-600 hover:bg-green-50"
+              className="border-green-200 text-green-700 hover:bg-green-50"
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Excel
@@ -1727,7 +1732,7 @@ export default function Results() {
               variant="outline"
               size="sm"
               onClick={() => setExportModalType("CSV")}
-              className="border-green-200 text-green-600 hover:bg-green-50"
+              className="border-green-200 text-green-700 hover:bg-green-50"
             >
               <Table2 className="w-4 h-4 mr-2" />
               CSV
@@ -1743,13 +1748,13 @@ export default function Results() {
                 setSelectedExam(null);
                 setStudentResults([]);
               }}
-              className="w-10 h-10 rounded-full bg-[#1a472a] text-white flex items-center justify-center hover:bg-[#2d6b47] transition-colors shrink-0 shadow-sm"
+              className="w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center hover:bg-green-700 transition-colors shrink-0 shadow-sm"
               title="Back to class exams"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div>
-              <h2 className="text-xl font-bold text-[#1a472a] leading-tight mb-1">
+              <h2 className="text-xl font-bold text-green-700 leading-tight mb-1">
                 {selectedExam.title}
               </h2>
               <p className="text-sm text-gray-600 font-medium">
@@ -1762,7 +1767,7 @@ export default function Results() {
           <div className="flex items-center">
             <Button
               onClick={() => setShowSendPanel(true)}
-              className="bg-[#1a472a] hover:bg-[#2d6b47] text-white shadow-sm px-6"
+              className="bg-green-600 hover:bg-green-700 text-white shadow-sm px-6"
             >
               <Mail className="w-4 h-4 mr-2" />
               Send Results
@@ -1827,7 +1832,7 @@ export default function Results() {
         <Dialog open={!!viewingStudent} onOpenChange={(open) => { if (!open) { setViewingStudent(null); setAnswerDetails([]); } }}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-[#1a472a]">Student Result Details</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-green-700">Student Result Details</DialogTitle>
               <DialogDescription>
                 {selectedExam?.title} — {selectedClass?.className}
               </DialogDescription>
@@ -1835,8 +1840,8 @@ export default function Results() {
             {viewingStudent && (
               <div className="space-y-5 pt-2">
                 {/* Student Info */}
-                <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg border">
-                  <div className="w-12 h-12 rounded-full bg-[#1a472a] flex items-center justify-center text-white font-bold text-lg">
+                <div className="flex items-center gap-4 p-4 bg-white rounded-lg border">
+                  <div className="w-12 h-12 rounded-full bg-green-600 flex items-center justify-center text-white font-bold text-lg">
                     {viewingStudent.studentName.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1">
@@ -1847,7 +1852,7 @@ export default function Results() {
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-[#1a472a]">{viewingStudent.score}/{viewingStudent.totalQuestions}</p>
+                    <p className="text-2xl font-bold text-green-700">{viewingStudent.score}/{viewingStudent.totalQuestions}</p>
                     <Badge variant="outline" className={`${getGradeColorClass(viewingStudent.grade)}`}>
                       {viewingStudent.grade} — {viewingStudent.percentage}%
                     </Badge>
@@ -1858,13 +1863,13 @@ export default function Results() {
                 <div className="grid grid-cols-4 gap-3">
                   <div className="p-3 rounded-lg border bg-white text-center">
                     <p className="text-xs text-muted-foreground mb-1">Score</p>
-                    <p className="text-lg font-bold text-[#1a472a]">
+                    <p className="text-lg font-bold text-green-700">
                       {viewingStudent.score}/{viewingStudent.totalQuestions}
                     </p>
                   </div>
                   <div className="p-3 rounded-lg border bg-white text-center">
                     <p className="text-xs text-muted-foreground mb-1">Percentage</p>
-                    <p className="text-lg font-bold text-[#1a472a]">{viewingStudent.percentage}%</p>
+                    <p className="text-lg font-bold text-green-700">{viewingStudent.percentage}%</p>
                   </div>
                   <div className="p-3 rounded-lg border bg-white text-center">
                     <p className="text-xs text-muted-foreground mb-1">Grade</p>
@@ -1889,7 +1894,7 @@ export default function Results() {
                 {/* Answer Breakdown */}
                 {loadingAnswerDetails ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-[#1a472a] mr-2" />
+                    <Loader2 className="w-6 h-6 animate-spin text-green-700 mr-2" />
                     <span className="text-muted-foreground">Loading answer details...</span>
                   </div>
                 ) : answerDetails.length > 0 ? (
@@ -1981,7 +1986,7 @@ export default function Results() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
             Results &amp; Analytics
           </h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -2053,7 +2058,7 @@ export default function Results() {
               onClick={() => setShowClassFilters(!showClassFilters)}
               className={
                 showClassFilters
-                  ? "bg-[#1a472a] hover:bg-[#2d6b47] text-white"
+                  ? "bg-green-600 hover:bg-green-700 text-white"
                   : ""
               }
             >
@@ -2067,11 +2072,11 @@ export default function Results() {
             </Button>
           </div>
 
-          {/* Collapsible class filter panel */}
+                   {/* Collapsible class filter panel */}
           {showClassFilters && (
             <Card className="p-4 border">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-[#1a472a]">
+                <h4 className="text-sm font-semibold text-green-700">
                   Filter by Average Score
                 </h4>
                 {classFilterCount > 0 && (
@@ -2182,6 +2187,58 @@ export default function Results() {
         </div>
       )}
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
+            <p className="text-xs text-muted-foreground mb-1">
+              Total Classes
+            </p>
+            <p className="text-2xl font-bold text-green-700">
+              {classes.length}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
+            <p className="text-xs text-muted-foreground mb-1">
+              Scanned Results
+            </p>
+            <p className="text-2xl font-bold text-green-700">
+              {classResults.reduce((sum, cr) => sum + cr.scannedCount, 0)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
+            <p className="text-xs text-muted-foreground mb-1">
+              Average Score
+            </p>
+            <p className="text-2xl font-bold text-green-700">
+              {classResults.length > 0
+                ? Math.round(
+                    classResults.reduce(
+                      (sum, cr) => sum + cr.averageScore,
+                      0,
+                    ) / classResults.length,
+                  )
+                : 0}
+              %
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
+            <p className="text-xs text-muted-foreground mb-1">
+              Draft Exams
+            </p>
+            <p className="text-2xl font-bold text-green-700">
+              {exams.filter((exam) => exam.status === "draft").length}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Class Cards */}
       {classResults.length === 0 ? (
         <Card className="p-12 border text-center">
@@ -2217,16 +2274,16 @@ export default function Results() {
             return (
               <Card
                 key={classResult.classId}
-                className="p-6 border-2 border-slate-100 hover:border-[#1a472a]/30 hover:shadow-lg transition-all cursor-pointer group bg-gradient-to-br from-white to-slate-50/30"
+                className="p-6 border-2 border-slate-100 hover:border-green-600/30 hover:shadow-lg transition-all cursor-pointer group bg-gradient-to-br from-white to-slate-50/30"
                 onClick={() => handleClassClick(classResult)}
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-[#1a472a]/10 rounded-2xl flex items-center justify-center text-[#1a472a] group-hover:bg-[#1a472a]/20 transition-colors">
+                    <div className="w-14 h-14 bg-green-600/10 rounded-2xl flex items-center justify-center text-green-700 group-hover:bg-green-600/20 transition-colors">
                       <Folder className="w-7 h-7" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-[#1a472a] mb-1 group-hover:text-[#2d6b47]">
+                      <h3 className="text-xl font-bold text-green-700 mb-1 group-hover:text-green-700">
                         {classResult.className}
                       </h3>
                       <p className="text-sm text-gray-500 font-medium flex items-center gap-2">
@@ -2240,13 +2297,13 @@ export default function Results() {
                       <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
                         Class Average
                       </p>
-                      <p className="text-2xl font-black text-[#1a472a] leading-tight">
+                      <p className="text-2xl font-black text-green-700 leading-tight">
                         {classResult.scannedCount > 0
                           ? `${classResult.averageScore}%`
                           : "—"}
                       </p>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-[#1a472a] group-hover:text-white transition-all">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-all">
                       <ChevronRight className="w-6 h-6" />
                     </div>
                   </div>
@@ -2260,7 +2317,7 @@ export default function Results() {
                         Students
                       </p>
                     </div>
-                    <p className="text-2xl font-bold text-[#1a472a]">
+                    <p className="text-2xl font-bold text-green-700">
                       {classResult.totalStudents}
                     </p>
                   </div>
@@ -2271,7 +2328,7 @@ export default function Results() {
                         Scanned
                       </p>
                     </div>
-                    <p className="text-2xl font-bold text-[#1a472a]">
+                    <p className="text-2xl font-bold text-green-700">
                       {classResult.scannedCount}
                     </p>
                   </div>
