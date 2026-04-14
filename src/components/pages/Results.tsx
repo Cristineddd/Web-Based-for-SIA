@@ -1330,22 +1330,6 @@ export default function Results() {
     [selectedClass, selectedExam, passingThreshold, user],
   );
 
-  // Render loading state
-  if (loading) {
-    return (
-      <div className="page-container">
-        <div className="mb-6">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-            Results &amp; Analytics
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            View and export grading results by class
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // Render exam list for selected class
   if (selectedClass && !selectedExam) {
     return (
@@ -1492,8 +1476,8 @@ export default function Results() {
 
         {/* Exam Search & Filter Bar */}
         {classExamsList.length > 0 && (
-          <div className="space-y-3 mb-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="mb-6">
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
               {/* Search */}
               <div className="relative flex-1">
                 <style>{`
@@ -1514,7 +1498,7 @@ export default function Results() {
                     outline: none !important;
                   }
                 `}</style>
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
                 <Input
                   placeholder="Search exams by title, subject, or template ID..."
                   value={examSearch}
@@ -1522,53 +1506,55 @@ export default function Results() {
                     setExamSearch(e.target.value);
                     updateURL({ es: e.target.value || null });
                   }}
-                  className="results-search-override pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-lg focus:outline-none focus:ring-0 focus:border-gray-300 border-2"
+                  className="results-search-override pl-12 h-12 bg-white border border-gray-200 shadow-sm rounded-xl text-sm focus:outline-none focus:ring-0 focus:border-gray-300"
                   autoComplete="off"
                 />
               </div>
-              {/* Subject filter */}
-              {availableSubjects.length > 1 && (
-                <Select
-                  value={subjectFilter}
-                  onValueChange={(v) => {
-                    setSubjectFilter(v);
-                    updateURL({ subj: v === "all" ? null : v });
-                  }}
-                >
-                  <SelectTrigger className="w-[200px] h-14 bg-white border-gray-200 shadow-sm rounded-xl border-2">
-                    <SelectValue placeholder="All Subjects" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Subjects</SelectItem>
-                    {availableSubjects.map((subj) => (
-                      <SelectItem key={subj} value={subj}>
-                        {subj}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {/* Clear filters */}
-              {examFilterCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearExamFilters}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-14 px-6 rounded-xl font-medium"
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Clear ({examFilterCount})
-                </Button>
-              )}
+              {/* Right side: count + subject filter + clear */}
+              <div className="flex items-center gap-3 sm:ml-auto sm:shrink-0">
+                <p className="text-sm text-muted-foreground hidden sm:block whitespace-nowrap">
+                  Showing {filteredExamsList.length} of {classExamsList.length}{" "}
+                  exams
+                </p>
+                {availableSubjects.length > 1 && (
+                  <Select
+                    value={subjectFilter}
+                    onValueChange={(v) => {
+                      setSubjectFilter(v);
+                      updateURL({ subj: v === "all" ? null : v });
+                    }}
+                  >
+                    <SelectTrigger className="h-10 px-4 rounded-xl bg-white border border-gray-200 shadow-sm text-sm w-[160px]">
+                      <SelectValue placeholder="All Subjects" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Subjects</SelectItem>
+                      {availableSubjects.map((subj) => (
+                        <SelectItem key={subj} value={subj}>
+                          {subj}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {examFilterCount > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearExamFilters}
+                    className="h-10 px-4 rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 font-medium"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-1.5" />
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
-
-            {/* Result count */}
-            {examFilterCount > 0 && (
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredExamsList.length} of {classExamsList.length}{" "}
-                exams
-              </p>
-            )}
+            {/* Result count on mobile */}
+            <p className="text-sm text-muted-foreground mt-2 sm:hidden">
+              Showing {filteredExamsList.length} of {classExamsList.length}{" "}
+              exams
+            </p>
           </div>
         )}
 
@@ -2056,10 +2042,28 @@ export default function Results() {
       {/* Class Search & Filter Bar */}
       {classResults.length > 0 && (
         <div className="mb-6">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-            {/* Search - more compact */}
-            <div className="relative sm:max-w-md">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            {/* Search */}
+            <div className="relative flex-1">
+              <style>{`
+                input:-webkit-autofill,
+                input:-webkit-autofill:focus,
+                input:-webkit-autofill:hover,
+                input:-webkit-autofill:active {
+                  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+                  box-shadow: 0 0 0 1000px #fff inset !important;
+                  border: 1px solid #e5e7eb !important;
+                  outline: none !important;
+                }
+                .class-search-override,
+                .class-search-override:focus,
+                .class-search-override:active {
+                  border-color: #e5e7eb !important;
+                  box-shadow: none !important;
+                  outline: none !important;
+                }
+              `}</style>
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
               <Input
                 placeholder="Search classes..."
                 value={classSearch}
@@ -2067,33 +2071,43 @@ export default function Results() {
                   setClassSearch(e.target.value);
                   updateURL({ cs: e.target.value || null });
                 }}
-                className="pl-9 h-9"
+                className="class-search-override pl-12 h-12 bg-white border border-gray-200 shadow-sm rounded-xl text-sm focus:outline-none focus:ring-0 focus:border-gray-300"
+                autoComplete="off"
               />
             </div>
-            {/* Filters toggle */}
-            <Button
-              variant={showClassFilters ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowClassFilters(!showClassFilters)}
-              className={
-                showClassFilters
-                  ? "bg-green-600 hover:bg-green-700 text-white"
-                  : ""
-              }
-            >
-              <Filter className="h-4 w-4 mr-1.5" />
-              Filters
-              {classFilterCount > 0 && (
-                <Badge className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0 h-4 min-w-[16px] rounded-full">
-                  {classFilterCount}
-                </Badge>
-              )}
-            </Button>
+            {/* Filters toggle + result count */}
+            <div className="flex items-center gap-3 sm:ml-auto sm:shrink-0">
+              <p className="text-sm text-muted-foreground hidden sm:block whitespace-nowrap">
+                Showing {filteredClassResults.length} of {classResults.length}{" "}
+                classes
+              </p>
+              <Button
+                variant={showClassFilters ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowClassFilters(!showClassFilters)}
+                className={`h-10 px-4 rounded-xl ${
+                  showClassFilters
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : ""
+                }`}
+              >
+                <Filter className="h-4 w-4 mr-1.5" />
+                Filters
+                {classFilterCount > 0 && (
+                  <Badge className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0 h-4 min-w-[16px] rounded-full">
+                    {classFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </div>
           </div>
-
-                   {/* Collapsible class filter panel */}
+          {/* Result count on mobile */}
+          <p className="text-sm text-muted-foreground mt-2 sm:hidden">
+            Showing {filteredClassResults.length} of {classResults.length}{" "}
+            classes
+          </p>
           {showClassFilters && (
-            <Card className="p-4 border">
+            <Card className="mt-3 p-4 border">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-semibold text-green-700">
                   Filter by Average Score
@@ -2195,14 +2209,6 @@ export default function Results() {
               )}
             </Card>
           )}
-
-          {/* Result count */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Showing {filteredClassResults.length} of {classResults.length}{" "}
-              classes
-            </p>
-          </div>
         </div>
       )}
 
@@ -2259,7 +2265,7 @@ export default function Results() {
       </div>
 
       {/* Class Cards */}
-      {classResults.length === 0 ? (
+      {!loading && classResults.length === 0 ? (
         <Card className="p-12 border text-center bg-white">
           <Folder className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-semibold text-gray-700">
@@ -2269,7 +2275,7 @@ export default function Results() {
             Create a class and add students to start grading exams.
           </p>
         </Card>
-      ) : filteredClassResults.length === 0 ? (
+      ) : !loading && filteredClassResults.length === 0 ? (
         <Card className="p-12 border text-center">
           <Search className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-semibold text-gray-700">
@@ -2296,9 +2302,9 @@ export default function Results() {
                 className="p-6 border-2 border-slate-100 hover:border-green-600/30 hover:shadow-lg transition-all cursor-pointer group bg-gradient-to-br from-white to-slate-50/30"
                 onClick={() => handleClassClick(classResult)}
               >
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-green-600/10 rounded-2xl flex items-center justify-center text-green-700 group-hover:bg-green-600/20 transition-colors">
+                    <div className="w-14 h-14 bg-green-600/10 rounded-2xl flex items-center justify-center text-green-700 group-hover:bg-green-600/20 transition-colors shrink-0">
                       <Folder className="w-7 h-7" />
                     </div>
                     <div>
@@ -2311,7 +2317,7 @@ export default function Results() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 self-center">
                     <div className="hidden sm:flex flex-col items-end">
                       <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
                         Class Average
@@ -2322,7 +2328,7 @@ export default function Results() {
                           : "—"}
                       </p>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-all">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-all shrink-0">
                       <ChevronRight className="w-6 h-6" />
                     </div>
                   </div>

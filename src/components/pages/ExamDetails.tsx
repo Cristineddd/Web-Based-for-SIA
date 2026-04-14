@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import {
@@ -16,7 +15,6 @@ import {
   Download,
   Save,
   X,
-  ArrowLeft,
   Printer,
 } from "lucide-react";
 import {
@@ -38,7 +36,6 @@ import {
 } from "firebase/firestore";
 import { toast } from "sonner";
 import { generateTemplatePDF, getTemplatePDFBlobUrl } from "@/lib/templatePdfGenerator";
-import { setPendingImage } from "@/lib/omrImageStore";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
 import { TemplateService } from "@/services/templateService";
@@ -50,11 +47,9 @@ interface ExamDetailsProps {
 
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
-  const router = useRouter();
-  const uploadInputRef = useRef<HTMLInputElement>(null);
   const importKeyRef = useRef<HTMLInputElement>(null);
   const [exam, setExam] = useState<Exam | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasTemplate, setHasTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
@@ -175,14 +170,6 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, hasTemplate]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
-      </div>
-    );
-  }
 
   if (!exam) {
     return (
@@ -472,12 +459,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Header Section */}
         <div className="flex items-start gap-4">
-          <Link
-            href="/exams"
-            className="mt-1.5 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
+          <BackButton href="/exams" asLink className="mt-1" />
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0f172a] tracking-tight">
               {exam.title}
@@ -771,41 +753,16 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                 Ready to Scan?
               </h3>
               <p className="text-gray-500 max-w-md mx-auto mt-2">
-                Use your mobile device to scan the answer sheets, or upload a
-                photo from your device.
+                Use your mobile device to scan the answer sheets.
               </p>
-              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <div className="mt-8 flex items-center justify-center">
                 <Link href={`/exams/${params.id}/scan-papers`}>
                   <button className="bg-[#22c55e] text-white px-10 py-3.5 rounded-xl font-bold hover:bg-[#16a34a] shadow-lg shadow-green-500/20 transition-all">
                     Open Scanner UI
                   </button>
                 </Link>
-                <button
-                  onClick={() => uploadInputRef.current?.click()}
-                  className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold border-2 border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700 hover:bg-green-50 transition-all"
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload Image
-                </button>
               </div>
-              <input
-                ref={uploadInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = (ev) => {
-                    const dataUrl = ev.target?.result as string;
-                    setPendingImage(dataUrl);
-                    router.push(`/exams/${params.id}/scan-papers`);
-                  };
-                  reader.readAsDataURL(file);
-                  e.target.value = '';
-                }}
-              />
+
             </div>
           )}
 

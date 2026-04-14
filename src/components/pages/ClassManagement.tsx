@@ -22,7 +22,6 @@ import { toast } from "sonner";
 import {
   Search,
   Plus,
-  Loader2,
   GraduationCap,
   Archive,
   Users,
@@ -244,11 +243,7 @@ export default function ClassManagement() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-accent" />
-        </div>
-      ) : filteredClasses.length === 0 ? (
+      {!loading && filteredClasses.length === 0 ? (
         <div className="text-center py-12">
           <GraduationCap className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">

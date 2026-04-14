@@ -48,9 +48,9 @@ type ArchivedItem = {
   name: string;
   type: "class" | "exam";
   archivedAt?: string;
-  code?: string; // BSBIO or similar
-  subjectLabel: string; // Biology
-  detail1: string; // 5 Students or 20 Items
+  code?: string; 
+  subjectLabel: string;
+  detail1: string; 
   year?: string;
 };
 
@@ -155,19 +155,21 @@ export default function Archive() {
 
   return (
     <div className="page-container">
-      {/* Header matches screenshot 2 */}
-      <div className="space-y-1">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-          Archive
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          View, restore, or permanently delete past classes.
-        </p>
+      {/* Header matches rest of pages */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+            Archive
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Restore or permanently delete your archived classes and exams.
+          </p>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-accent" />
         </div>
       ) : (items.length === 0 && reports.length === 0) ? (
         /* Empty State */
