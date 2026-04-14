@@ -10,7 +10,7 @@ import {
   Calendar,
   AlertCircle,
   Loader2,
-  FolderArchive,
+  Archive as ArchiveIcon,
   Layers,
   FileText,
   GraduationCap,
@@ -22,15 +22,12 @@ import {
   getArchivedClasses,
   updateClass,
   deleteClass,
-  Class,
 } from "@/services/classService";
 import {
   getArchivedExams,
   updateExam,
   deleteExam,
-  Exam,
 } from "@/services/examService";
-import { AuditLogger } from "@/services/auditLogger";
 import {
   ReportHistoryService,
   type ReportHistoryEntry,
@@ -45,24 +42,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 type ArchivedItem = {
   id: string;
   name: string;
   type: "class" | "exam";
   archivedAt?: string;
-  code?: string; // BSBIO or similar
-  subjectLabel: string; // Biology
-  detail1: string; // 5 Students or 20 Items
+  code?: string; 
+  subjectLabel: string;
+  detail1: string; 
   year?: string;
 };
 
@@ -167,25 +155,27 @@ export default function Archive() {
 
   return (
     <div className="page-container">
-      {/* Header matches screenshot 2 */}
-      <div className="space-y-1">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-          Archive
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          View, restore, or permanently delete past classes.
-        </p>
+      {/* Header matches rest of pages */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+            Archive
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Restore or permanently delete your archived classes and exams.
+          </p>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-accent" />
         </div>
       ) : (items.length === 0 && reports.length === 0) ? (
         /* Empty State */
         <div className="w-full h-[400px] flex flex-col items-center justify-center border-2 border-dashed border-[#E2E8F0] rounded-xl bg-white/50">
           <div className="w-12 h-12 bg-[#F1F5F9] rounded-lg flex items-center justify-center mb-6">
-            <FolderArchive className="w-6 h-6 text-[#94A3B8]" />
+            <ArchiveIcon className="w-6 h-6 text-[#94A3B8]" />
           </div>
           <h2 className="text-[16px] font-bold text-[#334155] mb-2">
             Archive is empty
@@ -274,8 +264,8 @@ export default function Archive() {
           {items.filter(i => i.type === 'exam').length > 0 && (
             <section className="space-y-6">
               <div className="flex items-center gap-2 px-1">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <FileText className="w-4 h-4 text-blue-600" />
+                <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-green-600" />
                 </div>
                 <h2 className="text-lg font-bold text-gray-800">Archived Exams</h2>
               </div>
@@ -289,15 +279,15 @@ export default function Archive() {
                       <div className="flex items-start justify-between">
                          <div className="space-y-1">
                             <h3 className="text-[16px] font-bold text-[#1E293B] line-clamp-1">{item.name}</h3>
-                            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">{item.subjectLabel}</p>
+                            <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest">{item.subjectLabel}</p>
                          </div>
-                         <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                            <Layers className="w-4 h-4 text-blue-400" />
+                         <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+                            <Layers className="w-4 h-4 text-green-600" />
                          </div>
                       </div>
 
                       <div className="h-[2px] w-full bg-gray-50 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-400/40 w-[100%]" />
+                        <div className="h-full bg-green-500/40 w-[100%]" />
                       </div>
 
                       <div className="space-y-3 pt-1">
@@ -309,10 +299,10 @@ export default function Archive() {
                         </div>
                         <div className="flex items-center gap-3 text-[#64748B]">
                           <AlertCircle className="w-4 h-4 text-gray-400" />
-                          <span className="text-xs font-bold text-gray-600 bg-blue-50/50 px-2 py-0.5 rounded border border-blue-100/50">{item.detail1}</span>
+                          <span className="text-xs font-bold text-gray-600 bg-green-50/50 px-2 py-0.5 rounded border border-green-100/50">{item.detail1}</span>
                         </div>
                         <div className="flex items-center gap-3 text-[#64748B]">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                           <span className="text-xs font-mono font-bold text-gray-400 tracking-tighter">{item.code || "NO-CODE"}</span>
                         </div>
                       </div>
@@ -322,7 +312,7 @@ export default function Archive() {
                       <Button
                         onClick={() => { setRestoreId(item.id); setRestoreType(item.type); }}
                         variant="outline"
-                        className="flex-1 h-9 rounded-xl border-blue-200 bg-white text-blue-600 hover:bg-blue-600 hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
+                        className="flex-1 h-9 rounded-xl border-green-200 bg-white text-green-600 hover:bg-green-600 hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         Restore

@@ -273,7 +273,7 @@ export function CreateExamModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[88vh]">
         {/* Header */}
         <div className="flex-shrink-0 px-5 pt-5 pb-4 border-b border-gray-100">
@@ -408,7 +408,7 @@ export function CreateExamModal({
                   Number of Items
                 </label>
                 <div className="grid grid-cols-3 gap-3">
-                  {[20, 50, 100, 150].map((num) => (
+                  {[20, 50, 100, 150, 200].map((num) => (
                     <button
                       key={num}
                       type="button"
@@ -469,12 +469,13 @@ export function CreateExamModal({
                   <p className="text-sm font-semibold text-gray-700">
                     How many questions? <span className="text-red-500">*</span>
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {[
                       { num: 20, label: "Quick Quiz" },
                       { num: 50, label: "Standard" },
                       { num: 100, label: "Major Exam" },
                       { num: 150, label: "Comprehensive" },
+                      { num: 200, label: "Extended" },
                     ].map(({ num, label }) => (
                       <button
                         key={num}

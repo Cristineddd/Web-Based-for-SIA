@@ -22,9 +22,8 @@ import { toast } from "sonner";
 import {
   Search,
   Plus,
-  Loader2,
   GraduationCap,
-  FolderArchive,
+  Archive,
   Users,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -197,7 +196,7 @@ export default function ClassManagement() {
     <div className="page-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
             Classes
           </h1>
           <p className="text-sm text-gray-500 mt-1">Manage your classes</p>
@@ -213,25 +212,38 @@ export default function ClassManagement() {
         </div>
       </div>
 
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl mb-6">
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="Search classes by name, course, or year..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      <div className="mb-6">
+        <div className="relative">
+          <style>{`
+            input:-webkit-autofill,
+            input:-webkit-autofill:focus,
+            input:-webkit-autofill:hover,
+            input:-webkit-autofill:active {
+              -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+              box-shadow: 0 0 0 1000px #fff inset !important;
+              border: 1px solid #e5e7eb !important;
+              outline: none !important;
+            }
+            .search-override,
+            .search-override:focus,
+            .search-override:active {
+              border-color: #e5e7eb !important;
+              box-shadow: none !important;
+              outline: none !important;
+            }
+          `}</style>
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
+          <Input
+            placeholder="Search classes by name, course, or year..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="search-override pl-12 h-12 bg-white border border-gray-200 shadow-sm rounded-xl text-sm focus:outline-none focus:ring-0 focus:border-gray-300"
+            autoComplete="off"
+          />
         </div>
-      ) : filteredClasses.length === 0 ? (
+      </div>
+
+      {!loading && filteredClasses.length === 0 ? (
         <div className="text-center py-12">
           <GraduationCap className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">
@@ -252,18 +264,18 @@ export default function ClassManagement() {
             >
               <CardContent className="p-6 flex flex-col h-full">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 bg-[#166534]/5 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-[#166534]/10 transition-colors">
-                    <GraduationCap className="w-6 h-6 text-[#166534]" />
+                  <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-green-100 transition-colors">
+                    <GraduationCap className="w-6 h-6 text-green-600" />
                   </div>
                   <div
                     onClick={(e) => {
                       e.stopPropagation();
                       handleArchive(classItem.id);
                     }}
-                    className="p-2.5 rounded-lg text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
+                    className="p-2.5 rounded-lg text-gray-600 hover:text-yellow-600 hover:bg-yellow-50 transition-all duration-200"
                     title="Archive Class"
                   >
-                    <FolderArchive className="w-6 h-6" />
+                    <Archive className="w-6 h-6" />
                   </div>
                 </div>
 

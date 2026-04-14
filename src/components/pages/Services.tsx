@@ -9,13 +9,13 @@ import {
   BarChart3,
   Archive,
   Settings,
-  Clipboard,
   TrendingUp,
   Eye,
   Sparkles,
   BookOpen,
   Shield,
   Database,
+  Clipboard as LucideClipboard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -108,7 +108,7 @@ const services: Service[] = [
     id: 'answer-key',
     title: 'Answer Key Editor',
     description: 'Create and manage answer keys with support for various question types and formats.',
-    icon: <Clipboard className="w-8 h-8" />,
+    icon: <LucideClipboard className="w-8 h-8" />,
     features: ['Visual editor', 'Multiple formats', 'Import/export', 'Validation'],
     path: '/exams',
     status: 'active',

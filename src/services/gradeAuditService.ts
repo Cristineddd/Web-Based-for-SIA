@@ -225,15 +225,15 @@ export class GradeAuditService {
     is_final?: boolean;
     comments?: string;
   }): GradeSnapshot {
-    return {
-      score: data.score,
-      max_score: data.max_score,
-      percentage: data.percentage,
-      letter_grade: data.letter_grade,
-      status: data.status,
-      is_final: data.is_final,
-      comments: data.comments,
-    };
+    const snapshot: GradeSnapshot = {};
+    if (data.score !== undefined) snapshot.score = data.score;
+    if (data.max_score !== undefined) snapshot.max_score = data.max_score;
+    if (data.percentage !== undefined) snapshot.percentage = data.percentage;
+    if (data.letter_grade !== undefined) snapshot.letter_grade = data.letter_grade;
+    if (data.status !== undefined) snapshot.status = data.status;
+    if (data.is_final !== undefined) snapshot.is_final = data.is_final;
+    if (data.comments !== undefined) snapshot.comments = data.comments;
+    return snapshot;
   }
 
   /**

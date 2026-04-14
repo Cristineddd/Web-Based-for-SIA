@@ -69,17 +69,16 @@ function drawBubble(
   }
 }
 
-export async function generateTemplatePDF(template: TemplateData) {
+/** Build the jsPDF document for a template without saving/downloading. */
+async function buildTemplateDoc(template: TemplateData): Promise<jsPDF> {
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
     format: "a4",
   });
 
-  // Load logo (dynamically or fallback)
   const logoData = await loadLogo(template.logoUrl);
 
-  // Choose layout based on number of questions
   if (template.numQuestions === 20) {
     generateTemplate20(doc, template, logoData);
   } else if (template.numQuestions === 50) {
@@ -88,13 +87,25 @@ export async function generateTemplatePDF(template: TemplateData) {
     generateTemplate100(doc, template, logoData);
   } else if (template.numQuestions === 150) {
     generateTemplate150(doc, template, logoData);
+  } else if (template.numQuestions === 200) {
+    generateTemplate200(doc, template, logoData);
   }
 
-  // Generate filename
-  const filename = `${template.name.replace(/[^a-z0-9]/gi, "_")}_Answer_Sheet.pdf`;
+  return doc;
+}
 
-  // Download the PDF
+/** Generate and immediately download the PDF. */
+export async function generateTemplatePDF(template: TemplateData) {
+  const doc = await buildTemplateDoc(template);
+  const filename = `${template.name.replace(/[^a-z0-9]/gi, "_")}_Answer_Sheet.pdf`;
   doc.save(filename);
+}
+
+/** Generate the PDF and return an object URL (blob) for preview / printing. */
+export async function getTemplatePDFBlobUrl(template: TemplateData): Promise<string> {
+  const doc = await buildTemplateDoc(template);
+  const blob = doc.output("blob");
+  return URL.createObjectURL(blob);
 }
 
 // 20 Questions - 2 sheets per page (stacked vertically)
@@ -106,23 +117,18 @@ function generateTemplate20(
   const pageWidth = 210;
   const pageHeight = 297;
 
-  const sheetWidth = pageWidth;
+  const sheetWidth = pageWidth / 2;
   const sheetHeight = pageHeight / 2;
 
-  // Top sheet
+  // 4 sheets in a 2×2 grid
+  // Top-left
   drawMiniSheet(doc, 0, 0, sheetWidth, sheetHeight, template, 20, logoData);
-
-  // Bottom sheet
-  drawMiniSheet(
-    doc,
-    0,
-    sheetHeight,
-    sheetWidth,
-    sheetHeight,
-    template,
-    20,
-    logoData,
-  );
+  // Top-right
+  drawMiniSheet(doc, sheetWidth, 0, sheetWidth, sheetHeight, template, 20, logoData);
+  // Bottom-left
+  drawMiniSheet(doc, 0, sheetHeight, sheetWidth, sheetHeight, template, 20, logoData);
+  // Bottom-right
+  drawMiniSheet(doc, sheetWidth, sheetHeight, sheetWidth, sheetHeight, template, 20, logoData);
 }
 
 // 50 Questions - 2 sheets per page (stacked vertically)
@@ -418,6 +424,7 @@ function drawMiniSheet(
 }
 
 // Draw full page sheet (for 100 questions) - ZipGrade style
+// questionOffset: added to every question number (0 for Q1-100, 100 for Q101-200)
 function drawFullSheet(
   doc: jsPDF,
   startX: number,
@@ -426,6 +433,7 @@ function drawFullSheet(
   height: number,
   template: TemplateData,
   logoData: string,
+  questionOffset: number = 0,
 ) {
   // A4 = 210 x 297mm
   const margin = 10; // Consistent with mini sheets
@@ -594,22 +602,23 @@ function drawFullSheet(
   const colGap = (usableW - totalGridW) / 6;
   const blockVGap = 10 * rowH + 10; // Vertical space between blocks
 
+  const o = questionOffset;
   const gridBlocks = [
     // Col 0: Q1-10, Q11-20 (down)
-    { startQ: 1, endQ: 10, col: 0, row: 0 },
-    { startQ: 11, endQ: 20, col: 0, row: 1 },
+    { startQ: 1 + o, endQ: 10 + o, col: 0, row: 0 },
+    { startQ: 11 + o, endQ: 20 + o, col: 0, row: 1 },
     // Col 1: Q21-30, Q31-40 (down)
-    { startQ: 21, endQ: 30, col: 1, row: 0 },
-    { startQ: 31, endQ: 40, col: 1, row: 1 },
+    { startQ: 21 + o, endQ: 30 + o, col: 1, row: 0 },
+    { startQ: 31 + o, endQ: 40 + o, col: 1, row: 1 },
     // Col 2: Q41-50, Q51-60 (down)
-    { startQ: 41, endQ: 50, col: 2, row: 0 },
-    { startQ: 51, endQ: 60, col: 2, row: 1 },
+    { startQ: 41 + o, endQ: 50 + o, col: 2, row: 0 },
+    { startQ: 51 + o, endQ: 60 + o, col: 2, row: 1 },
     // Col 3: Q61-70, Q71-80 (down)
-    { startQ: 61, endQ: 70, col: 3, row: 0 },
-    { startQ: 71, endQ: 80, col: 3, row: 1 },
+    { startQ: 61 + o, endQ: 70 + o, col: 3, row: 0 },
+    { startQ: 71 + o, endQ: 80 + o, col: 3, row: 1 },
     // Col 4: Q81-90, Q91-100 (down)
-    { startQ: 81, endQ: 90, col: 4, row: 0 },
-    { startQ: 91, endQ: 100, col: 4, row: 1 },
+    { startQ: 81 + o, endQ: 90 + o, col: 4, row: 0 },
+    { startQ: 91 + o, endQ: 100 + o, col: 4, row: 1 },
   ];
 
   let maxQY = currentY;
@@ -882,4 +891,21 @@ function drawFullSheet150(
     startY + height - 4,
     { align: "center" },
   );
+}
+
+// 200 Questions - 2-page answer sheet (Q1-100 on page 1, Q101-200 on page 2)
+function generateTemplate200(
+  doc: jsPDF,
+  template: TemplateData,
+  logoData: string,
+) {
+  const pageWidth = 210;
+  const pageHeight = 297;
+
+  // Page 1: Q1–100 (no offset)
+  drawFullSheet(doc, 0, 0, pageWidth, pageHeight, template, logoData, 0);
+
+  // Page 2: Q101–200
+  doc.addPage();
+  drawFullSheet(doc, 0, 0, pageWidth, pageHeight, template, logoData, 100);
 }

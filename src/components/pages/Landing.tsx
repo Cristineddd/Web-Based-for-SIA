@@ -248,7 +248,7 @@ export default function Landing() {
 
       {/* Auth Modal */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/10 backdrop-blur-sm">
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto border border-green-200" style={{ boxShadow: '0 20px 40px -12px rgba(22, 101, 52, 0.25)' }}>
             <button
               onClick={() => setShowAuthModal(false)}

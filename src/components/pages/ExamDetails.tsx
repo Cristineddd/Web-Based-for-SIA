@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   FileText,
   BarChart2,
@@ -14,9 +12,10 @@ import {
   Pencil,
   Maximize,
   Upload,
+  Download,
   Save,
   X,
-  ArrowLeft,
+  Printer,
 } from "lucide-react";
 import {
   getExamById,
@@ -28,20 +27,18 @@ import {
 import { AnswerKeyService } from "@/services/answerKeyService";
 import { ScanningService } from "@/services/scanningService";
 import { useAuth } from "@/contexts/AuthContext";
-import { db, auth } from "@/lib/firebase";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  deleteDoc,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { toast } from "sonner";
 import { BackButton } from "@/components/ui/BackButton";
-import { generateTemplatePDF } from "@/lib/templatePdfGenerator";
+import {
+  generateTemplatePDF,
+  getTemplatePDFBlobUrl,
+} from "@/lib/templatePdfGenerator";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
 import { TemplateService } from "@/services/templateService";
+import * as XLSX from "xlsx";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -49,12 +46,14 @@ interface ExamDetailsProps {
 
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
-  const router = useRouter();
+  const importKeyRef = useRef<HTMLInputElement>(null);
   const [exam, setExam] = useState<Exam | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasTemplate, setHasTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [templatePdfUrl, setTemplatePdfUrl] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Edit exam state
   const [isEditing, setIsEditing] = useState(false);
@@ -163,13 +162,18 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     }
   }, [params.id]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
-      </div>
-    );
-  }
+  // Auto-load preview whenever the template tab is opened and a template exists
+  useEffect(() => {
+    if (
+      activeTab === "template" &&
+      hasTemplate &&
+      !templatePdfUrl &&
+      !loadingPreview
+    ) {
+      handleLoadPreview();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, hasTemplate]);
 
   if (!exam) {
     return (
@@ -249,6 +253,21 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     }
   };
 
+  const buildTemplateData = async () => {
+    if (!exam || !user) return null;
+    const settings = await InstructorSettingsService.getSettings(user.id);
+    return {
+      name: exam.title,
+      description: exam.subject,
+      numQuestions: exam.num_items,
+      choicesPerQuestion: exam.choices_per_item,
+      examName: exam.title,
+      examCode: exam.examCode,
+      institutionName: exam.institutionName || settings?.institutionName,
+      logoUrl: exam.logoUrl || settings?.logoUrl,
+    };
+  };
+
   const handleCreateTemplate = async () => {
     if (!user?.instructorId || !exam) return;
     setCreatingTemplate(true);
@@ -268,24 +287,135 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         examCode: exam.examCode,
       });
 
-      const settings = await InstructorSettingsService.getSettings(user.id);
-      await generateTemplatePDF({
-        name: exam.title,
-        description: exam.subject,
-        numQuestions: exam.num_items,
-        choicesPerQuestion: exam.choices_per_item,
-        examName: exam.title,
-        examCode: exam.examCode,
-        institutionName: exam.institutionName || settings?.institutionName,
-        logoUrl: exam.logoUrl || settings?.logoUrl,
-      });
+      const tplData = await buildTemplateData();
+      if (tplData) {
+        await generateTemplatePDF(tplData);
+        // Also build preview URL
+        setLoadingPreview(true);
+        const url = await getTemplatePDFBlobUrl(tplData);
+        if (templatePdfUrl) URL.revokeObjectURL(templatePdfUrl);
+        setTemplatePdfUrl(url);
+        setLoadingPreview(false);
+      }
 
       setHasTemplate(true);
       toast.success("Template created!");
     } catch (err) {
       toast.error("Failed to create template");
+      setLoadingPreview(false);
     } finally {
       setCreatingTemplate(false);
+    }
+  };
+
+  const handleLoadPreview = async () => {
+    const tplData = await buildTemplateData();
+    if (!tplData) return;
+    setLoadingPreview(true);
+    try {
+      const url = await getTemplatePDFBlobUrl(tplData);
+      if (templatePdfUrl) URL.revokeObjectURL(templatePdfUrl);
+      setTemplatePdfUrl(url);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const handlePrintTemplate = async () => {
+    const tplData = await buildTemplateData();
+    if (!tplData) return;
+    const url = templatePdfUrl ?? (await getTemplatePDFBlobUrl(tplData));
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    iframe.onload = () => {
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    };
+  };
+
+  const handleDownloadTemplate = () => {
+    if (!exam) return;
+    const data: [string, string][] = [["Question", "Answer"]];
+    for (let i = 1; i <= exam.num_items; i++) data.push([String(i), ""]);
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws["!cols"] = [{ wch: 12 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Answer Key");
+    XLSX.writeFile(
+      wb,
+      `answer_key_template_${exam.title.replace(/\s+/g, "_")}.xlsx`,
+    );
+  };
+
+  const handleImportKey = (file: File) => {
+    if (!exam) return;
+    const valid = ["A", "B", "C", "D", "E"];
+
+    const processRows = (rows: [unknown, unknown][]) => {
+      const imported: Record<number, string> = {};
+      let parsed = 0;
+      for (const [colA, colB] of rows) {
+        const qNum = parseInt(String(colA ?? "").trim(), 10);
+        const ans = String(colB ?? "")
+          .trim()
+          .toUpperCase();
+        if (
+          !isNaN(qNum) &&
+          qNum >= 1 &&
+          qNum <= exam.num_items &&
+          valid.includes(ans)
+        ) {
+          imported[qNum] = ans;
+          parsed++;
+        }
+      }
+      if (parsed === 0) {
+        toast.error(
+          "No valid rows found. Expected columns: Question, Answer (e.g. 1, A)",
+        );
+        return;
+      }
+      setAnswerKey((prev) => ({ ...prev, ...imported }));
+      toast.success(
+        `Imported ${parsed} answer${parsed !== 1 ? "s" : ""} from file`,
+      );
+    };
+
+    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<[unknown, unknown]>(sheet, {
+          header: 1,
+        }) as [unknown, unknown][];
+        // Skip header row if first cell is not a number
+        const dataRows = isNaN(parseInt(String(rows[0]?.[0] ?? ""), 10))
+          ? rows.slice(1)
+          : rows;
+        processRows(dataRows);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        const lines = text.split(/\r?\n/).filter((l) => l.trim());
+        const rows: [unknown, unknown][] = lines.map((line) => {
+          const [a, b] = line.split(",");
+          return [a, b];
+        });
+        const dataRows = isNaN(parseInt(String(rows[0]?.[0] ?? "").trim(), 10))
+          ? rows.slice(1)
+          : rows;
+        processRows(dataRows);
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -352,22 +482,15 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Header Section */}
-        <div className="flex items-end justify-between gap-4">
-          <div className="flex items-start gap-3 sm:gap-4 min-w-0">
-            <Link
-              href="/exams"
-              className="mt-1 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 flex-shrink-0"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-3xl font-extrabold text-[#0f172a] tracking-tight leading-tight">
-                {exam.title}
-              </h1>
-              <p className="text-xs sm:text-base font-semibold text-gray-400 mt-0.5">
-                {exam.subject}
-              </p>
-            </div>
+        <div className="flex items-start gap-4">
+          <BackButton href="/exams" asLink className="mt-1" />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0f172a] tracking-tight">
+              {exam.title}
+            </h1>
+            <p className="text-sm sm:text-base font-semibold text-gray-400 mt-1">
+              {exam.subject}
+            </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-end gap-2 flex-shrink-0">
@@ -476,10 +599,31 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   Answer Key Configuration
                 </h3>
                 <div className="flex items-center gap-3">
-                  <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all">
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Template</span>
+                  </button>
+                  <button
+                    onClick={() => importKeyRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                  >
                     <Upload className="w-4 h-4" />
                     <span>Import Key</span>
                   </button>
+                  <input
+                    ref={importKeyRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImportKey(file);
+                      e.target.value = "";
+                    }}
+                  />
                   <button
                     onClick={handleSaveAnswerKey}
                     disabled={isSavingKey}
@@ -545,42 +689,101 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           )}
 
           {activeTab === "template" && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
-                <FileText className="w-16 h-16 text-green-500 mx-auto mb-4 opacity-20" />
-                <h3 className="text-xl font-bold text-gray-900">
-                  Exam Template
-                </h3>
-                <p className="text-gray-500 max-w-sm mx-auto mt-2">
-                  {hasTemplate
-                    ? "Template has been generated."
-                    : "Generate and download OMR answer sheets for your students."}
-                </p>
-                <button
-                  disabled={hasTemplate || creatingTemplate}
-                  onClick={handleCreateTemplate}
-                  className={`mt-8 flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-sm mx-auto transition-all ${
-                    hasTemplate
-                      ? "bg-green-50 text-green-600 cursor-default"
-                      : "bg-[#22c55e] text-white hover:bg-[#16a34a] shadow-lg shadow-green-500/20"
-                  }`}
-                >
-                  {creatingTemplate ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : hasTemplate ? (
-                    <CheckCircle className="w-4 h-4" />
-                  ) : (
-                    <FilePlus className="w-4 h-4" />
+            <div className="space-y-4">
+              {/* Action bar */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${hasTemplate ? "bg-emerald-50" : "bg-gray-50"}`}
+                  >
+                    <FileText
+                      className={`w-5 h-5 ${hasTemplate ? "text-emerald-600" : "text-gray-400"}`}
+                    />
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900 text-sm">
+                      {hasTemplate ? "Template Ready" : "No Template Yet"}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {exam?.num_items} questions · {exam?.choices_per_item}{" "}
+                      choices
+                    </p>
+                  </div>
+                  {hasTemplate && (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      <CheckCircle className="w-3 h-3" /> Created
+                    </span>
                   )}
-                  <span>
-                    {creatingTemplate
-                      ? "Generating..."
-                      : hasTemplate
-                        ? "Template Created"
-                        : "Create Template"}
-                  </span>
-                </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!hasTemplate && (
+                    <button
+                      disabled={creatingTemplate}
+                      onClick={handleCreateTemplate}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all disabled:opacity-60"
+                    >
+                      {creatingTemplate ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <FilePlus className="w-4 h-4" />
+                      )}
+                      {creatingTemplate ? "Generating…" : "Create Template"}
+                    </button>
+                  )}
+                  {hasTemplate && (
+                    <>
+                      <button
+                        onClick={handlePrintTemplate}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm border-2 border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 transition-all"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Print
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const d = await buildTemplateData();
+                          if (d) generateTemplatePDF(d);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm border-2 border-gray-200 text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-all"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download PDF
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
+
+              {/* PDF Preview */}
+              {hasTemplate && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  {loadingPreview && (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+                      <span className="ml-3 text-gray-500 text-sm">
+                        Generating preview…
+                      </span>
+                    </div>
+                  )}
+                  {!loadingPreview && !templatePdfUrl && (
+                    <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+                      <FileText className="w-12 h-12 text-gray-200 mb-3" />
+                      <p className="text-gray-500 text-sm">
+                        Click <strong>Refresh Preview</strong> to load the
+                        template preview.
+                      </p>
+                    </div>
+                  )}
+                  {!loadingPreview && templatePdfUrl && (
+                    <iframe
+                      src={templatePdfUrl}
+                      className="w-full border-0"
+                      style={{ height: "75vh", minHeight: "500px" }}
+                      title="Template Preview"
+                    />
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -591,17 +794,15 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                 Ready to Scan?
               </h3>
               <p className="text-gray-500 max-w-md mx-auto mt-2">
-                Use your mobile device to scan the answer sheets. Results sync
-                automatically.
+                Use your mobile device to scan the answer sheets.
               </p>
-              <Link
-                href={`/exams/${params.id}/scan-papers`}
-                className="mt-8 inline-block"
-              >
-                <button className="bg-[#22c55e] text-white px-10 py-3.5 rounded-xl font-bold hover:bg-[#16a34a] shadow-lg shadow-green-500/20 transition-all">
-                  Open Scanner UI
-                </button>
-              </Link>
+              <div className="mt-8 flex items-center justify-center">
+                <Link href={`/exams/${params.id}/scan-papers`}>
+                  <button className="bg-[#22c55e] text-white px-10 py-3.5 rounded-xl font-bold hover:bg-[#16a34a] shadow-lg shadow-green-500/20 transition-all">
+                    Open Scanner UI
+                  </button>
+                </Link>
+              </div>
             </div>
           )}
 

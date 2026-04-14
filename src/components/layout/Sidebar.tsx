@@ -15,7 +15,7 @@ import {
   Menu,
   X,
   AlertTriangle,
-  FolderArchive,
+  Archive,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebarContext } from "@/contexts/SidebarContext";
@@ -28,7 +28,7 @@ const navItems = [
   { path: "/classes", label: "Classes", icon: Users },
   { path: "/exams", label: "Exams", icon: FileText },
   { path: "/results", label: "Results", icon: BarChart3 },
-  { path: "/archive", label: "Archive", icon: FolderArchive },
+  { path: "/archive", label: "Archive", icon: Archive },
 ];
 
 export function Sidebar() {
@@ -39,7 +39,6 @@ export function Sidebar() {
     useSidebarContext();
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [classCount, setClassCount] = useState<number | null>(null);
-  const [loadingClasses, setLoadingClasses] = useState(true);
   const prevPathRef = useRef(pathname);
 
   useEffect(() => {
@@ -50,8 +49,6 @@ export function Sidebar() {
         setClassCount(classes.length);
       } catch (error) {
         console.error("Error fetching class count for sidebar:", error);
-      } finally {
-        setLoadingClasses(false);
       }
     }
     fetchClassCount();
@@ -160,7 +157,7 @@ export function Sidebar() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -206,27 +203,43 @@ export function Sidebar() {
 
         {/* Footer */}
         <div className="flex-shrink-0 px-3 py-4 border-t border-gray-100 space-y-1">
+          {/* User Info */}
           {!collapsed && user && (
-            <div className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-lg bg-gray-50">
-              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                {getEmailInitial()}
+            <div className="px-3 py-2 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  {getEmailInitial()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {user.displayName || "FACULTY"}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {user.email}
+                  </p>
+                  {user.instructorId && (
+                    <p className="text-xs text-gray-400 font-mono mt-0.5">
+                      ID: {user.instructorId}
+                    </p>
+                  )}
+                </div>
               </div>
-              <p className="text-xs font-medium text-gray-600 truncate">
-                {user.email}
-              </p>
             </div>
           )}
+          
           {collapsed && user && (
-            <div className="flex justify-center mb-1">
-              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+            <div className="flex justify-center mb-2">
+              <div className="w-9 h-9 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
                 {getEmailInitial()}
               </div>
             </div>
           )}
+
+          {/* Sign Out Button */}
           <button
             onClick={() => setShowSignOutModal(true)}
             className={cn(
-              "w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-150",
+              "w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-all duration-150",
               collapsed && "justify-center",
             )}
           >
@@ -258,7 +271,7 @@ export function Sidebar() {
         )}
         style={{ height: "calc(100vh - 3rem)" }}
       >
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -302,19 +315,34 @@ export function Sidebar() {
         </nav>
 
         <div className="flex-shrink-0 px-3 py-4 border-t border-gray-100 mt-auto space-y-1">
+          {/* User Info */}
           {user && (
-            <div className="flex items-center gap-3 px-3 py-2.5 mb-1 rounded-lg bg-gray-50">
-              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                {getEmailInitial()}
+            <div className="px-3 py-2 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  {getEmailInitial()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {user.displayName || "FACULTY"}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {user.email}
+                  </p>
+                  {user.instructorId && (
+                    <p className="text-xs text-gray-400 font-mono mt-0.5">
+                      ID: {user.instructorId}
+                    </p>
+                  )}
+                </div>
               </div>
-              <p className="text-xs font-medium text-gray-600 truncate">
-                {user.email}
-              </p>
             </div>
           )}
+
+          {/* Sign Out Button */}
           <button
             onClick={() => setShowSignOutModal(true)}
-            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-150"
+            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-all duration-150"
           >
             <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
             <span>Sign out</span>

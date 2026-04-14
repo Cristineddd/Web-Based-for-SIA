@@ -187,11 +187,11 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               placeholder="Full name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
-                required
-                autoFocus
-              />
-            </div>
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
+              required
+              autoFocus
+            />
+          </div>
 
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -200,10 +200,10 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
-                required
-              />
-            </div>
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
+              required
+            />
+          </div>
 
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -212,11 +212,11 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
               placeholder="Password (at least 6 characters)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-600"
-                required
-                minLength={6}
-              />
-            </div>
+              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
+              required
+              minLength={6}
+            />
+          </div>
 
           <button 
             type="submit" 

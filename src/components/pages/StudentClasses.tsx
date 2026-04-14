@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useEffect, useState, useRef } from "react";import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -62,10 +61,11 @@ import {
   X,
   FolderArchive,
 } from "lucide-react";
-import ClassDetailView from "./ClassDetailView";
+import { useRouter } from "next/navigation";
 
 export default function StudentClasses() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const { user } = useAuth();
 
   // Debug: Log user changes
@@ -82,8 +82,7 @@ export default function StudentClasses() {
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showViewDialog, setShowViewDialog] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+  const [selectedClass] = useState<Class | null>(null);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [roomWarning, setRoomWarning] = useState(false);
   const [, setClassNameWarning] = useState(false);
@@ -1086,19 +1085,13 @@ export default function StudentClasses() {
       c.section_block.toLowerCase().includes(search.toLowerCase()),
   );
 
-  if (showViewDialog && selectedClass) {
-    return (
-      <div className="page-container">
-        <ClassDetailView classItem={selectedClass} onBack={() => setShowViewDialog(false)} />
-      </div>
-    );
-  }
+
 
   return (
     <div className="page-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Class</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Class</h1>
           <p className="text-sm text-gray-500 mt-1">
             Manage student roster and information
           </p>
@@ -1162,9 +1155,10 @@ export default function StudentClasses() {
             <Card
               key={classItem.id}
               className="card-elevated hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => {
-                setSelectedClass(classItem);
-                setShowViewDialog(true);
+              onClick={(e) => {
+                // Don't navigate if archive button was clicked
+                if ((e.target as HTMLElement).closest('[data-archive-btn]')) return;
+                router.push(`/classes/edit/${classItem.id}`);
               }}
             >
               <CardContent className="p-6">
@@ -1186,6 +1180,7 @@ export default function StudentClasses() {
                     <Button
                       variant="outline"
                       size="sm"
+                      data-archive-btn="true"
                       className="text-amber-600 hover:text-amber-700 border-amber-200 hover:border-amber-300"
                       onClick={(e) => {
                         e.stopPropagation();

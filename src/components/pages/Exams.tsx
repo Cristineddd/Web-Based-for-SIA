@@ -9,7 +9,7 @@ import {
   Plus,
   Search,
   FileText,
-  FolderArchive,
+  Archive,
   Pencil,
   RefreshCw,
   Tag,
@@ -521,44 +521,56 @@ export default function Exams() {
   return (
     <div className="page-container">
       {/* Header */}
-      <div className="flex items-end justify-between gap-4 mb-8">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
-            Exams
-          </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Exams</h1>
           <p className="text-xs text-gray-500 mt-0.5">
             Create and manage your exams and answer keys
           </p>
         </div>
-        <div className="shrink-0">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-green-600 hover:bg-green-700 text-white rounded-xl py-2 px-3 sm:px-4 shadow-sm transition-all active:scale-95 text-xs sm:text-sm font-semibold whitespace-nowrap flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            Create Exam
-          </button>
-        </div>
+        <Button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+        >
+          <Plus className="w-4 h-4" />
+          Create Exam
+        </Button>
       </div>
 
       {/* Search Bar - Full Width */}
-      <div className="relative mb-8">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-        <Input
-          placeholder="Search exams by title, subject, or template ID..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-lg focus:ring-green-500/20 focus:border-green-500"
-        />
+      <div className="mb-6">
+        <div className="relative">
+          <style>{`
+            input:-webkit-autofill,
+            input:-webkit-autofill:focus,
+            input:-webkit-autofill:hover,
+            input:-webkit-autofill:active {
+              -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+              box-shadow: 0 0 0 1000px #fff inset !important;
+              border: 1px solid #e5e7eb !important;
+              outline: none !important;
+            }
+            .search-override,
+            .search-override:focus,
+            .search-override:active {
+              border-color: #e5e7eb !important;
+              box-shadow: none !important;
+              outline: none !important;
+            }
+          `}</style>
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
+          <Input
+            placeholder="Search exams by title, subject, or template ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="search-override pl-12 h-12 bg-white border border-gray-200 shadow-sm rounded-xl text-sm focus:outline-none focus:ring-0 focus:border-gray-300"
+            autoComplete="off"
+          />
+        </div>
       </div>
 
       {/* Grid Layout */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-10 h-10 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-500 font-medium">Loading exams...</p>
-        </div>
-      ) : filteredExams.length === 0 ? (
+      {filteredExams.length === 0 && !loading ? (
         <div className="flex flex-col items-center justify-center py-24 bg-white border border-dashed border-gray-200 rounded-2xl">
           <FileText className="w-16 h-16 text-gray-200 mb-4" />
           <p className="text-gray-500 text-lg font-medium">
@@ -663,14 +675,14 @@ export default function Exams() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-600 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                        className="h-8 w-8 text-gray-600 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           setArchiveId(exam.id);
                         }}
                       >
-                        <FolderArchive className="w-4 h-4" />
+                        <Archive className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -696,7 +708,7 @@ export default function Exams() {
 
       {/* Edit Exam Dialog */}
       {editingExam && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
@@ -898,19 +910,23 @@ export default function Exams() {
 
       {/* Archive Dialog */}
       <AlertDialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Archive Exam</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-xl font-bold text-gray-900">
+              Archive Exam
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-gray-600 leading-relaxed">
               Are you sure you want to archive this exam? It will be moved to
               the Archive page and you can restore it later.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="gap-3">
+            <AlertDialogCancel className="h-11 px-6 border-gray-200 text-gray-700 font-medium hover:bg-gray-50">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleArchive}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className="h-11 px-6 bg-green-600 text-white font-medium hover:bg-green-700"
             >
               Archive
             </AlertDialogAction>
@@ -926,7 +942,7 @@ export default function Exams() {
         <AlertDialogContent className="border-2 border-warning">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-warning">
-              <FolderArchive className="w-5 h-5" />
+              <Archive className="w-5 h-5" />
               Duplicate Batch Detected
             </AlertDialogTitle>
             <AlertDialogDescription className="text-foreground">
