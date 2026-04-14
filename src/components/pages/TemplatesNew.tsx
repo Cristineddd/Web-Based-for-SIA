@@ -938,134 +938,194 @@ export default function Templates() {
                   </div>
                 );
 
-                // Reusable: ID section
-                const IdSection = ({ small }: { small?: boolean }) => (
-                  <div
-                    className={`inline-flex flex-col border-[1.5px] border-black ${small ? "p-1" : "p-[4px]"}`}
-                  >
-                    <div
-                      className={`${small ? "text-[6.5px]" : "text-[6px]"} font-bold mb-1 leading-none`}
-                    >
-                      Student ZipGrade ID
-                    </div>
-                    {/* Input boxes */}
-                    <div className="flex justify-start gap-[1px] mb-[4px]">
-                      {Array.from({ length: 10 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`${small ? "w-[9px] h-[8px]" : "w-[12px] h-[10px]"} border border-black`}
-                        ></div>
-                      ))}
-                    </div>
-                    {/* Bubble grid */}
-                    <div className="flex gap-[1px] items-start justify-start">
-                      <div className="flex flex-col">
-                        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-                          <div
-                            key={n}
-                            className={`${small ? "h-[8.5px] text-[5.5px]" : "h-[11px] text-[7.5px]"} flex items-center font-bold w-[5px] justify-start`}
-                          >
-                            {n}
-                          </div>
-                        ))}
-                      </div>
-                      {Array.from({ length: 10 }).map((_, col) => (
-                        <div key={col} className="flex flex-col">
-                          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((row) => (
-                            <div
-                              key={row}
-                              className={`${small ? "w-[7.5px] h-[7.5px] m-[0.5px]" : "w-[10px] h-[10px] m-[0.5px]"} rounded-full border border-black bg-white flex-shrink-0`}
-                            ></div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-
                 // Reusable: mini sheet (for 20Q and 50Q)
+                // PDF spec: 2 sheets stacked top/bottom on one A4 page.
+                // 20Q: 2 columns of 10 each  |  50Q: 5 blocks in a single row
                 const MiniSheet = ({
                   questions,
-                  sheetW,
-                  sheetH,
                 }: {
                   questions: number;
-                  sheetW: string;
-                  sheetH: string;
                 }) => (
                   <div
-                    className="bg-white border border-black relative"
-                    style={{ width: sheetW, height: sheetH, padding: "8px" }}
+                    className="bg-white border border-black relative overflow-hidden"
+                    style={{ width: "100%", height: "100%", padding: "4px 6px" }}
                   >
-                    {/* Corner markers */}
-
-                    <div className="absolute bottom-[4px] left-[4px] w-[8px] h-[8px] bg-black"></div>
-                    <div className="absolute bottom-[4px] right-[4px] w-[8px] h-[8px] bg-black"></div>
+                    {/* Corner markers — top-left/right already implied by page border; bottom pair */}
+                    <div className="absolute top-[2px] left-[2px] w-[8px] h-[8px] bg-black"></div>
+                    <div className="absolute top-[2px] right-[2px] w-[8px] h-[8px] bg-black"></div>
+                    <div className="absolute bottom-[2px] left-[2px] w-[8px] h-[8px] bg-black"></div>
+                    <div className="absolute bottom-[2px] right-[2px] w-[8px] h-[8px] bg-black"></div>
 
                     {/* Header */}
-                    <div className="flex items-center justify-center gap-1 mb-0.5">
+                    <div className="flex items-center justify-center gap-[3px] mt-[10px] mb-[2px]">
                       <img
-                        src="/gclogo.png"
-                        alt="Gordon College logo"
-                        className="w-[10px] h-[10px] object-contain"
+                        src={branding?.logoUrl || "/gclogo.png"}
+                        alt="logo"
+                        className="w-[9px] h-[9px] object-contain"
                       />
-                      <span className="text-[7px] font-bold">
-                        Gordon College
+                      <span className="text-[6px] font-bold leading-none">
+                        {branding?.institutionName || "Gordon College"}
                       </span>
                     </div>
 
                     {/* Exam Code */}
                     {previewTemplate?.examCode && (
-                      <div className="text-center text-[5px] text-gray-600 mb-0.5">
+                      <div className="text-center text-[5px] text-gray-600 mb-[1px]">
                         Exam Code: {previewTemplate.examCode}
                       </div>
                     )}
 
                     {/* Name/Date */}
-                    <div className="flex items-center gap-[3px] mb-2 text-[7px]">
-                      <div className="w-[8px] h-[8px] bg-black flex-shrink-0"></div>
-                      <div className="flex-1 flex gap-2 items-end">
-                        <div className="flex-[3] flex items-end">
-                          <span className="text-[5px]">Name:</span>
-                          <div className="flex-1 border-b-[1.5px] border-black h-[1px]"></div>
-                        </div>
-                        <div className="flex-[2] flex items-end">
-                          <span className="text-[7px]">Date:</span>
-                          <div className="flex-1 border-b-[1.5px] border-black h-[1px]"></div>
-                        </div>
+                    <div className="flex gap-[4px] mb-[3px] items-end" style={{ padding: "0 2px" }}>
+                      <div className="flex-[3] flex items-end gap-[2px]">
+                        <span className="text-[5px] font-bold whitespace-nowrap">Name:</span>
+                        <div className="flex-1 border-b border-black" style={{ height: "1px" }}></div>
                       </div>
-                      <div className="w-[8px] h-[8px] bg-black flex-shrink-0"></div>
+                      <div className="flex-[2] flex items-end gap-[2px]">
+                        <span className="text-[5px] font-bold whitespace-nowrap">Date:</span>
+                        <div className="flex-1 border-b border-black" style={{ height: "1px" }}></div>
+                      </div>
                     </div>
 
-                    {/* ID Section */}
-                    <div className="mb-2">
-                      <IdSection />
+                    {/* ID Section — 9 columns to match PDF */}
+                    <div className="mb-[3px]" style={{ padding: "0 2px" }}>
+                      <div className="inline-flex flex-col border border-black p-[2px]">
+                        <div className="text-[4.5px] font-bold mb-[1px]">Student ZipGrade ID</div>
+                        <div className="flex gap-[1px] mb-[2px]">
+                          {Array.from({ length: 9 }).map((_, i) => (
+                            <div key={i} className="w-[7px] h-[5px] border border-black"></div>
+                          ))}
+                        </div>
+                        <div className="flex gap-[1px]">
+                          <div className="flex flex-col gap-[1px] mr-[1px]">
+                            {[0,1,2,3,4,5,6,7,8,9].map(n => (
+                              <div key={n} className="text-[3.5px] font-bold leading-none h-[5px] flex items-center">{n}</div>
+                            ))}
+                          </div>
+                          {Array.from({ length: 9 }).map((_, col) => (
+                            <div key={col} className="flex flex-col gap-[1px]">
+                              {Array.from({ length: 10 }).map((_, row) => (
+                                <div key={row} className="w-[5px] h-[5px] rounded-full border border-black bg-white"></div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Answer blocks */}
                     {questions === 20 ? (
-                      <div className="flex gap-2 mt-2">
+                      // 20Q: 2 columns of 10 each side-by-side
+                      <div className="flex gap-[4px] justify-center" style={{ padding: "0 2px" }}>
                         <QBlock startQ={1} endQ={10} />
                         <QBlock startQ={11} endQ={20} />
                       </div>
                     ) : (
-                      <div className="flex gap-2 justify-center mt-2">
-                        <div className="space-y-2">
-                          <QBlock startQ={1} endQ={10} />
-                          <QBlock startQ={11} endQ={20} />
-                          <QBlock startQ={21} endQ={30} />
-                        </div>
-                        <div className="space-y-2">
-                          <QBlock startQ={31} endQ={40} />
-                          <QBlock startQ={41} endQ={50} />
-                        </div>
+                      // 50Q: 5 blocks in a SINGLE horizontal row (matches PDF)
+                      <div className="flex gap-[2px] justify-center" style={{ padding: "0 2px" }}>
+                        <QBlock startQ={1} endQ={10} />
+                        <QBlock startQ={11} endQ={20} />
+                        <QBlock startQ={21} endQ={30} />
+                        <QBlock startQ={31} endQ={40} />
+                        <QBlock startQ={41} endQ={50} />
                       </div>
                     )}
                   </div>
                 );
 
+                // Full-page sheet preview (used for 100Q, 150Q, 200Q)
+                // numRows: how many block-rows per page (100Q=2, 150Q=3, 200Q=2 per page)
+                // offsetQ: question number offset for the page (0 for page1, 100 for page2)
+                const FullPageSheet = ({ numRows, offsetQ = 0 }: { numRows: number; offsetQ?: number }) => (
+                  <div
+                    className="mx-auto bg-white border border-gray-400 shadow-lg relative"
+                    style={{ width: "420px", aspectRatio: "210/297", padding: "10px" }}
+                  >
+                    {/* Corner markers */}
+                    <div className="absolute top-[4px] left-[4px] w-[14px] h-[14px] bg-black"></div>
+                    <div className="absolute top-[4px] right-[4px] w-[14px] h-[14px] bg-black"></div>
+                    <div className="absolute bottom-[4px] left-[4px] w-[14px] h-[14px] bg-black"></div>
+                    <div className="absolute bottom-[4px] right-[4px] w-[14px] h-[14px] bg-black"></div>
+
+                    {/* Header */}
+                    <div className="flex items-center justify-center gap-1 mb-2 mt-2">
+                      <img
+                        src={branding?.logoUrl || "/gclogo.png"}
+                        className="w-[20px] h-[20px] object-contain"
+                        alt="logo"
+                      />
+                      <span className="text-[10px] font-bold text-black tracking-tight">
+                        {branding?.institutionName || "Gordon College"}
+                      </span>
+                    </div>
+
+                    {/* Exam Code */}
+                    {previewTemplate?.examCode && (
+                      <div className="text-center text-[8px] text-gray-800 font-medium mb-1">
+                        Exam Code: {previewTemplate.examCode}
+                      </div>
+                    )}
+
+                    {/* Name/Date */}
+                    <div className="flex gap-4 mb-2 text-[8px] items-end">
+                      <div className="flex-[3] flex items-end gap-1">
+                        <span className="font-bold">Name:</span>
+                        <div className="flex-1 border-b-[1.5px] border-black" style={{ height: "1px" }}></div>
+                      </div>
+                      <div className="flex-[2] flex items-end gap-1">
+                        <span className="font-bold">Date:</span>
+                        <div className="flex-1 border-b-[1.5px] border-black" style={{ height: "1px" }}></div>
+                      </div>
+                    </div>
+
+                    {/* ID Section — left-aligned, above the grid (matches PDF) */}
+                    <div className="mb-2">
+                      <div className="inline-flex flex-col border border-black p-[3px]">
+                        <div className="text-[5px] font-bold mb-[2px]">Student ZipGrade ID</div>
+                        <div className="flex gap-[2px] mb-[2px]">
+                          {Array.from({ length: 9 }).map((_, i) => (
+                            <div key={i} className="w-[9px] h-[7px] border border-black"></div>
+                          ))}
+                        </div>
+                        <div className="flex gap-[1px]">
+                          <div className="flex flex-col gap-[1px] mr-[2px]">
+                            {[0,1,2,3,4,5,6,7,8,9].map(n => (
+                              <div key={n} className="text-[4px] font-bold leading-none h-[7px] flex items-center">{n}</div>
+                            ))}
+                          </div>
+                          {Array.from({ length: 9 }).map((_, col) => (
+                            <div key={col} className="flex flex-col gap-[1px]">
+                              {Array.from({ length: 10 }).map((_, row) => (
+                                <div key={row} className="w-[7px] h-[7px] rounded-full border border-black bg-white"></div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Answer grid: 5 cols × numRows rows
+                        Col layout (same as PDF): col c, row r → Q = (c * numRows + r) * 10 + 1 + offsetQ */}
+                    <div className="flex gap-[3px] justify-center">
+                      {Array.from({ length: 5 }).map((_, col) => (
+                        <div key={col} className="flex flex-col gap-[3px]">
+                          {Array.from({ length: numRows }).map((_, row) => {
+                            const startQ = (col * numRows + row) * 10 + 1 + offsetQ;
+                            return <QBlock key={row} startQ={startQ} endQ={startQ + 9} />;
+                          })}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="absolute bottom-[6px] left-0 right-0 text-center text-[6px] text-gray-500 italic">
+                      Do not fold, staple, or tear this answer sheet.
+                    </div>
+                  </div>
+                );
+
                 if (numQ === 20) {
-                  // 20Q: 4 mini sheets in 2x2 grid
+                  // 20Q: 4 mini-sheets in a 2×2 grid (same style as 50Q sheets)
                   return (
                     <div
                       className="mx-auto bg-white border border-gray-400 shadow-lg"
@@ -1077,107 +1137,39 @@ export default function Templates() {
                         gridTemplateRows: "1fr 1fr",
                       }}
                     >
-                      <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
-                      <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
-                      <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
-                      <MiniSheet questions={20} sheetW="100%" sheetH="100%" />
+                      <MiniSheet questions={20} />
+                      <MiniSheet questions={20} />
+                      <MiniSheet questions={20} />
+                      <MiniSheet questions={20} />
                     </div>
                   );
                 } else if (numQ === 50) {
-                  // 50Q: 2 side by side
+                  // 50Q: PDF = 2 mini-sheets stacked top/bottom on one A4 page
                   return (
                     <div
                       className="mx-auto bg-white border border-gray-400 shadow-lg"
-                      style={{
-                        width: "420px",
-                        aspectRatio: "210/297",
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                      }}
+                      style={{ width: "420px", aspectRatio: "210/297", display: "flex", flexDirection: "column" }}
                     >
-                      <MiniSheet questions={50} sheetW="100%" sheetH="100%" />
-                      <MiniSheet questions={50} sheetW="100%" sheetH="100%" />
+                      <div style={{ flex: 1 }}><MiniSheet questions={50} /></div>
+                      <div style={{ flex: 1, borderTop: "1px solid #999" }}><MiniSheet questions={50} /></div>
+                    </div>
+                  );
+                } else if (numQ === 100) {
+                  return <FullPageSheet numRows={2} offsetQ={0} />;
+                } else if (numQ === 150) {
+                  return <FullPageSheet numRows={3} offsetQ={0} />;
+                } else if (numQ === 200) {
+                  // 200Q: 2 full pages — page 1 Q1-100, page 2 Q101-200
+                  return (
+                    <div className="space-y-4">
+                      <div className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Page 1 — Questions 1–100</div>
+                      <FullPageSheet numRows={2} offsetQ={0} />
+                      <div className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4">Page 2 — Questions 101–200</div>
+                      <FullPageSheet numRows={2} offsetQ={100} />
                     </div>
                   );
                 } else {
-                  // 100Q: Full page
-                  return (
-                    <div
-                      className="mx-auto bg-white border border-gray-400 shadow-lg relative"
-                      style={{
-                        width: "420px",
-                        aspectRatio: "210/297",
-                        padding: "10px",
-                      }}
-                    >
-                      {/* Corner markers */}
-                      <div className="absolute top-[4px] left-[4px] w-[14px] h-[14px] bg-black"></div>
-                      <div className="absolute top-[4px] right-[4px] w-[14px] h-[14px] bg-black"></div>
-                      <div className="absolute bottom-[4px] left-[4px] w-[14px] h-[14px] bg-black"></div>
-                      <div className="absolute bottom-[4px] right-[4px] w-[14px] h-[14px] bg-black"></div>
-
-                      {/* Header */}
-                      <div className="flex items-center justify-center gap-1 mb-3 mt-2">
-                        <img
-                          src={branding?.logoUrl || "/gclogo.png"}
-                          className="w-[32px] h-[32px] object-contain"
-                          alt="logo"
-                        />
-                        <span className="text-[12px] font-bold text-black tracking-tight">
-                          {branding?.institutionName || "Gordon College"}
-                        </span>
-                      </div>
-
-                      {/* Exam Code */}
-                      {previewTemplate?.examCode && (
-                        <div className="text-center text-[10px] text-gray-800 font-medium mb-2">
-                          Exam Code: {previewTemplate.examCode}
-                        </div>
-                      )}
-
-                      {/* Name/Date */}
-                      <div className="flex gap-4  mb-4 text-[10px] items-end">
-                        <div className="flex-[3] flex items-end">
-                          <span className="font-bold mr-1">Name:</span>
-                          <div className="flex-1 border-b-[2px] border-black h-[1px]"></div>
-                        </div>
-                        <div className="flex-[2] flex items-end">
-                          <span className="font-bold mr-1">Date:</span>
-                          <div className="flex-1 border-b-[2px] border-black h-[1px]"></div>
-                        </div>
-                      </div>
-
-                      {/* Top section: ID + Q41-50 + Q71-80 */}
-                      <div className="flex justify-evenly gap-4 mb-4 items-start">
-                        <div className="flex-shrink-0">
-                          <IdSection />
-                        </div>
-                        <div className="flex gap-4 mt-6">
-                          <QBlock startQ={41} endQ={50} />
-                          <QBlock startQ={71} endQ={80} />
-                        </div>
-                      </div>
-
-                      {/* Bottom: 4 cols x 2 rows */}
-                      <div className="flex gap-4 mb-2">
-                        <QBlock startQ={1} endQ={10} />
-                        <QBlock startQ={21} endQ={30} />
-                        <QBlock startQ={51} endQ={60} />
-                        <QBlock startQ={81} endQ={90} />
-                      </div>
-                      <div className="flex gap-4">
-                        <QBlock startQ={11} endQ={20} />
-                        <QBlock startQ={31} endQ={40} />
-                        <QBlock startQ={61} endQ={70} />
-                        <QBlock startQ={91} endQ={100} />
-                      </div>
-
-                      {/* Footer */}
-                      <div className="absolute bottom-[10px] left-0 right-0 text-center text-[7px] text-gray-600 italic">
-                        Do not fold, staple, or tear this answer sheet.
-                      </div>
-                    </div>
-                  );
+                  return <FullPageSheet numRows={2} offsetQ={0} />;
                 }
               })()}
           </div>
