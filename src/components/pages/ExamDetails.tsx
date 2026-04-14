@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   FileText,
   BarChart2,
@@ -30,17 +29,16 @@ import {
 import { AnswerKeyService } from "@/services/answerKeyService";
 import { ScanningService } from "@/services/scanningService";
 import { useAuth } from "@/contexts/AuthContext";
-import { db, auth } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import {
   collection,
   query,
   where,
   getDocs,
-  deleteDoc,
 } from "firebase/firestore";
 import { toast } from "sonner";
-import { BackButton } from "@/components/ui/BackButton";
 import { generateTemplatePDF, getTemplatePDFBlobUrl } from "@/lib/templatePdfGenerator";
+import { setPendingImage } from "@/lib/omrImageStore";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
 import { TemplateService } from "@/services/templateService";
@@ -801,7 +799,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   const reader = new FileReader();
                   reader.onload = (ev) => {
                     const dataUrl = ev.target?.result as string;
-                    sessionStorage.setItem(`omr_upload_${params.id}`, dataUrl);
+                    setPendingImage(dataUrl);
                     router.push(`/exams/${params.id}/scan-papers`);
                   };
                   reader.readAsDataURL(file);

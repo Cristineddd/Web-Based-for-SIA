@@ -22,6 +22,7 @@ import { getClassById, getClasses, Class, Student } from '@/services/classServic
 import { toast } from 'sonner';
 import { BackButton } from '@/components/ui/BackButton';
 import { AnswerChoice } from '@/types/scanning';
+import { consumePendingImage } from '@/lib/omrImageStore';
 
 interface OMRScannerProps {
   examId: string;
@@ -124,10 +125,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           }
         }
 
-        // Check sessionStorage for a pre-uploaded image (from ExamDetails upload button)
-        const pendingUpload = sessionStorage.getItem(`omr_upload_${examId}`);
+        // Check for a pre-uploaded image (from ExamDetails upload button)
+        const pendingUpload = consumePendingImage();
         if (pendingUpload) {
-          sessionStorage.removeItem(`omr_upload_${examId}`);
           setCapturedImage(pendingUpload);
           setMode('processing');
           setLoading(false);
