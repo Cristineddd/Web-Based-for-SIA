@@ -2496,11 +2496,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-800 mx-auto" />
-          <p className="text-gray-600">Loading scanner...</p>
-        </div>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
       </div>
     );
   }
@@ -2525,10 +2522,14 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   if (answerKey.length === 0) {
     return (
       <div className="space-y-6">
-        <BackButton href={`/exams/${examId}`} asLink>
-          Back to Exam
-        </BackButton>
-        <Card className="border border-gray-100 shadow-sm rounded-2xl bg-white">
+        <Card className="border border-gray-100 shadow-sm rounded-2xl bg-white overflow-hidden">
+          {/* Top bar with back button */}
+          <div className="flex items-center px-5 py-4 border-b border-gray-100">
+            <BackButton href={`/exams/${examId}`} asLink className="text-sm font-medium text-gray-500 hover:text-gray-800 gap-1.5 px-0 py-0 hover:bg-transparent">
+              Back to Exam
+            </BackButton>
+          </div>
+          {/* Empty state body */}
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
             <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mb-5">
               <AlertCircle className="w-7 h-7 text-amber-500" />

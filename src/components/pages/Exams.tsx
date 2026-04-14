@@ -527,54 +527,49 @@ export default function Exams() {
             Create and manage your exams and answer keys.
           </p>
         </div>
-        <button
+        <Button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-lg font-semibold transition-all shadow-sm"
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-4 h-4" />
           Create Exam
-        </button>
+        </Button>
       </div>
 
       {/* Search Bar - Full Width */}
-      <div className="relative mb-8">
-        <style>{`
-          /* Autofill override */
-          input:-webkit-autofill,
-          input:-webkit-autofill:focus,
-          input:-webkit-autofill:hover,
-          input:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
-            box-shadow: 0 0 0 1000px #fff inset !important;
-            border: 1px solid #e5e7eb !important; /* gray-200 */
-            outline: none !important;
-          }
-          /* Super-specific override for search input border */
-          .search-override,
-          .search-override:focus,
-          .search-override:active {
-            border-color: #e5e7eb !important; /* gray-200 */
-            box-shadow: none !important;
-            outline: none !important;
-          }
-        `}</style>
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-        <Input
-          placeholder="Search exams by title, subject, or template ID..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="search-override pl-12 h-14 bg-white border-gray-200 shadow-sm rounded-xl text-lg focus:outline-none focus:ring-0 focus:border-gray-300 border-2"
-          autoComplete="off"
-        />
+      <div className="mb-6">
+        <div className="relative">
+          <style>{`
+            input:-webkit-autofill,
+            input:-webkit-autofill:focus,
+            input:-webkit-autofill:hover,
+            input:-webkit-autofill:active {
+              -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+              box-shadow: 0 0 0 1000px #fff inset !important;
+              border: 1px solid #e5e7eb !important;
+              outline: none !important;
+            }
+            .search-override,
+            .search-override:focus,
+            .search-override:active {
+              border-color: #e5e7eb !important;
+              box-shadow: none !important;
+              outline: none !important;
+            }
+          `}</style>
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
+          <Input
+            placeholder="Search exams by title, subject, or template ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="search-override pl-12 h-12 bg-white border border-gray-200 shadow-sm rounded-xl text-sm focus:outline-none focus:ring-0 focus:border-gray-300"
+            autoComplete="off"
+          />
+        </div>
       </div>
 
       {/* Grid Layout */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-10 h-10 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-500 font-medium">Loading exams...</p>
-        </div>
-      ) : filteredExams.length === 0 ? (
+      {filteredExams.length === 0 && !loading ? (
         <div className="flex flex-col items-center justify-center py-24 bg-white border border-dashed border-gray-200 rounded-2xl">
           <FileText className="w-16 h-16 text-gray-200 mb-4" />
           <p className="text-gray-500 text-lg font-medium">
