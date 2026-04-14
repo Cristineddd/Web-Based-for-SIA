@@ -42,6 +42,7 @@ import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
 import { TemplateService } from "@/services/templateService";
 import * as XLSX from "xlsx";
+import { setPendingImage } from "@/lib/omrImageStore";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -785,7 +786,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   const reader = new FileReader();
                   reader.onload = (ev) => {
                     const dataUrl = ev.target?.result as string;
-                    sessionStorage.setItem(`omr_upload_${params.id}`, dataUrl);
+                    setPendingImage(dataUrl);
                     router.push(`/exams/${params.id}/scan-papers`);
                   };
                   reader.readAsDataURL(file);

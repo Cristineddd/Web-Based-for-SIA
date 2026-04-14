@@ -2550,7 +2550,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-gray-50 min-h-screen p-4 sm:p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -2694,8 +2694,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         <div className="space-y-6">
           {/* Debug overlay image — shows marker positions & ID grid on scanned image */}
           {capturedImage && (
-            <Card className="overflow-hidden">
-              <div className="relative bg-gray-100">
+            <Card className="overflow-hidden border border-gray-100 shadow-sm">
+              <div className="relative bg-white">
                 <img
                   src={capturedImage}
                   alt="Debug overlay"
@@ -2803,7 +2803,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           )}
 
           {/* Score Summary */}
-          <Card className="p-4 sm:p-6">
+          <Card className="p-4 sm:p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
             <div className="flex flex-col gap-4">
               {/* Top row: student info + grade */}
               <div className="flex items-start justify-between gap-3">
@@ -2929,7 +2929,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           </Card>
 
           {/* Answer Comparison */}
-          <Card className="p-6">
+          <Card className="p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
             <h3 className="text-lg font-bold text-slate-800 mb-4">Answer Comparison</h3>
             
             {(() => {
@@ -3104,11 +3104,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
       {/* Recent Scans */}
       {recentScans.length > 0 && mode === 'camera' && (
-        <Card className="p-6">
+        <Card className="p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Scans This Session</h3>
           <div className="space-y-2">
             {recentScans.map((scan, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50/60 border border-gray-100 rounded-xl">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-600" />
                   <span className="font-medium">{scan.studentId}</span>
