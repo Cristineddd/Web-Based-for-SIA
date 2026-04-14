@@ -35,7 +35,6 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { toast } from "sonner";
-import { BackButton } from "@/components/ui/BackButton";
 import { generateTemplatePDF, getTemplatePDFBlobUrl } from "@/lib/templatePdfGenerator";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
@@ -763,6 +762,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   </button>
                 </Link>
               </div>
+
             </div>
           )}
 
