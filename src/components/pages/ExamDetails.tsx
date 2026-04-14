@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   FileText,
@@ -35,6 +36,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { toast } from "sonner";
+import { BackButton } from "@/components/ui/BackButton";
 import { generateTemplatePDF, getTemplatePDFBlobUrl } from "@/lib/templatePdfGenerator";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
@@ -47,7 +49,9 @@ interface ExamDetailsProps {
 
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const importKeyRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [exam, setExam] = useState<Exam | null>(null);
   const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -753,16 +757,41 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                 Ready to Scan?
               </h3>
               <p className="text-gray-500 max-w-md mx-auto mt-2">
-                Use your mobile device to scan the answer sheets.
+                Use your mobile device to scan the answer sheets, or upload a
+                photo from your device.
               </p>
-              <div className="mt-8 flex items-center justify-center">
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link href={`/exams/${params.id}/scan-papers`}>
                   <button className="bg-[#22c55e] text-white px-10 py-3.5 rounded-xl font-bold hover:bg-[#16a34a] shadow-lg shadow-green-500/20 transition-all">
                     Open Scanner UI
                   </button>
                 </Link>
+                <button
+                  onClick={() => uploadInputRef.current?.click()}
+                  className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold border-2 border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700 hover:bg-green-50 transition-all"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload Image
+                </button>
               </div>
-
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    const dataUrl = ev.target?.result as string;
+                    sessionStorage.setItem(`omr_upload_${params.id}`, dataUrl);
+                    router.push(`/exams/${params.id}/scan-papers`);
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = '';
+                }}
+              />
             </div>
           )}
 
