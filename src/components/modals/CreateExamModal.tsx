@@ -408,7 +408,7 @@ export function CreateExamModal({
                   Number of Items
                 </label>
                 <div className="grid grid-cols-3 gap-3">
-                  {[20, 50, 100, 150].map((num) => (
+                  {[20, 50, 100, 150, 200].map((num) => (
                     <button
                       key={num}
                       type="button"
@@ -469,12 +469,13 @@ export function CreateExamModal({
                   <p className="text-sm font-semibold text-gray-700">
                     How many questions? <span className="text-red-500">*</span>
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {[
                       { num: 20, label: "Quick Quiz" },
                       { num: 50, label: "Standard" },
                       { num: 100, label: "Major Exam" },
                       { num: 150, label: "Comprehensive" },
+                      { num: 200, label: "Extended" },
                     ].map(({ num, label }) => (
                       <button
                         key={num}
