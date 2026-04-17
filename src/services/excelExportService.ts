@@ -57,6 +57,16 @@ export interface StudentExportRow {
   section?: string | null;
 }
 
+export interface ExamReportExportRow {
+  studentId: string;
+  studentName: string;
+  score: number;
+  percentage: number;
+  status: 'Passed' | 'Failed';
+  examName: string;
+  className: string;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Auto-fit column widths based on data content and headers */
@@ -489,4 +499,60 @@ export function exportStudentRosterToExcel(students: StudentExportRow[]): void {
   XLSX.utils.book_append_sheet(wb, ws, 'Students');
 
   XLSX.writeFile(wb, 'student_roster.xlsx');
+}
+
+/**
+ * Export a single exam report with required SS4 columns.
+ *
+ * Required columns:
+ * Student ID · Name · Score · Percentage · Status · Exam Name · Class
+ */
+export function exportExamReportToExcel(
+  rows: ExamReportExportRow[],
+  examTitle: string,
+  className: string,
+  metadata?: ExcelExportMetadata,
+): void {
+  const wb = XLSX.utils.book_new();
+
+  const headers = [
+    '#',
+    'Student ID',
+    'Name',
+    'Score',
+    'Percentage',
+    'Status',
+    'Exam Name',
+    'Class',
+  ];
+
+  const data = rows.map((r, i) => [
+    i + 1,
+    r.studentId,
+    r.studentName,
+    r.score,
+    r.percentage,
+    r.status,
+    r.examName,
+    r.className,
+  ]);
+
+  const { ws, headerRowIndex } = buildBrandedSheet(headers, data, metadata);
+  autoFitColumns(ws, data, headers);
+  stylizeHeaderRow(ws, headers.length, headerRowIndex);
+  freezeHeaderRow(ws, headerRowIndex + 1);
+
+  // Percentage column format
+  for (let r = headerRowIndex + 1; r <= headerRowIndex + data.length; r++) {
+    const cellRef = XLSX.utils.encode_cell({ r, c: 4 });
+    if (ws[cellRef]) {
+      ws[cellRef].z = '0"%"';
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Exam Report');
+
+  const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  const safeExam = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  XLSX.writeFile(wb, `${safeClass}_${safeExam}_exam_report.xlsx`);
 }
