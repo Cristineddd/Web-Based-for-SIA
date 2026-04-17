@@ -92,6 +92,7 @@ export default function Exams() {
     choices_per_item: 4,
     examType: "board" as "board" | "diagnostic",
     examCode: "",
+    courseCode: "",
     institutionName: "",
     logoUrl: "",
     classId: "",
@@ -374,6 +375,7 @@ export default function Exams() {
       choices_per_item: exam.choices_per_item || 4,
       examType: (exam.examType as any) || "board",
       examCode: exam.examCode || "",
+      courseCode: exam.courseCode || "",
       institutionName: exam.institutionName || "",
       logoUrl: exam.logoUrl || "",
       classId: exam.classId || "",
@@ -406,6 +408,7 @@ export default function Exams() {
         choices_per_item: editForm.choices_per_item,
         examType: editForm.examType,
         examCode: editForm.examCode.trim().toUpperCase(),
+        courseCode: editForm.courseCode.trim(),
         institutionName: editForm.institutionName,
         logoUrl: editForm.logoUrl,
         classId: editForm.classId || null,
@@ -437,6 +440,7 @@ export default function Exams() {
                 choices_per_item: editForm.choices_per_item,
                 examType: editForm.examType,
                 examCode: editForm.examCode.trim().toUpperCase(),
+                courseCode: editForm.courseCode.trim(),
                 institutionName: editForm.institutionName,
                 logoUrl: editForm.logoUrl,
                 updatedAt: new Date().toISOString(),
@@ -765,6 +769,25 @@ export default function Exams() {
                 <p className="text-[10px] text-muted-foreground italic">
                   Unique identifier used for answer sheet scanning and
                   identification.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Course Code <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+                </label>
+                <Input
+                  type="text"
+                  value={editForm.courseCode}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, courseCode: e.target.value })
+                  }
+                  className="w-full"
+                  placeholder="e.g. CS101, MATH201"
+                  maxLength={20}
+                />
+                <p className="text-[10px] text-muted-foreground italic">
+                  Printed on the answer sheet header below the exam code.
                 </p>
               </div>
 

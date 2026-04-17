@@ -45,6 +45,7 @@ export interface Exam {
   isArchived?: boolean;
   archivedAt?: string;
   examCode?: string; // Unique exam code for template validation (e.g., "EX-A1B2C3")
+  courseCode?: string; // Course code printed on answer sheet (e.g., "CS101")
   status?: "draft" | "final"; // Status to control editability
   institutionName?: string;
   logoUrl?: string;

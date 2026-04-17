@@ -265,6 +265,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
       choicesPerQuestion: exam.choices_per_item,
       examName: exam.title,
       examCode: exam.examCode,
+      courseCode: exam.courseCode,
       institutionName: exam.institutionName || settings?.institutionName,
       logoUrl: exam.logoUrl || settings?.logoUrl,
     };

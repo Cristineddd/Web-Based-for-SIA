@@ -2880,26 +2880,6 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             </Card>
           )}
 
-          {/* Multiple Answers Warning */}
-          {multipleAnswerQuestions.length > 0 && (
-            <Card className="p-4 border-amber-300 bg-amber-50 shadow-sm">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-amber-900">Multiple Answers Detected</h4>
-                  <p className="text-sm text-amber-800 mt-1">
-                    The following question(s) have more than one bubble shaded: <strong>
-                    {multipleAnswerQuestions.map(q => `#${q}`).join(', ')}
-                    </strong>
-                  </p>
-                  <p className="text-xs text-amber-600 mt-2">
-                    Only one answer per question is allowed. The system selected the darkest bubble, but please verify and correct if needed. Remind the student to shade only one bubble per question.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
           {/* Score Summary */}
           <Card className="p-4 sm:p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
             <div className="flex flex-col gap-4">
