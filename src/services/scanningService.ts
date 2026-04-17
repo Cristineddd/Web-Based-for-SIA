@@ -523,4 +523,40 @@ export class ScanningService {
       errors,
     };
   }
+
+  /**
+   * Get the most recent scanned result for a specific student + exam.
+   * Used for 200-item two-page combining: fetch page 1 answers when scanning page 2.
+   */
+  static async getLatestResultByStudentAndExam(
+    examId: string,
+    studentId: string
+  ): Promise<ScannedResult | null> {
+    try {
+      // Two equality filters only — no orderBy — avoids requiring a composite index.
+      // Sort client-side to get the most-recent result.
+      const q = query(
+        collection(db, SCANNED_RESULTS_COLLECTION),
+        where('examId', '==', examId),
+        where('studentId', '==', studentId)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return null;
+      // Sort descending by scannedAt client-side
+      const sorted = snap.docs.sort((a, b) => {
+        const aTs = (a.data().scannedAt as Timestamp)?.toMillis?.() ?? 0;
+        const bTs = (b.data().scannedAt as Timestamp)?.toMillis?.() ?? 0;
+        return bTs - aTs;
+      });
+      const data = sorted[0].data();
+      return {
+        ...data,
+        scannedAt:
+          (data.scannedAt as Timestamp)?.toDate?.()?.toISOString() || data.scannedAt || '',
+      } as ScannedResult;
+    } catch (error) {
+      console.error('Error fetching latest result for student:', error);
+      return null;
+    }
+  }
 }

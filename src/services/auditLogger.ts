@@ -25,6 +25,13 @@ import {
 const AUDIT_LOGS_COLLECTION = "auditLogs";
 const LOG_RETENTION_DAYS = 90; // Keep logs for 90 days
 
+/** Remove undefined fields so Firestore doesn't reject the document */
+function stripUndefined<T extends object>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as Partial<T>;
+}
+
 export class AuditLogger {
   /**
    * Log an activity with admin ID and timestamp
@@ -86,9 +93,9 @@ export class AuditLogger {
           logData.errorMessage = options.errorMessage;
         if (options.metadata !== undefined) logData.metadata = options.metadata;
         if (options.beforeValues !== undefined)
-          logData.beforeValues = options.beforeValues;
+          logData.beforeValues = stripUndefined(options.beforeValues);
         if (options.afterValues !== undefined)
-          logData.afterValues = options.afterValues;
+          logData.afterValues = stripUndefined(options.afterValues);
       }
 
       console.log("AuditLogger: Sending log data to Firestore:", logData);

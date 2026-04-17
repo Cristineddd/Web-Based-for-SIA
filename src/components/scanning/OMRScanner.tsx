@@ -22,7 +22,7 @@ import { getClassById, getClasses, Class, Student } from '@/services/classServic
 import { toast } from 'sonner';
 import { BackButton } from '@/components/ui/BackButton';
 import { AnswerChoice } from '@/types/scanning';
-import { consumePendingImage } from '@/lib/omrImageStore';
+import { consumePendingImage, consumePendingPage } from '@/lib/omrImageStore';
 
 interface OMRScannerProps {
   examId: string;
@@ -47,6 +47,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   const scanCanvasRef = useRef<HTMLCanvasElement>(null);
   const autoScanTimerRef = useRef<number | null>(null);
   const isAutoCapturingRef = useRef(false);
+  const isProcessingImageRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   
@@ -55,7 +56,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   const [answerKey, setAnswerKey] = useState<AnswerChoice[]>([]);
   const [classData, setClassData] = useState<Class | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<'camera' | 'processing' | 'results'>('camera');
+  const [mode, setMode] = useState<'camera' | 'select-page' | 'processing' | 'results'>('camera');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [, setProcessing] = useState(false);
@@ -93,6 +94,39 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const examData = await getExamById(examId);
         if (examData) {
           setExam(examData);
+
+          // Check for a pre-uploaded image IMMEDIATELY after exam loads,
+          // before any other async calls that could throw and skip this check.
+          const pendingUpload = consumePendingImage();
+          const pendingPage = consumePendingPage();
+          if (pendingUpload) {
+            setCapturedImage(pendingUpload);
+            if (examData.num_items > 150 && pendingPage) {
+              setScanPage(pendingPage);
+            }
+            setMode('processing');
+            // Still load answer key and class data in background for grading
+            try {
+              const akResult = await AnswerKeyService.getAnswerKeyByExamId(examId);
+              if (akResult.success && akResult.data) {
+                setAnswerKey(akResult.data.answers);
+              }
+              if ((examData as any).classId) {
+                const cls = await getClassById((examData as any).classId);
+                if (cls) setClassData(cls);
+              } else if (examData.className && user) {
+                const allClasses = await getClasses(user.id);
+                const matchedClass = allClasses.find(c =>
+                  c.class_name === examData.className ||
+                  `${c.class_name} - ${c.course_subject}${c.year ? ` ${c.year}` : ''}` === examData.className
+                );
+                if (matchedClass) setClassData(matchedClass);
+              }
+            } catch (e) {
+              console.warn('Could not load answer key / class data for uploaded image:', e);
+            }
+            return;
+          }
           
           // Load answer key
           const akResult = await AnswerKeyService.getAnswerKeyByExamId(examId);
@@ -123,15 +157,6 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               console.warn('Could not find class by name:', e);
             }
           }
-        }
-
-        // Check for a pre-uploaded image (from ExamDetails upload button)
-        const pendingUpload = consumePendingImage();
-        if (pendingUpload) {
-          setCapturedImage(pendingUpload);
-          setMode('processing');
-          setLoading(false);
-          return;
         }
       } catch (error) {
         console.error('Error loading exam:', error);
@@ -933,6 +958,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   // Process the captured image using OMR
   const processImage = useCallback(async () => {
     if (!capturedImage || !exam) return;
+    // Prevent concurrent invocations (useEffect re-fires when deps change mid-flight)
+    if (isProcessingImageRef.current) return;
+    isProcessingImageRef.current = true;
     
     setProcessing(true);
     setMode('processing');
@@ -977,22 +1005,18 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       console.log(`[OMR] Processing enhanced image: ${imageData.width}x${imageData.height}`);
       
       // Process the image to detect filled bubbles
-      const { studentId, answers, multipleAnswers, idDoubleShades, rawIdDigits: detectedRawIdDigits, debugMarkers, markersFound, markerConfidence, bubbleHits } = await detectBubbles(imageData, exam.num_items, exam.choices_per_item);
+      // For 200-item exams, each physical page is a 100-item sheet.
+      // Pass 100 (not 200) to detectBubbles so marker detection uses the correct
+      // templateType and the returned answers array is exactly 100 items.
+      const effectiveDetectItems = exam.num_items > 150 ? 100 : exam.num_items;
+      const { studentId, answers, multipleAnswers, idDoubleShades, rawIdDigits: detectedRawIdDigits, debugMarkers, markersFound, markerConfidence, bubbleHits } = await detectBubbles(imageData, effectiveDetectItems, exam.choices_per_item);
       
       // Check for alignment issues based on marker detection quality
-      if (!markersFound || markerConfidence < 0.5) {
-        // Marker detection failed or is unreliable
-        const missingMarkers = !markersFound;
-        const lowConfidence = markerConfidence < 0.5;
-        
-        let alignmentMsg = 'Sheet alignment error. ';
-        if (missingMarkers) {
-          alignmentMsg += 'Could not detect all 4 corner markers. ';
-        } else if (lowConfidence) {
-          alignmentMsg += 'Corner markers were partially obscured or unclear. ';
-        }
-        alignmentMsg += 'Please ensure the answer sheet is flat, well-lit, and all 4 corner markers are visible. Retake the photo.';
-        
+      // Only show alignment error when markers were genuinely not found at all.
+      // Low confidence alone does not mean the positions are wrong — perspective-
+      // distorted phone photos regularly produce confident positions with scores < 0.35.
+      if (!markersFound) {
+        const alignmentMsg = 'Sheet alignment error. Could not detect all 4 corner markers. Please ensure the answer sheet is flat, well-lit, and all 4 corner markers are visible. Retake the photo.';
         setAlignmentError(alignmentMsg);
         console.log(`[OMR] Alignment error: markersFound=${markersFound} confidence=${markerConfidence?.toFixed(2)}`);
       }
@@ -1034,34 +1058,50 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
           const iw = enhancedCanvas.width;
           const ih = enhancedCanvas.height;
-          // Square size ~2.8% of the shorter image dimension
-          const boxSize = Math.max(16, Math.round(Math.min(iw, ih) * 0.028));
+          // Corner marker size: ~3.5% of shorter image dimension
+          const reticleR = Math.max(12, Math.round(Math.min(iw, ih) * 0.035));
 
-          // 1. Green squares with dark border at the 4 corner markers (ZipGrade style)
+          // 1. Draw detected corner markers as CIRCLE RETICLES (ring + crosshair)
+          // Using circles rather than squares distinguishes them clearly from the
+          // small printed registration-mark squares on the answer sheet.
           const corners = [
             debugMarkers.topLeft,
             debugMarkers.topRight,
             debugMarkers.bottomLeft,
             debugMarkers.bottomRight,
           ];
-          const border = Math.max(1, Math.round(boxSize * 0.15));
+          const reticleLineW = Math.max(3, Math.round(reticleR * 0.25));
           for (const c of corners) {
-            const bx = Math.round(c.x - boxSize / 2);
-            const by = Math.round(c.y - boxSize / 2);
-            // Dark border
-            oCtx.fillStyle = '#15532c';
-            oCtx.fillRect(bx - border, by - border, boxSize + border * 2, boxSize + border * 2);
-            // Green fill
-            oCtx.fillStyle = '#22c55e';
-            oCtx.fillRect(bx, by, boxSize, boxSize);
+            // Dark shadow for contrast against any background
+            oCtx.lineWidth = reticleLineW + 2;
+            oCtx.strokeStyle = '#064e3b'; // dark green shadow
+            oCtx.beginPath();
+            oCtx.arc(c.x, c.y, reticleR, 0, Math.PI * 2);
+            oCtx.stroke();
+            // Bright green ring
+            oCtx.lineWidth = reticleLineW;
+            oCtx.strokeStyle = '#22c55e';
+            oCtx.beginPath();
+            oCtx.arc(c.x, c.y, reticleR, 0, Math.PI * 2);
+            oCtx.stroke();
+            // Crosshair lines
+            const arm = Math.round(reticleR * 1.4);
+            oCtx.beginPath();
+            oCtx.moveTo(c.x - arm, c.y); oCtx.lineTo(c.x + arm, c.y);
+            oCtx.moveTo(c.x, c.y - arm); oCtx.lineTo(c.x, c.y + arm);
+            oCtx.stroke();
           }
 
           // 2. Circles over answered bubbles
+          // For page 2 of a 200-item exam, qIndex is 0-99 but represents Q101-200,
+          // so offset the answerKey lookup by 100.
+          const answerKeyOffset = exam.num_items > 150 && scanPage === 2 ? 100 : 0;
           const lineW = Math.max(2, Math.round(Math.min(iw, ih) * 0.004));
           for (const hit of bubbleHits) {
             const qIdx = hit.qIndex;
             const isMultiple = multipleAnswers.includes(qIdx + 1);
-            const isCorrect = answerKey[qIdx] && hit.choice.toUpperCase() === answerKey[qIdx].toUpperCase();
+            const akIdx = qIdx + answerKeyOffset;
+            const isCorrect = answerKey[akIdx] && hit.choice.toUpperCase() === answerKey[akIdx].toUpperCase();
 
             if (isMultiple) {
               oCtx.strokeStyle = '#facc15'; // yellow-400
@@ -1110,7 +1150,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       let matched: Student | null = null;
 
       // If there's an alignment error and ID detection issues, prioritize the alignment message
-      const hasAlignmentIssue = !markersFound || markerConfidence < 0.5;
+      const hasAlignmentIssue = !markersFound || markerConfidence < 0.2;
       
       if (idDoubleShades.length > 0) {
         // Check if this might be caused by alignment issues
@@ -1171,25 +1211,56 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       // ── 200-item two-pass handling ──
       if (exam.num_items > 150) {
         if (scanPage === 1) {
-          // Store page-1 data and advance to page-2 scan
+          // Store page-1 data and show page-1 results.
+          // User can save immediately and then switch to Page 2 for other students.
           setPage1Answers(answers);
           setPage1StudentId(studentId);
-          setScanPage(2);
-          setCapturedImage(null);
-          isAutoCapturingRef.current = false;
-          setMode('camera');
-          startCamera();
-          toast.info('Page 1 scanned! Now align and scan Page 2 (Questions 101–200).');
+          setScanResult(result);
+          setMode('results');
           return;
         } else {
-          // Page 2: merge answers and re-score using full 200-item answer key
-          const combined = [...page1Answers, ...answers];
-          const combinedStudentId = page1StudentId || studentId; // prefer page-1 id
+          // Page 2: use in-session page 1 answers if available,
+          // otherwise fetch the saved page 1 result for this student from Firestore.
+          let p1Answers = page1Answers;
+          let p1StudentId = page1StudentId;
+
+          if (p1Answers.length === 0 && studentId && !/^0+$/.test(studentId)) {
+            toast.info('Fetching saved Page 1 answers for this student…');
+            const existing = await ScanningService.getLatestResultByStudentAndExam(examId, studentId);
+            if (existing && existing.answers.length > 0) {
+              // The saved record may be:
+              //  (a) a true page-1 partial: 100 items, all non-empty → use as-is
+              //  (b) a page-2-only save: 200 items, first 100 are empty strings → ignore page 1 portion
+              const first100 = existing.answers.slice(0, 100);
+              const hasPage1Data = first100.some(a => a && a.trim() !== '');
+              if (hasPage1Data) {
+                p1Answers = first100;
+                p1StudentId = existing.studentId;
+                toast.success('Page 1 answers loaded from saved results.');
+              } else {
+                toast.warning('No saved Page 1 found for this student. Saving Page 2 answers only (Q101–200).');
+              }
+            } else {
+              toast.warning('No saved Page 1 found for this student. Saving Page 2 answers only (Q101–200).');
+            }
+          }
+
+          // Always build a 200-item answers array so indices align with the answer key:
+          //   positions 0-99   = page 1 answers (empty strings when page 1 not available)
+          //   positions 100-199 = page 2 answers
+          const combined = p1Answers.length > 0
+            ? [...p1Answers, ...answers]
+            : [...new Array(100).fill(''), ...answers];
+          const combinedStudentId = p1StudentId || studentId;
           let combinedScore = 0;
-          const combinedTotal = Math.min(combined.length, answerKey.length);
-          for (let i = 0; i < combinedTotal; i++) {
-            if (combined[i] && answerKey[i] && combined[i].toUpperCase() === answerKey[i].toUpperCase()) {
-              combinedScore++;
+          // Only count questions where we actually have an answer (skip empty page-1 slots)
+          let combinedTotal = 0;
+          for (let i = 0; i < Math.min(combined.length, answerKey.length); i++) {
+            if (combined[i]) {
+              combinedTotal++;
+              if (answerKey[i] && combined[i].toUpperCase() === answerKey[i].toUpperCase()) {
+                combinedScore++;
+              }
             }
           }
           const combinedPct = combinedTotal > 0 ? Math.round((combinedScore / combinedTotal) * 100) : 0;
@@ -1204,6 +1275,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           };
           setDetectedAnswers(combined);
           setDetectedStudentId(combinedStudentId);
+          // Keep page1Answers in state so the badge shows "Combined"
+          setPage1Answers(p1Answers);
           setScanResult(combinedResult);
           setMode('results');
           return;
@@ -1217,19 +1290,25 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       console.error('Error processing image:', error);
       toast.error('Failed to process image. Please try again with a clearer image.');
       isAutoCapturingRef.current = false;
-      setMode('camera');
-      startCamera();
+      // Stay on idle so an upload user can retry without being forced into camera mode
+      setMode('idle');
     } finally {
       setProcessing(false);
+      isProcessingImageRef.current = false;
     }
-  }, [capturedImage, exam, answerKey, classData]);
+  }, [capturedImage, exam, answerKey, classData, scanPage, page1Answers, page1StudentId]);
 
-  // Auto-trigger processImage when mode is 'processing' and capturedImage is ready
+  // Auto-trigger processImage when mode is 'processing' and capturedImage is ready.
+  // Guard with !loading so the hidden canvases are in the DOM before we try to use them.
   useEffect(() => {
-    if (mode === 'processing' && capturedImage && exam) {
+    if (!loading && mode === 'processing' && capturedImage && exam) {
       processImage();
     }
-  }, [mode, capturedImage, exam, processImage]);
+    // If mode leaves 'processing' externally (e.g. discard), release the guard
+    if (mode !== 'processing') {
+      isProcessingImageRef.current = false;
+    }
+  }, [loading, mode, capturedImage, exam, processImage]);
 
   // ─── CORNER MARKER DETECTION ───
   // Finds the 4 black alignment squares printed at the corners of every answer sheet.
@@ -1272,47 +1351,61 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       };
     }
 
+    // ── Per-corner best-match search ──
+    //
+    // Fundamental approach: each corner is searched INDEPENDENTLY in its own
+    // region of the image. No global scan, no merging, no combination search.
+    //
+    // Why this works where the global scan failed:
+    //  • The global scan collects candidates from the ENTIRE image, then uses
+    //    a quadrant split to assign them to corners. ANY dark element anywhere
+    //    in the upper-left quadrant can compete with the TL corner marker.
+    //  • Per-corner search restricts the search to a small region near each
+    //    image corner. Only the corner marker can win because it's the only
+    //    solid dark square there.
+    //
+    // Search region: 30% × 22% of image per corner (two-pass: tight first).
+    //   Tight (12%×10%): PDF uploads where paper fills the image (marker at ~3-5%)
+    //   Wide  (30%×22%): camera photos with paper filling ~60-80% (marker at ~20%)
+    //
+    // Detection: find the position with highest (borderAvg − innerAvg) score in
+    // each corner region, where innerAvg is computed on a box whose size spans
+    // 60-140% of the expected marker size. The corner marker is the ONLY element
+    // in the corner region that scores high (solid dark interior + bright border).
+    //
+    // InnerAvg threshold raised to 120 (from 80): handles JPEG/scan compression
+    // artefacts where markers appear as dark-gray (~90-110) instead of near-black.
+    // The uniformity check (qMax-qMin < 60) still rejects text, thin lines, circles.
+
+    const baseSize = Math.max(10, Math.round(width * 0.025));
+
+    console.log(`[OMR] Corner search: image=${width}x${height}, baseSize=${baseSize}px`);
+
     // Build integral image for fast region-sum queries
     const integral = new Float64Array((width + 1) * (height + 1));
-    for (let y = 0; y < height; y++) {
+    for (let y2b = 0; y2b < height; y2b++) {
       let rowSum = 0;
-      for (let x = 0; x < width; x++) {
-        rowSum += grayscale[y * width + x];
-        integral[(y + 1) * (width + 1) + (x + 1)] = integral[y * (width + 1) + (x + 1)] + rowSum;
+      for (let x2b = 0; x2b < width; x2b++) {
+        rowSum += grayscale[y2b * width + x2b];
+        integral[(y2b + 1) * (width + 1) + (x2b + 1)] = integral[y2b * (width + 1) + (x2b + 1)] + rowSum;
       }
     }
 
-    // Fast average brightness of a rectangle using integral image
+    // Fast average brightness of a rectangle using the integral image
     const rectAvg = (x1: number, y1: number, x2: number, y2: number): number => {
-      x1 = Math.max(0, Math.floor(x1));
-      y1 = Math.max(0, Math.floor(y1));
-      x2 = Math.min(width, Math.floor(x2));
-      y2 = Math.min(height, Math.floor(y2));
-      const area = (x2 - x1) * (y2 - y1);
+      const ax1 = Math.max(0, Math.floor(x1));
+      const ay1 = Math.max(0, Math.floor(y1));
+      const ax2 = Math.min(width,  Math.floor(x2));
+      const ay2 = Math.min(height, Math.floor(y2));
+      const area = (ax2 - ax1) * (ay2 - ay1);
       if (area <= 0) return 255;
-      const sum = integral[y2 * (width + 1) + x2] - integral[y1 * (width + 1) + x2]
-                 - integral[y2 * (width + 1) + x1] + integral[y1 * (width + 1) + x1];
+      const sum = integral[ay2 * (width + 1) + ax2]
+                - integral[ay1 * (width + 1) + ax2]
+                - integral[ay2 * (width + 1) + ax1]
+                + integral[ay1 * (width + 1) + ax1];
       return sum / area;
     };
 
-    // Estimate marker size based on image width.
-    // Paper may not fill the entire image, so use a conservative estimate.
-    // Real marker is 7mm on a 210mm page → 3.3% of page width.
-    // If the paper fills 50-90% of the image, marker is 1.7-3% of image width.
-    // Try sizes from ~1.5% to ~4% of image width.
-    const baseSize = Math.round(width * 0.025); // ~2.5% of image width
-    const sizes = [
-      Math.max(8, Math.round(baseSize * 0.5)),
-      Math.max(10, Math.round(baseSize * 0.7)),
-      Math.max(12, baseSize),
-      Math.round(baseSize * 1.3),
-      Math.round(baseSize * 1.6),
-      Math.round(baseSize * 2.0),
-    ];
-
-    console.log(`[OMR] Marker search: image=${width}x${height}, baseSize=${baseSize}px, sizes=[${sizes.join(',')}]`);
-
-    // ── PHASE 1: Collect ALL dark square candidates across the ENTIRE image ──
     interface MarkerCandidate {
       x: number;
       y: number;
@@ -1320,359 +1413,188 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       size: number;
     }
 
-    const candidates: MarkerCandidate[] = [];
+    // Search one corner region for the best corner-marker candidate.
+    // Returns null if nothing convincingly marker-like is found.
+    const searchCornerRegion = (
+      rx1: number, rx2: number, ry1: number, ry2: number
+    ): MarkerCandidate | null => {
+      let bestX = -1, bestY = -1, bestScore = 0, bestSize = baseSize;
 
-    for (const size of sizes) {
-      const half = Math.floor(size / 2);
-      // Use 1/3 of marker size as step — finer than before (was 1/2) so we don't
-      // accidentally stride over a marker that sits between two step positions.
-      const step = Math.max(2, Math.floor(size / 3));
+      for (const szMult of [0.6, 0.9, 1.2, 1.5]) {
+        const S  = Math.max(8, Math.round(baseSize * szMult));
+        const hf = Math.floor(S / 2);
+        const st = Math.max(2, Math.floor(S / 4));
+        const ri = Math.floor(hf * 1.5);
+        const ro = Math.floor(hf * 3.0);
 
-      for (let cy = half + 2; cy < height - half - 2; cy += step) {
-        for (let cx = half + 2; cx < width - half - 2; cx += step) {
-          // Interior brightness (the marker itself — must be dark)
-          const innerAvg = rectAvg(cx - half, cy - half, cx + half, cy + half);
-          if (innerAvg > 80) continue;
+        const xS = Math.max(hf + 1, rx1);
+        const xE = Math.min(width  - hf - 1, rx2);
+        const yS = Math.max(hf + 1, ry1);
+        const yE = Math.min(height - hf - 1, ry2);
+        if (xS >= xE || yS >= yE) continue;
 
-          // Uniformity: all 4 quadrants must be consistently dark
-          const q1 = rectAvg(cx - half, cy - half, cx, cy);
-          const q2 = rectAvg(cx, cy - half, cx + half, cy);
-          const q3 = rectAvg(cx - half, cy, cx, cy + half);
-          const q4 = rectAvg(cx, cy, cx + half, cy + half);
-          const qMax = Math.max(q1, q2, q3, q4);
-          const qMin = Math.min(q1, q2, q3, q4);
-          if (qMax - qMin > 50) continue; // Not uniform → not a solid square
+        for (let cy = yS; cy < yE; cy += st) {
+          for (let cx = xS; cx < xE; cx += st) {
+            // ── Inner box: must be dark (solid filled square) ──
+            const inner = rectAvg(cx - hf, cy - hf, cx + hf, cy + hf);
+            if (inner > 120) continue;  // threshold raised to 120 for JPEG/scan tolerance
 
-          // CRITICAL: The surrounding area must be BRIGHT (paper, not desk)
-          // Sample a ring 1.5-3× the marker size around it
-          const ringInner = Math.floor(half * 1.5);
-          const ringOuter = Math.floor(half * 3);
-          
-          // Check all 4 sides for brightness
-          // Corner markers sit near the paper edge, so 1-2 sides may extend into
-          // dark desk/background. We require at least 2 of 4 sides to be bright paper.
-          // This still rejects desk-edge shadows (0 bright sides) while allowing
-          // real markers that are near paper edges.
-          const topRing = rectAvg(cx - ringOuter, cy - ringOuter, cx + ringOuter, cy - ringInner);
-          const botRing = rectAvg(cx - ringOuter, cy + ringInner, cx + ringOuter, cy + ringOuter);
-          const leftRing = rectAvg(cx - ringOuter, cy - ringInner, cx - ringInner, cy + ringInner);
-          const rightRing = rectAvg(cx + ringInner, cy - ringInner, cx + ringOuter, cy + ringInner);
-          
-          const brightThreshold = 150; // Paper should be bright
-          const brightSides = (topRing > brightThreshold ? 1 : 0) +
-                              (botRing > brightThreshold ? 1 : 0) +
-                              (leftRing > brightThreshold ? 1 : 0) +
-                              (rightRing > brightThreshold ? 1 : 0);
-          
-          // At least 2 of 4 sides must have bright paper background
-          // (corner markers near paper edges may have desk on 2 sides)
-          if (brightSides < 2) continue;
+            // ── Uniformity: all 4 sub-quadrants dark ──
+            // Rejects circles (bright corners) and thin lines (mostly bright interior)
+            const q1 = rectAvg(cx - hf, cy - hf, cx,      cy     );
+            const q2 = rectAvg(cx,      cy - hf, cx + hf, cy     );
+            const q3 = rectAvg(cx - hf, cy,      cx,      cy + hf);
+            const q4 = rectAvg(cx,      cy,      cx + hf, cy + hf);
+            if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 60) continue;
 
-          // Border brightness: average of the ring
-          const borderAvg = (topRing + botRing + leftRing + rightRing) / 4;
-          const contrast = borderAvg - innerAvg;
-          if (contrast < 60) continue;
+            // ── Surrounding ring: at least 2 sides must be bright ──
+            const tR = rectAvg(cx - ro, cy - ro, cx + ro, cy - ri);
+            const bR = rectAvg(cx - ro, cy + ri, cx + ro, cy + ro);
+            const lR = rectAvg(cx - ro, cy - ri, cx - ri, cy + ri);
+            const rR = rectAvg(cx + ri, cy - ri, cx + ro, cy + ri);
+            const bS = (tR > 140 ? 1 : 0) + (bR > 140 ? 1 : 0)
+                     + (lR > 140 ? 1 : 0) + (rR > 140 ? 1 : 0);
+            if (bS < 2) continue;
 
-          // Score: contrast × size bonus (larger markers score higher)
-          const sizeBonus = size / baseSize;
-          const score = contrast * sizeBonus;
+            const score = (tR + bR + lR + rR) / 4 - inner;
+            if (score < 50) continue;
 
-          candidates.push({ x: cx, y: cy, score, size });
-        }
-      }
-    }
-
-    console.log(`[OMR] Found ${candidates.length} marker candidates`);
-
-    // Remove overlapping candidates (keep highest score within each cluster)
-    candidates.sort((a, b) => b.score - a.score);
-    const merged: MarkerCandidate[] = [];
-    const mergeRadius = baseSize * 2;
-    
-    for (const c of candidates) {
-      const tooClose = merged.some(m => 
-        Math.abs(m.x - c.x) < mergeRadius && Math.abs(m.y - c.y) < mergeRadius
-      );
-      if (!tooClose) {
-        merged.push(c);
-      }
-    }
-
-    console.log(`[OMR] After merge: ${merged.length} unique candidates`);
-    for (const m of merged.slice(0, 8)) {
-      console.log(`[OMR]   candidate: (${Math.round(m.x)},${Math.round(m.y)}) score=${m.score.toFixed(0)} size=${m.size}`);
-    }
-
-    // ── PHASE 2: Select the 4 candidates that form the best rectangle ──
-    // For each candidate, compute which corner it would best serve based on position
-    if (merged.length < 4) {
-      console.log('[OMR] Not enough candidates, using fallback positions');
-      return {
-        found: false,
-        confidence: merged.length / 4, // 0-0.75 if some markers found
-        topLeft: { x: width * 0.1, y: height * 0.05 },
-        topRight: { x: width * 0.9, y: height * 0.05 },
-        bottomLeft: { x: width * 0.1, y: height * 0.85 },
-        bottomRight: { x: width * 0.9, y: height * 0.85 },
-      };
-    }
-
-    // ── Edge-proximity filter for ALL template types ──
-    // Corner alignment markers must be near the edges of the captured image.
-    // This is the single most effective way to reject interior section markers (■)
-    // that also happen to look like dark squares surrounded by bright paper.
-    //
-    // How tight to make the margin depends on how much of the image the paper fills:
-    //   20-item  guide = 75% frame width  → paper corners in outer ~12% of image
-    //   50-item  guide = 55% frame width  → paper corners in outer ~22% of image
-    //   100-item guide = 90% frame width  → paper corners in outer ~10% of image
-    //
-    // We use generous margins (2-2.5×) to accommodate rotation and alignment error:
-    //   20-item  → 28% margin  (2.3× the expected 12%)
-    //   50-item  → 32% margin  (1.5× the expected 22%)
-    //   100-item → 28% margin  (2.8× the expected 10%)
-    //
-    // A "corner candidate" must be near at least one LEFT/RIGHT edge AND at
-    // least one TOP/BOTTOM edge — so it occupies a corner quadrant of the image.
-    let filteredCandidates = merged;
-    {
-      const edgeMarginX = templateType === 50 ? width * 0.32 : width * 0.28;
-      const edgeMarginY = templateType === 50 ? height * 0.32 : height * 0.28;
-
-      const edgeFiltered = merged.filter(c => {
-        const nearH = c.x < edgeMarginX || c.x > width  - edgeMarginX;
-        const nearV = c.y < edgeMarginY || c.y > height - edgeMarginY;
-        return nearH && nearV;
-      });
-
-      console.log(`[OMR] Edge filter (${templateType}-item): ${merged.length} → ${edgeFiltered.length} candidates`);
-
-      // Only apply if we still have at least 4 candidates
-      if (edgeFiltered.length >= 4) {
-        filteredCandidates = edgeFiltered;
-      } else {
-        console.log('[OMR] Edge filter too aggressive, keeping all candidates');
-      }
-    }
-
-    // Try all combinations of 4 candidates (limit to top 12 to keep it fast)
-    const topN = filteredCandidates.slice(0, 12);
-    let bestCombo: { tl: MarkerCandidate; tr: MarkerCandidate; bl: MarkerCandidate; br: MarkerCandidate } | null = null;
-    let bestRectScore = 0;
-
-    for (let i = 0; i < topN.length; i++) {
-      for (let j = i + 1; j < topN.length; j++) {
-        for (let k = j + 1; k < topN.length; k++) {
-          for (let l = k + 1; l < topN.length; l++) {
-            const pts = [topN[i], topN[j], topN[k], topN[l]];
-            
-            // Sort into corners: TL has smallest x+y, TR has largest x-y, etc.
-            const sorted = [...pts];
-            const tl = sorted.reduce((a, b) => (a.x + a.y < b.x + b.y ? a : b));
-            const br = sorted.reduce((a, b) => (a.x + a.y > b.x + b.y ? a : b));
-            const tr = sorted.reduce((a, b) => (a.x - a.y > b.x - b.y ? a : b));
-            const bl = sorted.reduce((a, b) => (a.y - a.x > b.y - b.x ? a : b));
-            
-            // All 4 must be different candidates
-            const ids = new Set([tl, tr, bl, br]);
-            if (ids.size < 4) continue;
-            
-            // Check that it forms a reasonable rectangle
-            const topW = tr.x - tl.x;
-            const botW = br.x - bl.x;
-            const leftH = bl.y - tl.y;
-            const rightH = br.y - tr.y;
-            
-            // All dimensions must be positive and significant
-            if (topW < width * 0.2 || botW < width * 0.2) continue;
-            if (leftH < height * 0.2 || rightH < height * 0.2) continue;
-            
-            // Width ratio and height ratio should be close to 1
-            const wRatio = Math.min(topW, botW) / Math.max(topW, botW);
-            const hRatio = Math.min(leftH, rightH) / Math.max(leftH, rightH);
-            if (wRatio < 0.85 || hRatio < 0.85) continue;
-            
-            // Aspect ratio check - varies by template type
-            // Template frames (marker center to marker center):
-            // - 100/150-item: fw=198mm, fh=285mm → aspect ratio = 198/285 ≈ 0.69
-            // - 20-item: fw=93mm, fh=136.5mm → aspect ratio = 93/136.5 ≈ 0.68 (portrait quarter-page)
-            // - 50-item: fw=198mm, fh=136.5mm → aspect ratio = 198/136.5 ≈ 1.45 (landscape half-page)
-            const avgW = (topW + botW) / 2;
-            const avgH = (leftH + rightH) / 2;
-            const aspect = avgW / avgH;
-
-            // Apply template-specific aspect ratio constraints
-            if (templateType === 100 || templateType === 150) {
-              // Full-page templates: aspect ratio ~0.69 (allowing for rotation/perspective)
-              if (aspect < 0.55 || aspect > 0.90) continue;
-            } else if (templateType === 20) {
-              // Quarter-page portrait (105x148.5mm): aspect ratio ~0.68
-              if (aspect < 0.50 || aspect > 0.95) continue;
-            } else if (templateType === 50) {
-              // Half-page landscape (210x148.5mm): aspect ratio ~1.45
-              if (aspect < 0.4 || aspect > 2.0) continue;
-            }
-            
-            // Left edges should be roughly aligned (TL.x ≈ BL.x)
-            const leftXDiff = Math.abs(tl.x - bl.x) / avgW;
-            const rightXDiff = Math.abs(tr.x - br.x) / avgW;
-            const topYDiff = Math.abs(tl.y - tr.y) / avgH;
-            const botYDiff = Math.abs(bl.y - br.y) / avgH;
-            // Allow more skew tolerance (up to 15% instead of 8%)
-            if (leftXDiff > 0.15 || rightXDiff > 0.15 || topYDiff > 0.15 || botYDiff > 0.15) continue;
-            
-            // ── Scoring ──
-            // Primary driver: area of the rectangle (larger = more likely to be
-            // the true outer corner markers, not inner section squares).
-            // Multiply by individual marker quality and rectangle regularity.
-            const rectQuality = wRatio * hRatio;
-            const areaFraction = (avgW * avgH) / (width * height); // 0–1
-
-            // Aspect ratio bonus for matching expected paper dimensions
-            let aspectBonus = 1.0;
-            let expectedAspect = 1.0;
-            
-            if (templateType === 100 || templateType === 150) {
-              expectedAspect = 0.69; // 198/285 for full-page
-              const aspectDiff = Math.abs(aspect - expectedAspect);
-              aspectBonus = Math.max(0.5, 1.0 - aspectDiff);
-            } else if (templateType === 50 || templateType === 20) {
-              expectedAspect = 1.45; // 198/136.5 for half-page
-              const aspectDiff = Math.abs(aspect - expectedAspect) / 1.45; // normalize
-              aspectBonus = Math.max(0.5, 1.0 - aspectDiff);
-            }
-
-            // Position bonus: prefer markers that are positioned correctly for the template
-            let positionBonus = 1.0;
-            const bottomY = (bl.y + br.y) / 2;
-            const bottomYRatio = bottomY / height;
-            
-            if (templateType === 100 || templateType === 150) {
-              // Full-page: bottom markers around 98% of height
-              if (bottomYRatio > 0.95 && bottomYRatio < 0.99) {
-                positionBonus = 1.2; // reward correct position
-              } else if (bottomYRatio > 0.99) {
-                positionBonus = 0.3; // penalize markers at very bottom edge
-              } else if (bottomYRatio < 0.85) {
-                positionBonus = 0.6; // penalize markers too high
-              }
-            } else if (templateType === 50 || templateType === 20) {
-              // Half-page: bottom markers around 96% of height
-              if (bottomYRatio > 0.93 && bottomYRatio < 0.99) {
-                positionBonus = 1.2; // reward correct position
-              } else if (bottomYRatio > 0.99) {
-                positionBonus = 0.3; // penalize markers at very bottom edge
-              } else if (bottomYRatio < 0.85) {
-                positionBonus = 0.6; // penalize markers too high
-              }
-            }
-
-            // Area is raised to the power of 2 so that a rectangle that is 10%
-            // larger in each dimension (21% more area) scores ~44% better,
-            // strongly preferring the outermost (correct) corner markers.
-            const totalScore = (tl.score + tr.score + bl.score + br.score)
-              * rectQuality
-              * Math.pow(areaFraction, 2)
-              * positionBonus
-              * aspectBonus;
-            
-            if (totalScore > bestRectScore) {
-              bestRectScore = totalScore;
-              bestCombo = { tl, tr, bl, br };
-            }
-          }
-        }
-      }
-    }
-
-    if (bestCombo) {
-      // Pixel-level refinement for each marker
-      const refineMarker = (c: MarkerCandidate): { x: number; y: number } => {
-        const half = Math.floor(c.size / 2);
-        const refineR = Math.max(4, Math.floor(c.size / 3));
-        let bestX = c.x, bestY = c.y, bestScore = 0;
-
-        for (let cy = c.y - refineR; cy <= c.y + refineR; cy++) {
-          for (let cx = c.x - refineR; cx <= c.x + refineR; cx++) {
-            if (cx - half < 0 || cx + half >= width || cy - half < 0 || cy + half >= height) continue;
-            const innerAvg = rectAvg(cx - half, cy - half, cx + half, cy + half);
-            if (innerAvg > 80) continue;
-            
-            const ringInner = Math.floor(half * 1.5);
-            const ringOuter = Math.floor(half * 3);
-            const topRing = rectAvg(cx - ringOuter, cy - ringOuter, cx + ringOuter, cy - ringInner);
-            const botRing = rectAvg(cx - ringOuter, cy + ringInner, cx + ringOuter, cy + ringOuter);
-            const leftRing = rectAvg(cx - ringOuter, cy - ringInner, cx - ringInner, cy + ringInner);
-            const rightRing = rectAvg(cx + ringInner, cy - ringInner, cx + ringOuter, cy + ringInner);
-            const borderAvg = (topRing + botRing + leftRing + rightRing) / 4;
-            
-            const score = borderAvg - innerAvg;
             if (score > bestScore) {
               bestScore = score;
-              bestX = cx;
-              bestY = cy;
+              bestX = cx; bestY = cy; bestSize = S;
             }
           }
         }
-        return { x: bestX, y: bestY };
-      };
+      }
 
-      const tl = refineMarker(bestCombo.tl);
-      const tr = refineMarker(bestCombo.tr);
-      const bl = refineMarker(bestCombo.bl);
-      const br = refineMarker(bestCombo.br);
+      if (bestX < 0) return null;
 
-      console.log(`[OMR] Selected rectangle: TL=(${Math.round(tl.x)},${Math.round(tl.y)}) TR=(${Math.round(tr.x)},${Math.round(tr.y)}) BL=(${Math.round(bl.x)},${Math.round(bl.y)}) BR=(${Math.round(br.x)},${Math.round(br.y)}) rectScore=${bestRectScore.toFixed(0)}`);
+      // Pixel-level refinement within ±(step) pixels of the coarse best
+      const refSt = Math.max(2, Math.floor(baseSize * 0.6 / 4));
+      const refR  = refSt + 2;
+      for (const szMult of [0.6, 0.9, 1.2, 1.5]) {
+        const S  = Math.max(8, Math.round(baseSize * szMult));
+        const hf = Math.floor(S / 2);
+        const ri = Math.floor(hf * 1.5);
+        const ro = Math.floor(hf * 3.0);
+        for (let cy = Math.max(hf + 1, bestY - refR); cy <= Math.min(height - hf - 1, bestY + refR); cy++) {
+          for (let cx = Math.max(hf + 1, bestX - refR); cx <= Math.min(width - hf - 1, bestX + refR); cx++) {
+            if (cx < rx1 || cx > rx2 || cy < ry1 || cy > ry2) continue;
+            const inner = rectAvg(cx - hf, cy - hf, cx + hf, cy + hf);
+            if (inner > 120) continue;
+            const q1 = rectAvg(cx - hf, cy - hf, cx, cy);
+            const q2 = rectAvg(cx, cy - hf, cx + hf, cy);
+            const q3 = rectAvg(cx - hf, cy, cx, cy + hf);
+            const q4 = rectAvg(cx, cy, cx + hf, cy + hf);
+            if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 60) continue;
+            const tR = rectAvg(cx - ro, cy - ro, cx + ro, cy - ri);
+            const bR = rectAvg(cx - ro, cy + ri, cx + ro, cy + ro);
+            const lR = rectAvg(cx - ro, cy - ri, cx - ri, cy + ri);
+            const rR = rectAvg(cx + ri, cy - ri, cx + ro, cy + ri);
+            const bS = (tR > 140 ? 1 : 0) + (bR > 140 ? 1 : 0)
+                     + (lR > 140 ? 1 : 0) + (rR > 140 ? 1 : 0);
+            if (bS < 2) continue;
+            const score = (tR + bR + lR + rR) / 4 - inner;
+            if (score > bestScore) {
+              bestScore = score;
+              bestX = cx; bestY = cy; bestSize = S;
+            }
+          }
+        }
+      }
 
-      // Calculate confidence based on rectangle quality and individual marker scores
-      // Normalize score: typical good score is 5000-20000, max out at ~1.0
-      const avgMarkerScore = (bestCombo.tl.score + bestCombo.tr.score + bestCombo.bl.score + bestCombo.br.score) / 4;
-      const normalizedMarkerScore = Math.min(1, avgMarkerScore / 200);
-      
-      // Check rectangle quality metrics
-      const topW = tr.x - tl.x;
-      const botW = br.x - bl.x;
+      return { x: bestX, y: bestY, score: bestScore, size: bestSize };
+    };
+
+    // Two-pass search: tight then wide
+    const tightMX = Math.round(width  * 0.12);
+    const tightMY = Math.round(height * 0.10);
+    const wideMX  = Math.round(width  * 0.30);
+    const wideMY  = Math.round(height * 0.22);
+
+    const cornerDefs = [
+      { label: 'TL', tx1: 0,           tx2: tightMX,          ty1: 0,            ty2: tightMY,
+                     wx1: 0,           wx2: wideMX,           wy1: 0,            wy2: wideMY  },
+      { label: 'TR', tx1: width-tightMX, tx2: width,            ty1: 0,            ty2: tightMY,
+                     wx1: width-wideMX,  wx2: width,            wy1: 0,            wy2: wideMY  },
+      { label: 'BL', tx1: 0,           tx2: tightMX,          ty1: height-tightMY, ty2: height,
+                     wx1: 0,           wx2: wideMX,           wy1: height-wideMY,  wy2: height  },
+      { label: 'BR', tx1: width-tightMX, tx2: width,            ty1: height-tightMY, ty2: height,
+                     wx1: width-wideMX,  wx2: width,            wy1: height-wideMY,  wy2: height  },
+    ];
+
+    const found4: (MarkerCandidate | null)[] = cornerDefs.map(cd => {
+      const tight = searchCornerRegion(cd.tx1, cd.tx2, cd.ty1, cd.ty2);
+      if (tight) {
+        console.log(`[OMR] ${cd.label} tight: (${Math.round(tight.x)},${Math.round(tight.y)}) score=${tight.score.toFixed(0)}`);
+        return tight;
+      }
+      const wide = searchCornerRegion(cd.wx1, cd.wx2, cd.wy1, cd.wy2);
+      if (wide) {
+        console.log(`[OMR] ${cd.label} wide: (${Math.round(wide.x)},${Math.round(wide.y)}) score=${wide.score.toFixed(0)}`);
+        return wide;
+      }
+      console.log(`[OMR] ${cd.label}: NOT FOUND`);
+      return null;
+    });
+
+    const [rawTL, rawTR, rawBL, rawBR] = found4;
+    const allFound = found4.every(c => c !== null);
+
+    if (allFound) {
+      const tl = rawTL!; const tr = rawTR!;
+      const bl = rawBL!; const br = rawBR!;
+
+      const topW  = tr.x - tl.x;
+      const botW  = br.x - bl.x;
       const leftH = bl.y - tl.y;
       const rightH = br.y - tr.y;
-      const wRatio = Math.min(topW, botW) / Math.max(topW, botW);
-      const hRatio = Math.min(leftH, rightH) / Math.max(leftH, rightH);
-      const rectQuality = wRatio * hRatio;
-      
-      const confidence = Math.min(1, normalizedMarkerScore * rectQuality * 1.2);
-      console.log(`[OMR] Marker confidence: ${(confidence * 100).toFixed(1)}% (markerScore=${avgMarkerScore.toFixed(0)}, rectQuality=${rectQuality.toFixed(2)})`);
+      const avgW = (topW + botW) / 2;
+      const avgH = (leftH + rightH) / 2;
+      const aspect = avgH > 0 ? avgW / avgH : 0;
+
+      const geometryOk = topW > 0 && botW > 0 && leftH > 0 && rightH > 0
+        && aspect > 0.3 && aspect < 3.0
+        && (avgW * avgH) / (width * height) > 0.03;
+
+      const avgScore = (tl.score + tr.score + bl.score + br.score) / 4;
+      const confidence = geometryOk ? Math.min(1, (avgScore / 200) * 1.5) : 0.2;
+
+      console.log(`[OMR] All 4 found: aspect=${aspect.toFixed(2)} geometryOk=${geometryOk} conf=${(confidence*100).toFixed(0)}%`);
 
       return {
-        found: true,
+        found: geometryOk,
         confidence,
-        topLeft: tl,
-        topRight: tr,
-        bottomLeft: bl,
-        bottomRight: br,
+        topLeft:     { x: tl.x, y: tl.y },
+        topRight:    { x: tr.x, y: tr.y },
+        bottomLeft:  { x: bl.x, y: bl.y },
+        bottomRight: { x: br.x, y: br.y },
       };
     }
 
-    // Fallback: pick the 4 candidates closest to each corner
-    console.log('[OMR] No valid rectangle found, using corner-closest fallback');
-    const pickClosest = (targetX: number, targetY: number) => {
-      let best = merged[0];
-      let bestDist = Infinity;
-      for (const c of merged) {
-        const dist = Math.sqrt(Math.pow(c.x - targetX, 2) + Math.pow(c.y - targetY, 2));
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = c;
-        }
-      }
-      return { x: best.x, y: best.y };
-    };
+    // ── Partial fallback: extrapolate missing corners ──
+    // If 3 out of 4 corners were found, use the parallelogram rule.
+    // If 2 or fewer, use fixed proportional estimates.
+    console.log(`[OMR] Only ${found4.filter(Boolean).length}/4 corners found — extrapolating`);
+
+    // Parallelogram extrapolation: missing = two adjacent − diagonal
+    let eTL = rawTL ? { x: rawTL.x, y: rawTL.y } : null;
+    let eTR = rawTR ? { x: rawTR.x, y: rawTR.y } : null;
+    let eBL = rawBL ? { x: rawBL.x, y: rawBL.y } : null;
+    let eBR = rawBR ? { x: rawBR.x, y: rawBR.y } : null;
+
+    if (!eTL && eTR && eBL && eBR) eTL = { x: eTR.x + eBL.x - eBR.x, y: eTR.y + eBL.y - eBR.y };
+    if (!eTR && eTL && eBL && eBR) eTR = { x: eTL.x + eBR.x - eBL.x, y: eTL.y + eBR.y - eBL.y };
+    if (!eBL && eTL && eTR && eBR) eBL = { x: eTL.x + eBR.x - eTR.x, y: eTL.y + eBR.y - eTR.y };
+    if (!eBR && eTL && eTR && eBL) eBR = { x: eTR.x + eBL.x - eTL.x, y: eTR.y + eBL.y - eTL.y };
 
     return {
       found: false,
-      confidence: 0.3, // Low confidence for fallback
-      topLeft: pickClosest(0, 0),
-      topRight: pickClosest(width, 0),
-      bottomLeft: pickClosest(0, height),
-      bottomRight: pickClosest(width, height),
+      confidence: 0.15,
+      topLeft:    eTL ?? { x: width * 0.05, y: height * 0.05 },
+      topRight:   eTR ?? { x: width * 0.95, y: height * 0.05 },
+      bottomLeft: eBL ?? { x: width * 0.05, y: height * 0.95 },
+      bottomRight: eBR ?? { x: width * 0.95, y: height * 0.95 },
     };
   };
 
@@ -2388,7 +2310,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     setSaving(true);
     try {
       const isNullId = !detectedStudentId || detectedStudentId === '0000000000';
-      
+      // For 200-item page 2 (combined result), force override the existing page 1 partial save
+      const isPage2Combined = exam.num_items > 150 && scanPage === 2;
+
       const result = await ScanningService.saveScannedResult(
         examId,
         detectedStudentId || `NULL_${Date.now()}`,
@@ -2396,7 +2320,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         answerKey,
         user.id,
         isNullId,
-        exam.choicePoints
+        exam.choicePoints,
+        isPage2Combined // forceOverride — replaces the page 1 partial record
       );
       
       if (result.success) {
@@ -2571,11 +2496,47 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       {/* Mode: Camera */}
       {mode === 'camera' && (
         <Card className="overflow-hidden">
-          {/* 200-item: show which page we're scanning */}
+          {/* 200-item: page selector */}
           {getTemplateType() === 200 && (
-            <div className="flex items-center justify-center gap-2 py-2 bg-emerald-800 text-white text-sm font-semibold">
-              <span className="bg-white/20 rounded px-2 py-0.5">Page {scanPage} of 2</span>
-              <span>{scanPage === 1 ? 'Scanning Questions 1–100' : 'Scanning Questions 101–200'}</span>
+            <div className="flex flex-col items-center gap-2 py-3 px-4 bg-emerald-800 text-white">
+              <p className="text-xs font-medium opacity-80 uppercase tracking-wider">Select page to scan</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setScanPage(1);
+                    setPage1Answers([]);
+                    setPage1StudentId('');
+                  }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                    scanPage === 1
+                      ? 'bg-white text-emerald-800 shadow'
+                      : 'bg-white/20 text-white hover:bg-white/30'
+                  }`}
+                >
+                  Page 1 · Q1–100
+                </button>
+                <button
+                  onClick={() => {
+                    if (scanPage === 1 && page1Answers.length === 0) {
+                      toast.warning('Scan Page 1 first, or switch to Page 2 to rescan it independently.');
+                    }
+                    setScanPage(2);
+                  }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                    scanPage === 2
+                      ? 'bg-white text-emerald-800 shadow'
+                      : 'bg-white/20 text-white hover:bg-white/30'
+                  }`}
+                >
+                  Page 2 · Q101–200
+                </button>
+              </div>
+              <p className="text-xs opacity-70">
+                {scanPage === 1 ? 'Scanning Questions 1–100' : 'Scanning Questions 101–200'}
+                {scanPage === 2 && page1Answers.length === 0 && (
+                  <span className="ml-1 text-yellow-300">(Page 1 not yet scanned)</span>
+                )}
+              </p>
             </div>
           )}
           <div className="relative bg-black">
@@ -2657,12 +2618,76 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                 const dataUrl = ev.target?.result as string;
                 stopCamera();
                 setCapturedImage(dataUrl);
-                setMode('processing');
+                // 200-item needs page selection before processing
+                if (exam && exam.num_items > 150) {
+                  setMode('select-page');
+                } else {
+                  setMode('processing');
+                }
               };
               reader.readAsDataURL(file);
               e.target.value = '';
             }}
           />
+        </Card>
+      )}
+
+      {/* Mode: Select Page (200-item upload only) */}
+      {mode === 'select-page' && capturedImage && (
+        <Card className="overflow-hidden">
+          <div className="bg-emerald-800 text-white px-4 py-3 text-center">
+            <p className="text-sm font-semibold">200-Item Exam — Which page did you upload?</p>
+            <p className="text-xs opacity-70 mt-0.5">Select the page that matches your uploaded image before processing.</p>
+          </div>
+          <div className="p-4 space-y-4">
+            {/* Thumbnail */}
+            <div className="flex justify-center">
+              <img
+                src={capturedImage}
+                alt="Uploaded answer sheet"
+                className="max-h-48 rounded-lg border border-gray-200 object-contain shadow"
+              />
+            </div>
+            {/* Page buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setScanPage(1);
+                  setPage1Answers([]);
+                  setPage1StudentId('');
+                  setMode('processing');
+                }}
+                className="flex-1 py-3 rounded-xl font-bold text-sm border-2 border-emerald-700 text-emerald-800 hover:bg-emerald-50 transition-all"
+              >
+                Page 1
+                <span className="block text-xs font-normal text-gray-500 mt-0.5">Questions 1–100</span>
+              </button>
+              <button
+                onClick={() => {
+                  setScanPage(2);
+                  setMode('processing');
+                }}
+                className="flex-1 py-3 rounded-xl font-bold text-sm border-2 border-emerald-700 text-emerald-800 hover:bg-emerald-50 transition-all"
+              >
+                Page 2
+                <span className="block text-xs font-normal text-gray-500 mt-0.5">Questions 101–200</span>
+              </button>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCapturedImage(null);
+                  setMode('camera');
+                  startCamera();
+                }}
+              >
+                <X className="w-4 h-4 mr-1" />
+                Cancel
+              </Button>
+            </div>
+          </div>
         </Card>
       )}
 
@@ -2692,6 +2717,32 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       {/* Mode: Results */}
       {mode === 'results' && scanResult && (
         <div className="space-y-6">
+          {/* 200-item page badge */}
+          {exam.num_items > 150 && (
+            <div className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${
+              scanPage === 1
+                ? 'bg-blue-50 border border-blue-200 text-blue-800'
+                : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+            }`}>
+              {scanPage === 1 ? (
+                <>
+                  <span className="bg-blue-200 text-blue-900 rounded px-2 py-0.5 text-xs font-bold">Page 1 of 2</span>
+                  <span>Showing Q1–100 · {scanResult.score}/{scanResult.totalQuestions} correct</span>
+                </>
+              ) : (
+                <>
+                  <span className="bg-emerald-200 text-emerald-900 rounded px-2 py-0.5 text-xs font-bold">
+                    {page1Answers.length > 0 ? 'Combined 200-item' : 'Page 2 of 2'}
+                  </span>
+                  <span>
+                    {page1Answers.length > 0
+                      ? `Q1–200 · ${scanResult.score}/${scanResult.totalQuestions} correct`
+                      : `Q101–200 · ${scanResult.score}/${scanResult.totalQuestions} correct`}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
           {/* Debug overlay image — shows marker positions & ID grid on scanned image */}
           {capturedImage && (
             <Card className="overflow-hidden border border-gray-100 shadow-sm">
@@ -3048,7 +3099,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             </div>
           </Card>
 
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center gap-4 flex-wrap">
             <Button variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors" onClick={() => {
               setScanResult(null);
               setDetectedAnswers([]);
@@ -3057,7 +3108,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               setStudentIdError(null);
               setMultipleAnswerQuestions([]);
               setIdDoubleShadeColumns([]);
-              setRawIdDigits([]); // Clear raw ID digit display
+              setRawIdDigits([]);
               setAlignmentError(null);
               setCapturedImage(null);
               // Reset 200-item two-pass state
@@ -3071,7 +3122,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               <X className="w-4 h-4 mr-2" />
               Discard & Scan Again
             </Button>
-            <Button 
+
+            <Button
               onClick={() => {
                 if (idDoubleShadeColumns.length > 0) {
                   toast.error('Student ID has multiple bubbles shaded. Please correct the ID before saving.');
