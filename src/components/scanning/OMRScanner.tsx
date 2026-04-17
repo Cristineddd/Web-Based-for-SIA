@@ -48,6 +48,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   const autoScanTimerRef = useRef<number | null>(null);
   const isAutoCapturingRef = useRef(false);
   const isProcessingImageRef = useRef(false);
+  const liveMarkersRef = useRef<{tl:{x:number;y:number};tr:{x:number;y:number};bl:{x:number;y:number};br:{x:number;y:number}} | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   
@@ -614,24 +615,85 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       mxL = 0.0286; mxR = 0.9714; myT = 0.0404; myB = 0.9596;
     }
 
-    const boxSz = Math.round(Math.min(vw, vh) * 0.08);
+    // ── 1. Dimmed surround — darken everything outside the paper rectangle ──
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    // Full canvas
+    ctx.rect(0, 0, vw, vh);
+    // Cut out the paper area (even-odd rule punches a hole)
+    ctx.rect(paperLeft, paperTop, gw, gh);
+    ctx.fill('evenodd');
+    ctx.restore();
 
-    const guidePts = [
-      { x: paperLeft + gw * mxL, y: paperTop + gh * myT }, // TL
-      { x: paperLeft + gw * mxR, y: paperTop + gh * myT }, // TR
-      { x: paperLeft + gw * mxL, y: paperTop + gh * myB }, // BL
-      { x: paperLeft + gw * mxR, y: paperTop + gh * myB }, // BR
+    // ── 2. Paper border rectangle ──
+    const detected = liveMarkersRef.current !== null;
+    const borderColor = detected ? '#22c55e' : 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.strokeRect(paperLeft - 1, paperTop - 1, gw + 2, gh + 2);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(paperLeft, paperTop, gw, gh);
+
+    // ── 3. L-shaped corner brackets at each paper corner ──
+    const bracketLen = Math.round(Math.min(gw, gh) * 0.10);
+    const bracketW   = 4;
+    const corners = [
+      { x: paperLeft,      y: paperTop,       dx: 1,  dy: 1  }, // TL
+      { x: paperLeft + gw, y: paperTop,       dx: -1, dy: 1  }, // TR
+      { x: paperLeft,      y: paperTop + gh,  dx: 1,  dy: -1 }, // BL
+      { x: paperLeft + gw, y: paperTop + gh,  dx: -1, dy: -1 }, // BR
     ];
+    for (const c of corners) {
+      // Shadow
+      ctx.lineWidth = bracketW + 2;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.lineJoin = 'miter';
+      ctx.beginPath();
+      ctx.moveTo(c.x + c.dx * bracketLen, c.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.lineTo(c.x, c.y + c.dy * bracketLen);
+      ctx.stroke();
+      // Coloured bracket
+      ctx.lineWidth = bracketW;
+      ctx.strokeStyle = borderColor;
+      ctx.beginPath();
+      ctx.moveTo(c.x + c.dx * bracketLen, c.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.lineTo(c.x, c.y + c.dy * bracketLen);
+      ctx.stroke();
+    }
 
-    // White outer stroke + dark inner stroke for visibility on any background
-    ctx.lineWidth = 3;
-    for (const p of guidePts) {
-      const bx = Math.round(p.x - boxSz / 2);
-      const by = Math.round(p.y - boxSz / 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-      ctx.strokeRect(bx - 1, by - 1, boxSz + 2, boxSz + 2);
-      ctx.strokeStyle = 'rgba(20,20,20,0.95)';
-      ctx.strokeRect(bx, by, boxSz, boxSz);
+    // ── 4. Marker-position guides — square + crosshair at each corner marker spot ──
+    const markerCenters = [
+      { x: paperLeft + gw * mxL, y: paperTop + gh * myT },
+      { x: paperLeft + gw * mxR, y: paperTop + gh * myT },
+      { x: paperLeft + gw * mxL, y: paperTop + gh * myB },
+      { x: paperLeft + gw * mxR, y: paperTop + gh * myB },
+    ];
+    const mSz  = Math.round(Math.min(gw, gh) * 0.040);
+    const mArm = Math.round(mSz * 0.85);
+    const activeColor = detected ? '#22c55e' : 'rgba(255,255,255,0.75)';
+    for (const m of markerCenters) {
+      const hSz = mSz / 2;
+      // Shadow
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.strokeRect(m.x - hSz - 1, m.y - hSz - 1, mSz + 2, mSz + 2);
+      // Square
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = activeColor;
+      ctx.strokeRect(m.x - hSz, m.y - hSz, mSz, mSz);
+      // Crosshair — only when detected
+      if (detected) {
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = activeColor;
+        ctx.beginPath();
+        ctx.moveTo(m.x - mArm, m.y); ctx.lineTo(m.x + mArm, m.y);
+        ctx.moveTo(m.x, m.y - mArm); ctx.lineTo(m.x, m.y + mArm);
+        ctx.stroke();
+      }
     }
   }, [exam]);
 
@@ -644,7 +706,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     
     let frameCount = 0;
     let consecutiveDetections = 0;
-    const REQUIRED_CONSECUTIVE = 5; // ~0.8 seconds of stable marker detection (reduced from 8)
+    const REQUIRED_CONSECUTIVE = 30; // ~3 seconds of stable marker detection at 10fps
     let cancelled = false;
     
     const scanLoop = () => {
@@ -658,6 +720,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       if (frameCount % 3 === 0) {
         const result = detectMarkersInFrame();
         const detected = result.found;
+        liveMarkersRef.current = detected ? result.markers : null;
         
         if (detected && result.markers) {
           consecutiveDetections++;
@@ -694,6 +757,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         cancelAnimationFrame(autoScanTimerRef.current);
         autoScanTimerRef.current = null;
       }
+      liveMarkersRef.current = null;
       setMarkersDetected(false);
       setStabilizationProgress(0);
     };
@@ -1072,20 +1136,18 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           ];
           const reticleLineW = Math.max(3, Math.round(reticleR * 0.25));
           for (const c of corners) {
-            // Dark shadow for contrast against any background
+            // Dark shadow square
             oCtx.lineWidth = reticleLineW + 2;
-            oCtx.strokeStyle = '#064e3b'; // dark green shadow
-            oCtx.beginPath();
-            oCtx.arc(c.x, c.y, reticleR, 0, Math.PI * 2);
-            oCtx.stroke();
-            // Bright green ring
+            oCtx.strokeStyle = '#064e3b';
+            oCtx.strokeRect(c.x - reticleR - 1, c.y - reticleR - 1, (reticleR + 1) * 2, (reticleR + 1) * 2);
+            // Bright green square
             oCtx.lineWidth = reticleLineW;
             oCtx.strokeStyle = '#22c55e';
-            oCtx.beginPath();
-            oCtx.arc(c.x, c.y, reticleR, 0, Math.PI * 2);
-            oCtx.stroke();
+            oCtx.strokeRect(c.x - reticleR, c.y - reticleR, reticleR * 2, reticleR * 2);
             // Crosshair lines
             const arm = Math.round(reticleR * 1.4);
+            oCtx.lineWidth = reticleLineW;
+            oCtx.strokeStyle = '#22c55e';
             oCtx.beginPath();
             oCtx.moveTo(c.x - arm, c.y); oCtx.lineTo(c.x + arm, c.y);
             oCtx.moveTo(c.x, c.y - arm); oCtx.lineTo(c.x, c.y + arm);
@@ -1290,8 +1352,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       console.error('Error processing image:', error);
       toast.error('Failed to process image. Please try again with a clearer image.');
       isAutoCapturingRef.current = false;
-      // Stay on idle so an upload user can retry without being forced into camera mode
-      setMode('idle');
+      // Return to camera mode so the user can retry
+      setMode('camera');
     } finally {
       setProcessing(false);
       isProcessingImageRef.current = false;
@@ -1330,8 +1392,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     _binary: Uint8Array,
     width: number,
     height: number,
-    grayscale?: Uint8Array,
-    templateType?: 20 | 50 | 100 | 150
+    grayscale?: Uint8Array
   ): {
     found: boolean;
     confidence: number;
@@ -1929,7 +1990,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     // Determine template type BEFORE finding markers (needed for position heuristics)
     const templateType = numQuestions <= 20 ? 20 : numQuestions <= 50 ? 50 : numQuestions <= 100 ? 100 : 150;
     
-    const markers = findCornerMarkers(dummyBinary, width, height, rawGrayscale, templateType);
+    const markers = findCornerMarkers(dummyBinary, width, height, rawGrayscale);
     console.log('[OMR] Corner markers found:', markers.found,
       'TL:', Math.round(markers.topLeft.x), Math.round(markers.topLeft.y),
       'BR:', Math.round(markers.bottomRight.x), Math.round(markers.bottomRight.y),
