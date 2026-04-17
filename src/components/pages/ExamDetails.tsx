@@ -37,6 +37,7 @@ import {
 } from "firebase/firestore";
 import { toast } from "sonner";
 import { BackButton } from "@/components/ui/BackButton";
+import ReviewPapersPage from "@/components/pages/ReviewPapers";
 import { generateTemplatePDF, getTemplatePDFBlobUrl } from "@/lib/templatePdfGenerator";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
@@ -830,7 +831,11 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             </div>
           )}
 
-          {["review_paper", "item_analysis"].includes(activeTab) && (
+          {activeTab === "review_paper" && (
+            <ReviewPapersPage params={{ id: params.id }} embedded />
+          )}
+
+          {activeTab === "item_analysis" && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
               <BarChart2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-gray-900 capitalize">
