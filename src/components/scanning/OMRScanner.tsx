@@ -2864,24 +2864,6 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             </Card>
           )}
 
-          {/* Student ID Double Shade Error */}
-          {idDoubleShadeColumns.length > 0 && (
-            <Card className="p-4 border-amber-300 bg-amber-50 shadow-sm">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-amber-900">Multiple Bubbles Shaded in Student ID</h4>
-                  <p className="text-sm text-amber-800 mt-1">
-                    Column(s) <strong>{idDoubleShadeColumns.join(', ')}</strong> of the Student ID have more than one bubble shaded. Each column must have only <strong>one digit</strong> selected.
-                  </p>
-                  <p className="text-xs text-amber-700 mt-2">
-                    Please ask the student to properly shade only one bubble per column, or manually correct the Student ID below.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
           {/* Student ID Not Found Error */}
           {studentIdError && idDoubleShadeColumns.length === 0 && (
             <Card className="p-4 border-rose-300 bg-rose-50 shadow-sm">
@@ -3004,7 +2986,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                             onChange={(e) => editIdDigit(idx, e.target.value)}
                             className={`w-8 h-9 text-center text-sm font-bold rounded border-2 focus:outline-none focus:ring-2 transition-colors ${
                               hasDoubleShade
-                                ? 'border-amber-400 bg-amber-50 text-amber-700 placeholder-amber-400 focus:ring-amber-200'
+                                ? 'border-rose-500 bg-rose-50 text-rose-700 placeholder-rose-400 focus:ring-rose-200'
                                 : isUnshaded
                                   ? 'border-gray-200 bg-gray-50 text-gray-400 placeholder-gray-300 focus:ring-gray-200'
                                   : 'border-emerald-500 bg-emerald-50 text-emerald-700 focus:ring-emerald-200'
@@ -3027,7 +3009,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                       Detected
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="inline-block w-3 h-3 rounded border-2 border-amber-400 bg-amber-50" />
+                      <span className="inline-block w-3 h-3 rounded border-2 border-rose-500 bg-rose-50" />
                       Double-shaded
                     </span>
                     <span className="flex items-center gap-1">
