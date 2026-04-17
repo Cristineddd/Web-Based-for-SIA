@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,6 @@ import {
   Folder,
   Loader2,
   Mail,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,7 +27,15 @@ import { getClasses, Class } from "@/services/classService";
 import { getExams, Exam } from "@/services/examService";
 import { exportExamReportToExcel } from "@/services/excelExportService";
 import { ExportMetadata, generateExamReportPdf } from "@/services/pdfReportService";
-import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  onSnapshot,
+  query,
+  Timestamp,
+  Unsubscribe,
+  where,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 interface HubStudentRow {
@@ -121,6 +128,12 @@ export default function Results() {
   });
 
   const passingThreshold = 60;
+  const rowsCacheRef = useRef(rowsCache);
+  const rowsSubscriptionsRef = useRef<Map<string, Unsubscribe>>(new Map());
+
+  useEffect(() => {
+    rowsCacheRef.current = rowsCache;
+  }, [rowsCache]);
 
   const fetchBaseData = useCallback(async () => {
     if (!user?.id) return;
@@ -188,85 +201,96 @@ export default function Results() {
     [filteredClassViews],
   );
 
-  const fetchExamRows = useCallback(
+  const buildExamRows = useCallback(
+    (
+      cls: Class,
+      exam: Exam,
+      scannedDocs: Record<string, unknown>[],
+      gradeDocs: Record<string, unknown>[],
+    ): HubStudentRow[] => {
+      const students = cls.students || [];
+      const studentMap = new Map(students.map((s) => [s.student_id, s]));
+      const rowMap = new Map<string, HubStudentRow>();
+
+      scannedDocs.forEach((data) => {
+        if (data.isNullId) return;
+
+        const studentId = String(data.studentId || "").trim();
+        if (!studentId) return;
+
+        const score = Number(data.score || 0);
+        const totalQuestions = Number(data.totalQuestions || 0);
+        const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
+        const student = studentMap.get(studentId);
+
+        rowMap.set(studentId, {
+          studentId,
+          studentName: student ? `${student.last_name}, ${student.first_name}` : studentId,
+          score,
+          totalQuestions,
+          percentage,
+          status: percentage >= passingThreshold ? "Passed" : "Failed",
+          examName: exam.title,
+          className: cls.class_name,
+          grade: calculateLetterGrade(percentage),
+          date: normalizeDate(data.scannedAt),
+          email: student?.email,
+        });
+      });
+
+      gradeDocs.forEach((data) => {
+        const gradeClassId = String(data.class_id || data.classId || "");
+        if (gradeClassId && gradeClassId !== cls.id) return;
+
+        const studentId = String(data.student_id || data.studentId || "").trim();
+        if (!studentId || rowMap.has(studentId)) return;
+
+        const score = Number(data.score || 0);
+        const totalQuestions = Number(data.max_score || data.totalQuestions || 0);
+        const percentage = Number(
+          data.percentage || (totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0),
+        );
+        const student = studentMap.get(studentId);
+
+        rowMap.set(studentId, {
+          studentId,
+          studentName: student ? `${student.last_name}, ${student.first_name}` : studentId,
+          score,
+          totalQuestions,
+          percentage,
+          status: percentage >= passingThreshold ? "Passed" : "Failed",
+          examName: exam.title,
+          className: cls.class_name,
+          grade: String(data.letter_grade || calculateLetterGrade(percentage)),
+          date: normalizeDate(data.graded_at),
+          email: student?.email,
+        });
+      });
+
+      return Array.from(rowMap.values()).sort((a, b) => a.studentName.localeCompare(b.studentName));
+    },
+    [passingThreshold],
+  );
+
+  const fetchExamRowsOnce = useCallback(
     async (cls: Class, exam: Exam): Promise<HubStudentRow[]> => {
       const cacheKey = keyFor(cls.id, exam.id);
-      const cached = rowsCache[cacheKey];
-      if (cached) return cached;
-
       setLoadingRows((prev) => ({ ...prev, [cacheKey]: true }));
 
       try {
-        const students = cls.students || [];
-        const studentMap = new Map(students.map((s) => [s.student_id, s]));
-        const rowMap = new Map<string, HubStudentRow>();
-
         const [scannedSnap, gradeSnakeSnap, gradeCamelSnap] = await Promise.all([
           getDocs(query(collection(db, "scannedResults"), where("examId", "==", exam.id))),
           getDocs(query(collection(db, "studentGrades"), where("exam_id", "==", exam.id))),
           getDocs(query(collection(db, "studentGrades"), where("examId", "==", exam.id))),
         ]);
 
-        scannedSnap.forEach((docSnap) => {
-          const data = docSnap.data() as Record<string, unknown>;
-          if (data.isNullId) return;
-
-          const studentId = String(data.studentId || "").trim();
-          if (!studentId) return;
-
-          const score = Number(data.score || 0);
-          const totalQuestions = Number(data.totalQuestions || 0);
-          const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
-          const student = studentMap.get(studentId);
-
-          rowMap.set(studentId, {
-            studentId,
-            studentName: student ? `${student.last_name}, ${student.first_name}` : studentId,
-            score,
-            totalQuestions,
-            percentage,
-            status: percentage >= passingThreshold ? "Passed" : "Failed",
-            examName: exam.title,
-            className: cls.class_name,
-            grade: calculateLetterGrade(percentage),
-            date: normalizeDate(data.scannedAt),
-            email: student?.email,
-          });
-        });
-
-        const gradeDocs = [...gradeSnakeSnap.docs, ...gradeCamelSnap.docs];
-        gradeDocs.forEach((docSnap) => {
-          const data = docSnap.data() as Record<string, unknown>;
-          const gradeClassId = String(data.class_id || data.classId || "");
-          if (gradeClassId && gradeClassId !== cls.id) return;
-
-          const studentId = String(data.student_id || data.studentId || "").trim();
-          if (!studentId || rowMap.has(studentId)) return;
-
-          const score = Number(data.score || 0);
-          const totalQuestions = Number(data.max_score || data.totalQuestions || 0);
-          const percentage = Number(
-            data.percentage || (totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0),
-          );
-          const student = studentMap.get(studentId);
-
-          rowMap.set(studentId, {
-            studentId,
-            studentName: student ? `${student.last_name}, ${student.first_name}` : studentId,
-            score,
-            totalQuestions,
-            percentage,
-            status: percentage >= passingThreshold ? "Passed" : "Failed",
-            examName: exam.title,
-            className: cls.class_name,
-            grade: String(data.letter_grade || calculateLetterGrade(percentage)),
-            date: normalizeDate(data.graded_at),
-            email: student?.email,
-          });
-        });
-
-        const rows = Array.from(rowMap.values()).sort((a, b) =>
-          a.studentName.localeCompare(b.studentName),
+        const rows = buildExamRows(
+          cls,
+          exam,
+          scannedSnap.docs.map((docSnap) => docSnap.data() as Record<string, unknown>),
+          [...gradeSnakeSnap.docs, ...gradeCamelSnap.docs].map(
+            (docSnap) => docSnap.data() as Record<string, unknown>,
+          ),
         );
 
         setRowsCache((prev) => ({ ...prev, [cacheKey]: rows }));
@@ -279,8 +303,128 @@ export default function Results() {
         setLoadingRows((prev) => ({ ...prev, [cacheKey]: false }));
       }
     },
-    [rowsCache],
+    [buildExamRows],
   );
+
+  const fetchExamRows = useCallback(
+    async (cls: Class, exam: Exam): Promise<HubStudentRow[]> => {
+      const cacheKey = keyFor(cls.id, exam.id);
+      const cachedRows = rowsCacheRef.current[cacheKey];
+      if (cachedRows) return cachedRows;
+      return fetchExamRowsOnce(cls, exam);
+    },
+    [fetchExamRowsOnce],
+  );
+
+  const subscribeExamRows = useCallback(
+    (cls: Class, exam: Exam) => {
+      const cacheKey = keyFor(cls.id, exam.id);
+      if (rowsSubscriptionsRef.current.has(cacheKey)) return;
+
+      setLoadingRows((prev) => ({ ...prev, [cacheKey]: true }));
+
+      let scannedDocs: Record<string, unknown>[] = [];
+      let gradeSnakeDocs: Record<string, unknown>[] = [];
+      let gradeCamelDocs: Record<string, unknown>[] = [];
+      let scannedReady = false;
+      let gradeSnakeReady = false;
+      let gradeCamelReady = false;
+      let hasShownRealtimeError = false;
+
+      const publishRows = () => {
+        if (!scannedReady || !gradeSnakeReady || !gradeCamelReady) return;
+
+        const rows = buildExamRows(cls, exam, scannedDocs, [...gradeSnakeDocs, ...gradeCamelDocs]);
+        setRowsCache((prev) => ({ ...prev, [cacheKey]: rows }));
+        setLoadingRows((prev) => ({ ...prev, [cacheKey]: false }));
+      };
+
+      const onRealtimeError = (error: unknown) => {
+        console.error(`Failed live sync for exam ${exam.id}:`, error);
+        setLoadingRows((prev) => ({ ...prev, [cacheKey]: false }));
+        if (!hasShownRealtimeError) {
+          toast.error(`Unable to keep ${exam.title} report in live sync`);
+          hasShownRealtimeError = true;
+        }
+      };
+
+      const unsubScanned = onSnapshot(
+        query(collection(db, "scannedResults"), where("examId", "==", exam.id)),
+        (snapshot) => {
+          scannedDocs = snapshot.docs.map((docSnap) => docSnap.data() as Record<string, unknown>);
+          scannedReady = true;
+          publishRows();
+        },
+        onRealtimeError,
+      );
+
+      const unsubGradeSnake = onSnapshot(
+        query(collection(db, "studentGrades"), where("exam_id", "==", exam.id)),
+        (snapshot) => {
+          gradeSnakeDocs = snapshot.docs.map((docSnap) => docSnap.data() as Record<string, unknown>);
+          gradeSnakeReady = true;
+          publishRows();
+        },
+        onRealtimeError,
+      );
+
+      const unsubGradeCamel = onSnapshot(
+        query(collection(db, "studentGrades"), where("examId", "==", exam.id)),
+        (snapshot) => {
+          gradeCamelDocs = snapshot.docs.map((docSnap) => docSnap.data() as Record<string, unknown>);
+          gradeCamelReady = true;
+          publishRows();
+        },
+        onRealtimeError,
+      );
+
+      rowsSubscriptionsRef.current.set(cacheKey, () => {
+        unsubScanned();
+        unsubGradeSnake();
+        unsubGradeCamel();
+      });
+    },
+    [buildExamRows],
+  );
+
+  useEffect(() => {
+    const desiredKeys = new Set<string>();
+
+    filteredClassViews.forEach((view) => {
+      if (!expandedClassIds.has(view.cls.id)) return;
+      view.exams.forEach((exam) => {
+        const cacheKey = keyFor(view.cls.id, exam.id);
+        desiredKeys.add(cacheKey);
+        subscribeExamRows(view.cls, exam);
+      });
+    });
+
+    rowsSubscriptionsRef.current.forEach((unsubscribe, cacheKey) => {
+      if (desiredKeys.has(cacheKey)) return;
+      unsubscribe();
+      rowsSubscriptionsRef.current.delete(cacheKey);
+      setRowsCache((prev) => {
+        if (!(cacheKey in prev)) return prev;
+        const next = { ...prev };
+        delete next[cacheKey];
+        return next;
+      });
+      setLoadingRows((prev) => {
+        if (!(cacheKey in prev)) return prev;
+        const next = { ...prev };
+        delete next[cacheKey];
+        return next;
+      });
+    });
+  }, [expandedClassIds, filteredClassViews, subscribeExamRows]);
+
+  useEffect(() => {
+    const subscriptions = rowsSubscriptionsRef.current;
+    return () => {
+      subscriptions.forEach((unsubscribe) => unsubscribe());
+      subscriptions.clear();
+    };
+  }, []);
 
   const sendExamResults = useCallback(
     async (cls: Class, exam: Exam): Promise<{ sent: number; failed: number; total: number }> => {
@@ -575,7 +719,7 @@ export default function Results() {
         </Card>
         <Card className="border-green-100">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500">Loaded Reports</p>
+            <p className="text-xs text-gray-500">Live Reports</p>
             <p className="text-2xl font-bold text-green-700">{Object.keys(rowsCache).length}</p>
           </CardContent>
         </Card>
@@ -656,24 +800,12 @@ export default function Results() {
                                   </p>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => fetchExamRows(view.cls, exam)}
-                                    disabled={isRowsLoading}
-                                  >
-                                    {isRowsLoading ? (
-                                      <>
-                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        Loading
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Users className="w-4 h-4 mr-2" />
-                                        Load Report
-                                      </>
-                                    )}
-                                  </Button>
+                                  {isRowsLoading && (
+                                    <Badge variant="outline" className="border-amber-200 text-amber-700">
+                                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                      Syncing...
+                                    </Badge>
+                                  )}
                                   <Button
                                     variant="outline"
                                     size="sm"
