@@ -1174,7 +1174,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             }
             oCtx.lineWidth = lineW;
             oCtx.beginPath();
-            oCtx.ellipse(hit.px, hit.py, hit.rx * 1.15, hit.ry * 1.15, 0, 0, Math.PI * 2);
+            oCtx.ellipse(hit.px, hit.py, hit.rx, hit.ry, 0, 0, Math.PI * 2);
             oCtx.stroke();
           }
 
@@ -2181,10 +2181,13 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       }
 
       if (hasDetection && detectedDigit !== null) {
-        // Double-shade: 2nd-darkest is also quite dark AND close to darkest
+        // Double-shade: both the darkest AND second-darkest must independently
+        // meet the Tier-1 fill threshold (< 68% of ref), AND they must be very
+        // close together (gap < 6%). This prevents print noise / slightly-absorbed
+        // ink from triggering a false double-shade.
         const secondRatio = upperQ > 20 ? secondDark / upperQ : 1;
         const gapBetweenTopTwo = upperQ > 20 ? gapFromSecond / upperQ : 1;
-        if (secondRatio < 0.76 && gapBetweenTopTwo < 0.09) {
+        if (secondRatio < 0.68 && gapBetweenTopTwo < 0.06) {
           doubleShadeColumns.push(col + 1);
           console.log(`[ID] ⚠️ Col ${col} DOUBLE SHADE: darkest=${darkest.toFixed(0)} 2nd=${secondDark.toFixed(0)} upperQ=${upperQ.toFixed(0)}`);
           idDigits.push(-2);
@@ -2293,10 +2296,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         if (selectedChoice) {
           const secondRatio = ref > 20 ? secondDark / ref : 1;
           const gapBetweenTopTwo = ref > 20 ? gapFromSecond / ref : 1;
-          // Multiple answers: 2nd darkest must be clearly filled (<70% of ref) AND very
-          // close to the darkest (<7% gap). Stricter thresholds reduce false positives
-          // from print noise / slight ink absorption near empty bubbles.
-          if (secondRatio < 0.70 && gapBetweenTopTwo < 0.07) {
+          // Multiple answers: 2nd darkest must be clearly filled (<68% of ref) AND very
+          // close to the darkest (<6% gap). Matches the same Tier-1 threshold used
+          // for single detection — a genuine double-shade means two bubbles are both
+          // clearly filled, not just one filled and one slightly dark from ink spread.
+          if (secondRatio < 0.68 && gapBetweenTopTwo < 0.06) {
             multipleAnswers.push(q);
             console.log(`[MULTI] Q${q}: ${sorted.slice(0, 3).map(f => `${f.choice}=${f.brightness.toFixed(0)}`).join(', ')} ref=${ref.toFixed(0)}`);
           }
