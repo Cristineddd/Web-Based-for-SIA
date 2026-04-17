@@ -79,6 +79,16 @@ export interface PdfClassSummaryRow {
   averageScore: number;
 }
 
+export interface PdfExamReportRow {
+  studentId: string;
+  studentName: string;
+  score: number;
+  percentage: number;
+  status: 'Passed' | 'Failed';
+  examName: string;
+  className: string;
+}
+
 // ─── Export Metadata ─────────────────────────────────────────────────────────
 
 /** Optional metadata included on cover pages and branding headers of all exports. */
@@ -848,4 +858,93 @@ export async function generateClassSummaryPdf(
   // ── Footers ──
   addAllFooters(doc);
   doc.save('class_summary_report.pdf');
+}
+
+/**
+ * Generate a branded PDF export for a single exam report with required SS4 columns.
+ */
+export async function generateExamReportPdf(
+  rows: PdfExamReportRow[],
+  examTitle: string,
+  className: string,
+  metadata?: ExportMetadata,
+): Promise<void> {
+  const logoBase64 = await loadGCLogoBase64();
+  const doc = new jsPDF('p', 'mm', 'a4');
+
+  const percentages = rows.map((r) => r.percentage);
+  const avg = percentages.length > 0
+    ? Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length)
+    : 0;
+  const passCount = rows.filter((r) => r.status === 'Passed').length;
+  const failCount = rows.length - passCount;
+
+  const generatedDate = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const coverMeta: { label: string; value: string }[] = [
+    { label: 'Class', value: className },
+    { label: 'Exam', value: examTitle },
+  ];
+  if (metadata?.instructorName) coverMeta.push({ label: 'Instructor', value: metadata.instructorName });
+  if (metadata?.subject) coverMeta.push({ label: 'Subject', value: metadata.subject });
+  if (metadata?.section) coverMeta.push({ label: 'Section', value: metadata.section });
+  if (metadata?.examCode) coverMeta.push({ label: 'Exam Code', value: metadata.examCode });
+  if (metadata?.examDate) coverMeta.push({ label: 'Exam Date', value: metadata.examDate });
+  coverMeta.push(
+    { label: 'Date Generated', value: generatedDate },
+    { label: 'Total Records', value: String(rows.length) },
+    { label: 'Pass Count', value: String(passCount) },
+    { label: 'Fail Count', value: String(failCount) },
+    { label: 'Average', value: `${avg}%` },
+  );
+
+  drawCoverPage(doc, className, `${examTitle} — Results & Export Report`, coverMeta, logoBase64);
+
+  doc.addPage();
+  drawContentPageHeader(doc, logoBase64);
+  let y = drawSectionHeading(doc, MARGIN_TOP + 5, 'Student Results');
+
+  const cols: TableColumn[] = [
+    { header: '#', width: 10, align: 'center' },
+    { header: 'Student ID', width: 26 },
+    { header: 'Name', width: 42 },
+    { header: 'Score', width: 16, align: 'right' },
+    { header: 'Percentage', width: 20, align: 'right' },
+    { header: 'Status', width: 18, align: 'center' },
+    { header: 'Exam Name', width: 30 },
+    { header: 'Class', width: CONTENT_WIDTH - 10 - 26 - 42 - 16 - 20 - 18 - 30 },
+  ];
+
+  const tableRows = rows.map((r, i) => [
+    String(i + 1),
+    r.studentId,
+    r.studentName,
+    String(r.score),
+    `${r.percentage}%`,
+    r.status,
+    r.examName,
+    r.className,
+  ]);
+
+  y = drawDataTable(doc, y, cols, tableRows, {
+    highlightFn: (row) => (row[5] === 'Failed' ? RED_50 : null),
+  });
+
+  y += 8;
+  y = checkPageBreak(doc, y, 40);
+  y = drawSectionHeading(doc, y, 'Summary');
+  y = drawStatLine(doc, y, 'Total Records', String(rows.length));
+  y = drawStatLine(doc, y, 'Passed', String(passCount));
+  y = drawStatLine(doc, y, 'Failed', String(failCount));
+  drawStatLine(doc, y, 'Average Percentage', `${avg}%`);
+
+  addAllFooters(doc);
+
+  const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  const safeExam = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  doc.save(`${safeClass}_${safeExam}_exam_report.pdf`);
 }
