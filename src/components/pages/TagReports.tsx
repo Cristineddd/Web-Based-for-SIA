@@ -107,7 +107,7 @@ export default function TagReportsPage({ params }: TagReportsProps) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-muted-foreground">Loading tag reports...</p>
         </div>
       </div>

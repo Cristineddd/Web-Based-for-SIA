@@ -26,6 +26,7 @@ import {
   Archive,
   Users,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -192,6 +193,14 @@ export default function ClassManagement() {
       c.course_subject.toLowerCase().includes(search.toLowerCase()) ||
       c.year?.toLowerCase().includes(search.toLowerCase()),
   );
+
+  if (loading) {
+    return (
+      <div className="page-container flex items-center justify-center min-h-[55vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">

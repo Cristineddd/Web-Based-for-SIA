@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { BarChart3, TrendingUp, AlertCircle, ArrowLeft } from 'lucide-react';
+import { BarChart3, AlertCircle, ArrowLeft, FileText, Activity, Hash } from 'lucide-react';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LucideIcon = React.ComponentType<any>;
 import { getExamById, Exam } from '@/services/examService';
 import { AnswerKeyService } from '@/services/answerKeyService';
 import { ScanningService } from '@/services/scanningService';
 import { AnswerChoice } from '@/types/scanning';
-import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 interface ItemAnalysisProps {
@@ -161,7 +163,7 @@ export default function ItemAnalysisPage({ params }: ItemAnalysisProps) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-muted-foreground">Loading item analysis...</p>
         </div>
       </div>
@@ -170,194 +172,142 @@ export default function ItemAnalysisPage({ params }: ItemAnalysisProps) {
 
   if (!exam) {
     return (
-      <div className="space-y-6">
-        <Button
-          variant="outline"
+      <div className="space-y-4 p-6">
+        <button
           onClick={() => window.history.back()}
-          className="mb-4"
+          className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-green-600 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
+          <ArrowLeft className="w-4 h-4" />
           Back
-        </Button>
+        </button>
         <p className="text-foreground">Exam not found</p>
       </div>
     );
   }
 
-  const avgCorrectRate = questions.length > 0
-    ? Math.round(questions.reduce((sum, q) => sum + q.correctRate, 0) / questions.length)
-    : 0;
   const avgDiscrimination = questions.length > 0
     ? parseFloat((questions.reduce((sum, q) => sum + q.discrimination, 0) / questions.length).toFixed(2))
     : 0;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 sm:gap-4">
-        <Button
-          variant="outline"
-          onClick={() => window.history.back()}
-          className="mb-4"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Exam
-        </Button>
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
-            <BarChart3 className="w-6 h-6" />
-            Item Analysis
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Exam: {exam.title}</p>
-        </div>
-      </div>
+    <div className="space-y-5 pt-4 px-1">
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="p-4 sm:p-6 border">
-          <p className="text-xs sm:text-sm font-semibold text-muted-foreground mb-2">Papers Analyzed</p>
-          <p className="text-2xl sm:text-3xl font-bold text-primary">{totalPapers}</p>
-          <p className="text-xs text-muted-foreground mt-2">Scanned answer sheets</p>
-        </Card>
-        <Card className="p-4 sm:p-6 border">
-          <p className="text-xs sm:text-sm font-semibold text-muted-foreground mb-2">Avg Correct Rate</p>
-          <p className="text-2xl sm:text-3xl font-bold text-primary">{avgCorrectRate}%</p>
-          <p className="text-xs text-muted-foreground mt-2">Overall performance</p>
-        </Card>
-        <Card className="p-4 sm:p-6 border">
-          <p className="text-xs sm:text-sm font-semibold text-muted-foreground mb-2">Avg Discrimination</p>
-          <p className="text-2xl sm:text-3xl font-bold text-primary">{avgDiscrimination}</p>
-          <p className="text-xs text-muted-foreground mt-2">Item quality (0-1)</p>
-        </Card>
-        <Card className="p-4 sm:p-6 border">
-          <p className="text-xs sm:text-sm font-semibold text-muted-foreground mb-2">Questions Analyzed</p>
-          <p className="text-2xl sm:text-3xl font-bold text-primary">{questions.length}</p>
-          <p className="text-xs text-muted-foreground mt-2">Total exam items</p>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        {[
+          { label: 'Papers Analyzed', value: totalPapers, sub: 'Scanned answer sheets', icon: FileText as LucideIcon, color: 'text-green-700', bg: 'bg-green-100', grad: 'from-green-600 to-green-400' },
+          { label: 'Avg Discrimination', value: avgDiscrimination, sub: 'Item quality (0–1)', icon: Activity as LucideIcon, color: 'text-green-700', bg: 'bg-green-100', grad: 'from-green-600 to-green-400' },
+          { label: 'Questions Analyzed', value: questions.length, sub: 'Total exam items', icon: Hash as LucideIcon, color: 'text-green-700', bg: 'bg-green-100', grad: 'from-green-600 to-green-400' },
+        ].map(({ label, value, sub, icon: Icon, color, bg, grad }) => (
+          <Card key={label} className="bg-white border border-gray-200 shadow-sm overflow-hidden">
+            <div className={`h-1 w-full bg-gradient-to-r ${grad}`} />
+            <div className="p-4 sm:p-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
+                <div className={`w-8 h-8 rounded-full ${bg} flex items-center justify-center`}>
+                  <Icon className={`w-4 h-4 ${color}`} />
+                </div>
+              </div>
+              <p className={`text-2xl sm:text-3xl font-bold ${color}`}>{value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{sub}</p>
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {/* Difficulty Distribution */}
-      <Card className="p-4 sm:p-6 border">
-        <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-          <TrendingUp className="w-5 h-5" />
-          Difficulty Distribution
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {['Easy', 'Medium', 'Hard'].map(difficulty => {
-            const count = questions.filter(q => q.difficulty === difficulty).length;
-            const percentage = questions.length > 0 ? Math.round((count / questions.length) * 100) : 0;
-            return (
-              <div key={difficulty} className="text-center p-4 rounded-lg bg-muted/50">
-                <p className="text-sm font-semibold text-foreground mb-2">{difficulty}</p>
-                <p className="text-2xl font-bold text-primary">{count}</p>
-                <p className="text-xs text-muted-foreground mt-1">{percentage}% of exam</p>
+      {/* Questions Detail */}
+      <Card className="bg-white border border-gray-200 shadow-sm overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-green-500 to-emerald-400" />
+        <div className="p-4 sm:p-5">
+          <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-green-600" />
+            Question Statistics
+          </h2>
+          <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
+            {questions.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+                  <AlertCircle className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground font-medium text-sm">No analysis data available yet.</p>
+                <p className="text-xs text-muted-foreground mt-1">Scan answer sheets to generate item analysis.</p>
               </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Questions Detail Table */}
-      <Card className="p-4 sm:p-6 border">
-        <h2 className="text-lg font-bold text-foreground mb-4">Question Statistics</h2>
-        <div className="space-y-3 max-h-96 overflow-y-auto">
-          {questions.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground font-medium">No analysis data available yet.</p>
-              <p className="text-sm text-muted-foreground mt-1">Scan answer sheets to generate item analysis.</p>
-            </div>
-          ) : (
-            questions.map(q => (
-              <div key={q.questionNumber} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-foreground">Question {q.questionNumber}</span>
-                    <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">
+            ) : (
+              questions.map(q => (
+                <div key={q.questionNumber} className="flex flex-wrap items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50/40 hover:bg-white hover:shadow-sm transition-all">
+                  {/* Q number + key */}
+                  <div className="flex items-center gap-2 min-w-[120px]">
+                    <span className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                      {q.questionNumber}
+                    </span>
+                    <span className="text-xs font-semibold text-gray-500">Q{q.questionNumber}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold border border-green-200">
                       Key: {q.correctAnswer}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <span className={`px-3 py-1 rounded text-xs font-semibold ${
-                      q.correctRate >= 75
-                        ? 'bg-green-50 text-green-700'
-                        : q.correctRate >= 40
-                        ? 'bg-yellow-50 text-yellow-700'
-                        : 'bg-red-50 text-red-700'
-                    }`}>
-                      {q.correctRate}% Correct
-                    </span>
-                    <span className={`px-3 py-1 rounded text-xs font-semibold ${
-                      q.difficulty === 'Easy' ? 'bg-green-50 text-green-700' :
-                      q.difficulty === 'Medium' ? 'bg-yellow-50 text-yellow-700' :
-                      'bg-red-50 text-red-700'
-                    }`}>
-                      {q.difficulty}
+
+                  {/* Badges */}
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      q.correctRate >= 75 ? 'bg-green-50 text-green-700 border-green-200' :
+                      q.correctRate >= 40 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                      'bg-red-50 text-red-700 border-red-200'
+                    }`}>{q.correctRate}% correct</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      q.difficulty === 'Easy' ? 'bg-green-50 text-green-700 border-green-200' :
+                      q.difficulty === 'Medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                      'bg-red-50 text-red-700 border-red-200'
+                    }`}>{q.difficulty}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      q.discrimination >= 0.4 ? 'bg-green-50 text-green-700 border-green-200' :
+                      q.discrimination >= 0.2 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                      'bg-red-50 text-red-700 border-red-200'
+                    }`}>D: {q.discrimination}</span>
+                    <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] border border-gray-200">
+                      {q.totalResponses} resp.
                     </span>
                   </div>
-                </div>
 
-                {/* Choice Distribution */}
-                <div className="mb-3">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Response Distribution:</p>
-                  <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                  {/* Mini bar chart inline */}
+                  <div className="flex items-end gap-1 ml-auto">
                     {Object.entries(q.choiceDistribution).map(([choice, count]) => {
                       const percentage = q.totalResponses > 0 ? (count / q.totalResponses) * 100 : 0;
                       const isCorrect = choice === q.correctAnswer;
                       return (
-                        <div key={choice} className="text-center">
-                          <div className={`w-full rounded-md overflow-hidden mb-1 ${isCorrect ? 'ring-2 ring-green-500' : ''}`}>
+                        <div key={choice} className="flex flex-col items-center gap-0.5">
+                          <div className="relative w-5 bg-gray-100 rounded-sm overflow-hidden" style={{ height: 28 }}>
                             <div
-                              className={`flex items-center justify-center transition-all ${isCorrect ? 'bg-green-200' : 'bg-primary/20'}`}
-                              style={{ height: `${Math.max(40, percentage * 2)}px` }}
+                              className={`absolute bottom-0 w-full rounded-sm ${isCorrect ? 'bg-green-400' : 'bg-blue-200'}`}
+                              style={{ height: `${Math.max(5, percentage)}%` }}
                             />
+                            {isCorrect && <div className="absolute inset-0 ring-1 ring-green-500 rounded-sm" />}
                           </div>
-                          <p className={`text-xs font-semibold ${isCorrect ? 'text-green-700' : 'text-foreground'}`}>
-                            {choice} {isCorrect ? '✓' : ''}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{count} ({Math.round(percentage)}%)</p>
+                          <span className={`text-[9px] font-bold ${isCorrect ? 'text-green-700' : 'text-gray-400'}`}>{choice}</span>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-
-                <div className="flex flex-wrap gap-3 text-xs">
-                  <div className={`px-3 py-1 rounded ${
-                    q.discrimination >= 0.4 ? 'bg-green-50' :
-                    q.discrimination >= 0.2 ? 'bg-yellow-50' :
-                    'bg-red-50'
-                  }`}>
-                    <span className="font-semibold text-muted-foreground">Discrimination: </span>
-                    <span className={`font-bold ${
-                      q.discrimination >= 0.4 ? 'text-green-700' :
-                      q.discrimination >= 0.2 ? 'text-yellow-700' :
-                      'text-red-700'
-                    }`}>{q.discrimination}</span>
-                  </div>
-                  <div className="px-3 py-1 bg-muted rounded">
-                    <span className="font-semibold text-muted-foreground">Total Responses: </span>
-                    <span className="font-bold text-foreground">{q.totalResponses}</span>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       </Card>
 
       {/* Analysis Tips */}
-      <Card className="p-4 sm:p-6 border bg-blue-50 border-blue-200">
-        <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 text-blue-600" />
-          Analysis Tips
-        </h3>
-        <ul className="text-sm text-foreground space-y-1 ml-7">
-          <li>• <strong>Correct Rate:</strong> Percentage of students who answered correctly</li>
-          <li>• <strong>Difficulty:</strong> Easy (76-100%), Medium (40-75%), Hard (0-39%)</li>
-          <li>• <strong>Discrimination:</strong> How well the question differentiates between high and low performers (0-1 scale)</li>
-          <li>• <strong>Distribution:</strong> Visual representation of how students chose each answer</li>
-        </ul>
+      <Card className="bg-white border border-green-200 shadow-sm overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-green-600 to-green-400" />
+        <div className="p-4 sm:p-5">
+          <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-green-600" />
+            How to Read This Report
+          </h3>
+          <ul className="text-sm text-muted-foreground space-y-1.5">
+            <li className="flex gap-2"><span className="text-green-500 font-bold mt-0.5">•</span><span><strong className="text-foreground">Correct Rate:</strong> % of students who answered the question correctly.</span></li>
+            <li className="flex gap-2"><span className="text-green-500 font-bold mt-0.5">•</span><span><strong className="text-foreground">Discrimination:</strong> How well the question separates high from low scorers. Higher is better (0–1 scale).</span></li>
+            <li className="flex gap-2"><span className="text-green-500 font-bold mt-0.5">•</span><span><strong className="text-foreground">Distribution:</strong> Bar chart showing how many students picked each answer choice.</span></li>
+          </ul>
+        </div>
       </Card>
     </div>
   );

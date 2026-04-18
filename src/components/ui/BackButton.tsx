@@ -48,7 +48,7 @@ export function BackButton({
     return (
       <Link 
         href={href} 
-        className={`inline-flex items-center gap-2 p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground ${className}`}
+        className={`inline-flex items-center gap-2 p-2 hover:bg-green-50 rounded-md transition-colors text-gray-400 hover:text-green-700 ${className}`}
       >
         {content}
       </Link>
@@ -60,7 +60,7 @@ export function BackButton({
       variant={variant}
       size={size}
       onClick={handleClick}
-      className={`gap-2 ${className}`}
+      className={`gap-2 text-gray-400 hover:text-green-700 hover:bg-green-50 ${className}`}
     >
       {content}
     </Button>

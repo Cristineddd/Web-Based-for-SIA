@@ -847,7 +847,7 @@ export default function Students() {
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-12">
                   <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                    <Loader2 className="w-4 h-4 animate-spin text-green-600" />
                     Loading students...
                   </div>
                 </TableCell>

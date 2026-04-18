@@ -97,34 +97,34 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
   const isFormValid = formData.class_name.trim().length >= 4 && formData.course_subject.trim().length >= 5;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[88vh]">
+    <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[88vh]">
 
         {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-5 border-b border-gray-100">
           <div>
             <h2 className="text-base font-bold text-gray-900">Add New Class</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Create a new class for your students</p>
+            <p className="text-xs text-gray-400 mt-0.5">Fill in the details to create a new class</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
           >
-            <X className="w-4 h-4 text-gray-500" />
+            <X className="w-4 h-4 text-gray-400" />
           </button>
         </div>
 
         {/* Scrollable Fields */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
           {/* Program / Class Name */}
           <div className="space-y-1.5">
-            <label className="block text-sm font-semibold text-gray-700">
-              Program <span className="text-red-500">*</span>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+              Program <span className="text-red-400">*</span>
             </label>
             <Input
               type="text"
-              placeholder="Enter class name"
+              placeholder="e.g. BSIT, BSCS"
               value={formData.class_name}
               onChange={(e) => {
                 const value = e.target.value;
@@ -137,7 +137,7 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
                 }
               }}
               disabled={loading}
-              className={`text-sm transition-all ${
+              className={`text-sm bg-white border-gray-200 rounded-xl h-10 transition-all ${
                 formData.class_name.trim().length >= 4
                   ? 'border-green-500 focus-visible:ring-green-500/20'
                   : formData.class_name.trim().length > 0
@@ -152,16 +152,16 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
 
           {/* Course Subject */}
           <div className="space-y-1.5">
-            <label className="block text-sm font-semibold text-gray-700">
-              Course <span className="text-red-500">*</span>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+              Course Code <span className="text-red-400">*</span>
             </label>
             <Input
               type="text"
-              placeholder="Enter course subject"
+              placeholder="e.g. ITPKINEME123"
               value={formData.course_subject}
               onChange={(e) => handleInputChange('course_subject', e.target.value)}
               disabled={loading}
-              className={`text-sm transition-all ${
+              className={`text-sm bg-white border-gray-200 rounded-xl h-10 transition-all ${
                 formData.course_subject.trim().length >= 5
                   ? 'border-green-500 focus-visible:ring-green-500/20'
                   : formData.course_subject.trim().length > 0
@@ -171,58 +171,59 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
             />
           </div>
 
-          {/* Year */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-semibold text-gray-700">
-              Year <span className="text-xs text-gray-400 font-normal">(Optional)</span>
-            </label>
-            <Select
-              value={formData.year}
-              onValueChange={(value) => handleInputChange('year', value)}
-              disabled={loading}
-            >
-              <SelectTrigger className="w-full text-sm border border-gray-200 rounded-lg h-10">
-                <SelectValue placeholder="Select year level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1st Year</SelectItem>
-                <SelectItem value="2">2nd Year</SelectItem>
-                <SelectItem value="3">3rd Year</SelectItem>
-                <SelectItem value="4">4th Year</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Year + Room side by side */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Year Level
+              </label>
+              <Select
+                value={formData.year}
+                onValueChange={(value) => handleInputChange('year', value)}
+                disabled={loading}
+              >
+                <SelectTrigger className={`w-full text-sm bg-white rounded-xl h-10 transition-all ${formData.year ? 'border-green-500 focus:ring-green-500/20' : 'border-gray-200'}`}>
+                  <SelectValue placeholder="Select year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1st Year</SelectItem>
+                  <SelectItem value="2">2nd Year</SelectItem>
+                  <SelectItem value="3">3rd Year</SelectItem>
+                  <SelectItem value="4">4th Year</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Room */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-semibold text-gray-700">
-              Room <span className="text-xs text-gray-400 font-normal">(Optional, 3 digits)</span>
-            </label>
-            <Input
-              type="number"
-              placeholder="e.g. 101"
-              value={formData.room}
-              onChange={(e) => {
-                const inputValue = e.target.value.replace(/[^0-9]/g, '');
-                if (inputValue.length > 3) {
-                  setRoomWarning(true);
-                  setTimeout(() => setRoomWarning(false), 3000);
-                  return;
-                }
-                handleInputChange('room', inputValue.slice(0, 3));
-              }}
-              disabled={loading}
-              className="text-sm"
-            />
-            {roomWarning && (
-              <p className="text-xs text-red-500">Room number must be exactly 3 digits</p>
-            )}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Room <span className="text-gray-300 font-normal normal-case">(optional)</span>
+              </label>
+              <Input
+                type="number"
+                placeholder="e.g. 101"
+                value={formData.room}
+                onChange={(e) => {
+                  const inputValue = e.target.value.replace(/[^0-9]/g, '');
+                  if (inputValue.length > 3) {
+                    setRoomWarning(true);
+                    setTimeout(() => setRoomWarning(false), 3000);
+                    return;
+                  }
+                  handleInputChange('room', inputValue.slice(0, 3));
+                }}
+                disabled={loading}
+                className="text-sm bg-white border-gray-200 rounded-xl h-10"
+              />
+              {roomWarning && (
+                <p className="text-xs text-red-500">Max 3 digits</p>
+              )}
+            </div>
           </div>
 
           {/* Semester */}
           <div className="space-y-1.5">
-            <label className="block text-sm font-semibold text-gray-700">
-              Semester <span className="text-xs text-gray-400 font-normal">(Optional)</span>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+              Semester <span className="text-gray-300 font-normal normal-case">(optional)</span>
             </label>
             <Input
               type="text"
@@ -230,20 +231,19 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
               value={formData.semester}
               onChange={(e) => handleInputChange('semester', e.target.value)}
               disabled={loading}
-              className="text-sm"
+              className="text-sm bg-white border-gray-200 rounded-xl h-10"
             />
           </div>
-
 
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 flex gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+        <div className="flex-shrink-0 flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
           <button
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            className="px-5 py-2 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors"
           >
             Cancel
           </button>
@@ -251,12 +251,12 @@ export function AddNewClassModal({ isOpen, onClose, onClassCreated }: AddNewClas
             type="button"
             onClick={handleSubmit}
             disabled={loading || !isFormValid}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
             {loading ? (
               <><Loader2 className="w-4 h-4 animate-spin" />Creating...</>
             ) : (
-              <><Plus className="w-4 h-4" />Create Class</>
+              <>Add Class</>
             )}
           </button>
         </div>

@@ -1138,7 +1138,7 @@ export default function StudentClasses() {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-accent" />
+          <Loader2 className="w-8 h-8 animate-spin text-green-600" />
         </div>
       ) : filteredClasses.length === 0 ? (
         <div className="text-center py-12">

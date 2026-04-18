@@ -38,6 +38,7 @@ import {
 import { toast } from "sonner";
 import { BackButton } from "@/components/ui/BackButton";
 import ReviewPapersPage from "@/components/pages/ReviewPapers";
+import ItemAnalysisPage from "@/components/pages/ItemAnalysis";
 import { generateTemplatePDF, getTemplatePDFBlobUrl } from "@/lib/templatePdfGenerator";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
@@ -55,7 +56,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   const importKeyRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [exam, setExam] = useState<Exam | null>(null);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasTemplate, setHasTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
@@ -177,6 +178,17 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, hasTemplate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-400 font-medium">Loading exam...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!exam) {
     return (
@@ -469,10 +481,10 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         <div className="flex items-start gap-4">
           <BackButton href="/exams" asLink className="mt-1" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0f172a] tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {exam.title}
             </h1>
-            <p className="text-sm sm:text-base font-semibold text-gray-400 mt-1">
+            <p className="text-sm text-gray-500 font-medium mt-0.5">
               {exam.subject}
             </p>
           </div>
@@ -481,7 +493,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             {exam.status !== "final" && (
               <button
                 onClick={() => setShowFinalizeConfirm(true)}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#22c55e] text-white rounded-xl font-bold text-sm hover:bg-[#16a34a] transition-all shadow-md shadow-green-500/10"
+                className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-500/10"
               >
                 <CheckCircle className="w-4 h-4" />
                 <span>Finalize</span>
@@ -501,51 +513,31 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         </div>
 
         {/* Stats Card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="space-y-3 relative before:absolute before:left-[-24px] before:top-[-8px] before:bottom-[-8px] before:w-[4px] before:bg-green-500 before:rounded-full">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                Items
-              </p>
-              <p className="text-base font-extrabold text-[#0f172a]">
-                {exam.num_items} Questions
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                Template ID
-              </p>
-              <div className="inline-block px-3 py-1 bg-gray-50 border border-gray-100 rounded-md">
-                <span className="text-sm font-bold text-gray-600 font-mono">
-                  {exam.examCode || "NO-CODE"}
-                </span>
+        <Card className="border border-gray-100 shadow-sm rounded-xl bg-white border-l-4 border-l-green-500">
+          <div className="px-4 py-2 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-600">Exam Information</p>
+          </div>
+          <div className="px-4 pb-3 pt-1">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-0">
+              <div className="space-y-0.5 py-1 pr-4">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Items</p>
+                <p className="text-sm font-bold text-[#1e293b]">{exam.num_items} Questions</p>
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                Tagged Classes
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <div className="inline-block px-3 py-1 bg-green-50 border border-green-100 rounded-full">
-                  <span className="text-xs font-bold text-green-600">
-                    {exam.className || "General"}
-                  </span>
-                </div>
+              <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1 pr-4">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Template ID</p>
+                <p className="text-sm font-bold text-[#1e293b] font-mono">{exam.examCode || "NO-CODE"}</p>
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                Papers Scanned
-              </p>
-              <p className="text-xl font-extrabold text-[#0f172a]">
-                {scannedCount}
-              </p>
+              <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1 pr-4">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Tagged Classes</p>
+                <p className="text-sm font-bold text-gray-900">{exam.className || "General"}</p>
+              </div>
+              <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Papers Scanned</p>
+                <p className="text-sm font-bold text-[#1e293b]">{scannedCount}</p>
+              </div>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Tabs */}
         <div className="flex items-center gap-8 border-b border-gray-100 px-2 overflow-x-auto no-scrollbar">
@@ -558,16 +550,16 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2.5 pb-5 text-sm font-bold transition-all relative whitespace-nowrap ${
                   isActive
-                    ? "text-[#22c55e]"
+                    ? "text-green-600"
                     : "text-gray-400 hover:text-gray-600"
                 }`}
               >
                 <Icon
-                  className={`w-4.5 h-4.5 ${isActive ? "text-[#22c55e]" : "text-gray-300"}`}
+                  className={`w-4.5 h-4.5 ${isActive ? "text-green-600" : "text-gray-300"}`}
                 />
                 <span>{tab.label}</span>
                 {isActive && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#22c55e] rounded-full" />
+                  <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-green-500 rounded-full" />
                 )}
               </button>
             );
@@ -611,7 +603,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   <button
                     onClick={handleSaveAnswerKey}
                     disabled={isSavingKey}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#22c55e] text-white rounded-lg text-sm font-bold hover:bg-[#16a34a] transition-all shadow-md shadow-green-500/10 disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all shadow-sm disabled:opacity-50"
                   >
                     {isSavingKey ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -653,10 +645,10 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                                     [qNum]: isSelected ? "" : choice,
                                   }))
                                 }
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border-2 shadow-sm ${
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border-2 ${
                                   isSelected
-                                    ? "bg-[#22c55e] border-[#22c55e] text-white ring-4 ring-green-500/10 scale-110"
-                                    : "bg-white border-gray-200 text-gray-400 hover:border-green-200 hover:text-green-500"
+                                    ? "bg-green-600 border-green-600 text-white ring-4 ring-green-500/10 scale-110"
+                                    : "bg-white border-gray-200 text-gray-400 hover:border-green-300 hover:text-green-600"
                                 }`}
                               >
                                 {choice}
@@ -677,8 +669,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               {/* Action bar */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${hasTemplate ? 'bg-emerald-50' : 'bg-gray-50'}`}>
-                    <FileText className={`w-5 h-5 ${hasTemplate ? 'text-emerald-600' : 'text-gray-400'}`} />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${hasTemplate ? 'bg-green-50' : 'bg-gray-50'}`}>
+                    <FileText className={`w-5 h-5 ${hasTemplate ? 'text-green-600' : 'text-gray-400'}`} />
                   </div>
                   <div>
                     <p className="font-bold text-gray-900 text-sm">
@@ -689,7 +681,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                     </p>
                   </div>
                   {hasTemplate && (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
                       <CheckCircle className="w-3 h-3" /> Created
                     </span>
                   )}
@@ -699,7 +691,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                     <button
                       disabled={creatingTemplate}
                       onClick={handleCreateTemplate}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all disabled:opacity-60"
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-green-600 text-white hover:bg-green-700 shadow-sm transition-all disabled:opacity-60"
                     >
                       {creatingTemplate ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus className="w-4 h-4" />}
                       {creatingTemplate ? 'Generating…' : 'Create Template'}
@@ -755,59 +747,62 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           )}
 
           {activeTab === "scan_papers" && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-              <Maximize className="w-16 h-16 text-green-500 mx-auto mb-4 opacity-20" />
-              <h3 className="text-xl font-bold text-gray-900">
-                Ready to Scan?
-              </h3>
-              <p className="text-gray-500 max-w-md mx-auto mt-2">
-                Use your mobile device to scan the answer sheets, or upload a
-                photo from your device.
-              </p>
-
-              {/* 200-item: page selector shown inline */}
-              {exam && exam.num_items > 150 && (
-                <div className="mt-6 inline-flex flex-col items-center gap-2">
-                  <p className="text-sm font-semibold text-gray-700">Which page are you scanning?</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setUploadPage(1)}
-                      className={`px-5 py-2 rounded-lg text-sm font-bold border-2 transition-all ${
-                        uploadPage === 1
-                          ? 'border-[#22c55e] bg-[#22c55e] text-white shadow'
-                          : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
-                      }`}
-                    >
-                      Page 1 · Q1–100
-                    </button>
-                    <button
-                      onClick={() => setUploadPage(2)}
-                      className={`px-5 py-2 rounded-lg text-sm font-bold border-2 transition-all ${
-                        uploadPage === 2
-                          ? 'border-[#22c55e] bg-[#22c55e] text-white shadow'
-                          : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
-                      }`}
-                    >
-                      Page 2 · Q101–200
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Link href={`/exams/${params.id}/scan-papers`}>
-                  <button className="bg-[#22c55e] text-white px-10 py-3.5 rounded-xl font-bold hover:bg-[#16a34a] shadow-lg shadow-green-500/20 transition-all">
-                    Open Scanner UI
-                  </button>
-                </Link>
-                <button
-                  onClick={() => uploadInputRef.current?.click()}
-                  className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold border-2 border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700 hover:bg-green-50 transition-all"
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload Image
-                </button>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100">
+                <h3 className="text-base font-bold text-gray-900">Scan Papers</h3>
+                <p className="text-sm text-gray-400 mt-0.5">
+                  Use your mobile device to scan answer sheets, or upload a photo from your device.
+                </p>
               </div>
+
+              <div className="px-6 py-6 space-y-6">
+                {/* Page selector for 200-item exams */}
+                {exam && exam.num_items > 150 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-gray-700">Which page are you scanning?</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setUploadPage(1)}
+                        className={`px-5 py-2 rounded-lg text-sm font-bold border-2 transition-all ${
+                          uploadPage === 1
+                            ? 'border-green-600 bg-green-600 text-white shadow-sm'
+                            : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
+                        }`}
+                      >
+                        Page 1 · Q1–100
+                      </button>
+                      <button
+                        onClick={() => setUploadPage(2)}
+                        className={`px-5 py-2 rounded-lg text-sm font-bold border-2 transition-all ${
+                          uploadPage === 2
+                            ? 'border-green-600 bg-green-600 text-white shadow-sm'
+                            : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
+                        }`}
+                      >
+                        Page 2 · Q101–200
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <Link href={`/exams/${params.id}/scan-papers`} className="flex-1 sm:flex-none">
+                    <button className="w-full sm:w-auto flex items-center justify-center gap-2 bg-green-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-700 shadow-sm shadow-green-500/20 transition-all">
+                      <Maximize className="w-4 h-4" />
+                      Open Scanner UI
+                    </button>
+                  </Link>
+                  <button
+                    onClick={() => uploadInputRef.current?.click()}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold border-2 border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700 hover:bg-green-50 transition-all"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload Image
+                  </button>
+                </div>
+              </div>
+
               <input
                 ref={uploadInputRef}
                 type="file"
@@ -837,23 +832,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
           )}
 
           {activeTab === "item_analysis" && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-              <BarChart2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-gray-900 capitalize">
-                {activeTab.replace("_", " ")}
-              </h3>
-              <p className="text-gray-500 mt-1">
-                No data available to display yet.
-              </p>
-              <Link
-                href={`/exams/${params.id}/${activeTab.replace("_", "-")}`}
-                className="mt-8 inline-block"
-              >
-                <button className="px-6 py-2.5 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">
-                  Go to Dedicated Page
-                </button>
-              </Link>
-            </div>
+            <ItemAnalysisPage params={{ id: params.id }} />
           )}
         </div>
       </div>
@@ -862,7 +841,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
       {isEditing && (
         <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col overflow-hidden">
-            <div className="p-6 border-b border-gray-50 flex items-center justify-between">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-[#0f172a]">
                   Edit Exam Details
@@ -891,7 +870,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                     onChange={(e) =>
                       setEditForm({ ...editForm, title: e.target.value })
                     }
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all font-semibold text-[#0f172a]"
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all font-semibold text-gray-900"
                   />
                 </div>
                 <div className="space-y-2">
@@ -904,7 +883,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                     onChange={(e) =>
                       setEditForm({ ...editForm, subject: e.target.value })
                     }
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all font-semibold text-[#0f172a]"
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all font-semibold text-gray-900"
                   />
                 </div>
                 <div className="space-y-3">
@@ -920,8 +899,8 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                         }
                         className={`py-3 rounded-xl font-bold text-sm border transition-all ${
                           editForm.num_items === n
-                            ? "bg-[#22c55e] text-white border-[#22c55e] shadow-md shadow-green-500/10"
-                            : "bg-white border-gray-100 text-gray-500 hover:border-green-200"
+                            ? "bg-green-600 text-white border-green-600 shadow-sm"
+                            : "bg-white border-gray-100 text-gray-500 hover:border-green-300"
                         }`}
                       >
                         {n} Items
@@ -932,7 +911,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-50 bg-gray-50/50 flex items-center justify-end gap-3">
+            <div className="p-6 border-t border-gray-100 flex items-center justify-end gap-3">
               <button
                 onClick={() => setIsEditing(false)}
                 className="px-6 py-2.5 font-bold text-sm text-gray-400 hover:text-gray-600"
@@ -942,7 +921,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               <button
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit}
-                className="px-8 py-2.5 bg-[#22c55e] text-white rounded-xl font-bold text-sm hover:bg-[#16a34a] shadow-md shadow-green-500/10 disabled:opacity-50"
+                className="px-8 py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 shadow-sm disabled:opacity-50"
               >
                 {isSavingEdit ? "Saving..." : "Save Changes"}
               </button>
