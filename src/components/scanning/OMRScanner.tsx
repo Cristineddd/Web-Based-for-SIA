@@ -2563,22 +2563,23 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         <Card className="overflow-hidden">
           {/* 200-item: page selector */}
           {getTemplateType() === 200 && (
-            <div className="flex flex-col items-center gap-2 py-3 px-4 bg-emerald-800 text-white">
-              <p className="text-xs font-medium opacity-80 uppercase tracking-wider">Select page to scan</p>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-6 px-6 bg-white border-b border-gray-100">
                 <button
                   onClick={() => {
                     setScanPage(1);
                     setPage1Answers([]);
                     setPage1StudentId('');
                   }}
-                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                  className={`relative flex items-center gap-2 pb-3 pt-3 text-sm font-semibold transition-all ${
                     scanPage === 1
-                      ? 'bg-white text-emerald-800 shadow'
-                      : 'bg-white/20 text-white hover:bg-white/30'
+                      ? 'text-[#10B981]'
+                      : 'text-gray-400 hover:text-gray-600'
                   }`}
                 >
                   Page 1 · Q1–100
+                  {scanPage === 1 && (
+                    <span className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#10B981] rounded-full" />
+                  )}
                 </button>
                 <button
                   onClick={() => {
@@ -2587,21 +2588,20 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                     }
                     setScanPage(2);
                   }}
-                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                  className={`relative flex items-center gap-2 pb-3 pt-3 text-sm font-semibold transition-all ${
                     scanPage === 2
-                      ? 'bg-white text-emerald-800 shadow'
-                      : 'bg-white/20 text-white hover:bg-white/30'
+                      ? 'text-[#10B981]'
+                      : 'text-gray-400 hover:text-gray-600'
                   }`}
                 >
                   Page 2 · Q101–200
+                  {scanPage === 2 && page1Answers.length === 0 && (
+                    <span className="text-[11px] font-normal text-amber-500">(Page 1 not scanned)</span>
+                  )}
+                  {scanPage === 2 && (
+                    <span className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#10B981] rounded-full" />
+                  )}
                 </button>
-              </div>
-              <p className="text-xs opacity-70">
-                {scanPage === 1 ? 'Scanning Questions 1–100' : 'Scanning Questions 101–200'}
-                {scanPage === 2 && page1Answers.length === 0 && (
-                  <span className="ml-1 text-yellow-300">(Page 1 not yet scanned)</span>
-                )}
-              </p>
             </div>
           )}
           <div className="relative bg-black">
@@ -2636,34 +2636,17 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                       />
                     </div>
                   )}
-                  {/* Capture button overlay — large, inside the camera frame for easy tap */}
-                  <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-3 pointer-events-none">
-                    <div className="pointer-events-auto flex items-center gap-3">
-                      <button
-                        onClick={() => fileUploadRef.current?.click()}
-                        className="bg-white/95 hover:bg-white text-gray-700 font-bold text-sm px-5 py-2.5 rounded-full shadow-lg border-2 border-gray-300 flex items-center gap-2 transition-all active:scale-95"
-                      >
-                        📁 Upload
-                      </button>
-                      <button
-                        onClick={() => {
-                          console.log('[ManualCapture] User tapped manual capture button');
-                          captureAndProcess();
-                        }}
-                        className="bg-white/95 hover:bg-white text-emerald-800 font-bold text-sm px-5 py-2.5 rounded-full shadow-lg border-2 border-emerald-800/30 flex items-center gap-2 transition-all active:scale-95"
-                      >
-                        📷 Capture
-                      </button>
-                      <p className={`whitespace-nowrap text-white text-xs ${markersDetected ? 'bg-green-600/80' : 'bg-black/60'} px-3 py-1.5 rounded-full transition-colors duration-200`}>
-                        {label}
-                      </p>
-                    </div>
+                  {/* Status label overlay */}
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center pointer-events-none">
+                    <p className={`whitespace-nowrap text-white text-xs ${markersDetected ? 'bg-[#10B981]/90' : 'bg-black/60'} px-3 py-1.5 rounded-full transition-colors duration-200`}>
+                      {label}
+                    </p>
                   </div>
                 </>
               );
             })()}
           </div>
-          <div className="p-3 flex justify-end">
+          <div className="p-3 flex justify-center">
             <Button variant="outline" size="sm" onClick={stopCamera}>
               <X className="w-4 h-4 mr-1" />
               Cancel
@@ -2874,26 +2857,6 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                   <p className="text-sm text-rose-700 mt-1">{studentIdError}</p>
                   <p className="text-xs text-rose-500 mt-2">
                     You must correct the Student ID before saving. Edit the ID field below or discard and re-scan.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Multiple Answers Warning */}
-          {multipleAnswerQuestions.length > 0 && (
-            <Card className="p-4 border-amber-300 bg-amber-50 shadow-sm">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-amber-900">Multiple Answers Detected</h4>
-                  <p className="text-sm text-amber-800 mt-1">
-                    The following question(s) have more than one bubble shaded: <strong>
-                    {multipleAnswerQuestions.map(q => `#${q}`).join(', ')}
-                    </strong>
-                  </p>
-                  <p className="text-xs text-amber-600 mt-2">
-                    Only one answer per question is allowed. The system selected the darkest bubble, but please verify and correct if needed. Remind the student to shade only one bubble per question.
                   </p>
                 </div>
               </div>
