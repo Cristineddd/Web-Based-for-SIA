@@ -8,6 +8,7 @@ interface TemplateData {
   examName?: string;
   className?: string;
   examCode?: string;
+  courseCode?: string;
   answerKey?: string[]; // e.g. ['A','C','B', ...]
   institutionName?: string;
   logoUrl?: string;
@@ -66,6 +67,110 @@ function drawBubble(
   } else {
     doc.setFillColor(255, 255, 255);
     doc.circle(x, y, size * 0.5, "FD");
+  }
+}
+
+/**
+ * Draw a shading guidelines panel at (px, py) with the given width.
+ * Shows: correct fill, erasure correction, wrong examples, and reminders.
+ * Used by both full-page and mini-sheet templates (rotated 90° for side margins).
+ */
+function drawShadingGuide(
+  doc: jsPDF,
+  px: number,
+  py: number,
+  panelW: number,
+  bubbleSize: number,
+) {
+  // Adaptive layout: label column is 45% of width, bubbles fill the rest
+  const labelW = Math.min(24, panelW * 0.45);
+  const bStartX = px + labelW;
+  const remaining = panelW - labelW;
+  const bSpacing = Math.min(4.5, remaining / 5.5);
+  // Bubble radius scales down if spacing is tight (never larger than bubbleSize/2)
+  const bR = Math.min(bubbleSize * 0.5, bSpacing * 0.42);
+  const lineH = bR * 2 + 1.8;
+
+  const colLabels = ["A", "B", "C", "D", "E"];
+
+  const items: Array<{
+    label: string;
+    bubbles: Array<{ filled: boolean; partial?: boolean }>;
+  }> = [
+    { label: "Correct", bubbles: [{ filled: false }, { filled: true }, { filled: false }, { filled: false }, { filled: false }] },
+    { label: "Wrong", bubbles: [{ filled: false }, { filled: false, partial: true }, { filled: false }, { filled: false }, { filled: false }] },
+    { label: "Wrong", bubbles: [{ filled: true }, { filled: true }, { filled: false }, { filled: false }, { filled: false }] },
+    { label: "Erase OK", bubbles: [{ filled: false }, { filled: false }, { filled: false }, { filled: true }, { filled: false }] },
+  ];
+
+  const reminders = [
+    "Use No. 2 pencil or dark pen.",
+    "Fill bubble completely.",
+    "Erase stray marks fully.",
+  ];
+
+  let gy = py;
+
+  // Title
+  doc.setFontSize(5.5);
+  doc.setFont("helvetica", "bold");
+  doc.text("SHADING GUIDE", px + panelW / 2, gy, { align: "center" });
+  gy += 4;
+
+  // Thin rule
+  doc.setLineWidth(0.15);
+  doc.setDrawColor(0);
+  doc.line(px, gy, px + panelW, gy);
+  gy += 2;
+
+  // Column headers A B C D E
+  doc.setFontSize(5);
+  doc.setFont("helvetica", "bold");
+  for (let i = 0; i < 5; i++) {
+    doc.text(colLabels[i], bStartX + i * bSpacing, gy + 1.5, { align: "center" });
+  }
+  gy += 3.5;
+
+  // Example rows
+  for (const item of items) {
+    doc.setFontSize(4.8);
+    doc.setFont("helvetica", "normal");
+    doc.text(item.label, px, gy + bR + 0.3, { baseline: "middle" });
+
+    for (let i = 0; i < item.bubbles.length; i++) {
+      const bx = bStartX + i * bSpacing;
+      const by = gy + bR;
+      const b = item.bubbles[i];
+
+      doc.setDrawColor(0);
+      if (b.filled) {
+        doc.setFillColor(0, 0, 0);
+        doc.circle(bx, by, bR, "FD");
+      } else if (b.partial) {
+        // Empty outline with grey centre — represents a faint/partial mark
+        doc.setFillColor(255, 255, 255);
+        doc.circle(bx, by, bR, "FD");
+        doc.setFillColor(170, 170, 170);
+        doc.circle(bx, by, bR * 0.55, "F");
+      } else {
+        doc.setFillColor(255, 255, 255);
+        doc.circle(bx, by, bR, "FD");
+      }
+    }
+    gy += lineH;
+  }
+
+  gy += 1;
+  doc.setLineWidth(0.15);
+  doc.line(px, gy, px + panelW, gy);
+  gy += 2;
+
+  // Reminder bullets
+  doc.setFontSize(4.5);
+  doc.setFont("helvetica", "normal");
+  for (const r of reminders) {
+    doc.text(`\u2022 ${r}`, px, gy);
+    gy += 3.2;
   }
 }
 
@@ -221,9 +326,7 @@ function drawMiniSheet(
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     const centerX = startX + width / 2;
-    doc.text(`Exam Code: ${template.examCode}`, centerX, currentY, {
-      align: "center",
-    });
+    doc.text(`Exam Code: ${template.examCode}`, centerX, currentY, { align: "center" });
     currentY += 4;
   }
 
@@ -234,15 +337,25 @@ function drawMiniSheet(
   const fieldStartX = startX + margin;
   const fieldEndX = startX + width - margin;
   const usableW = fieldEndX - fieldStartX;
-  const nameEnd = fieldStartX + usableW * 0.65;
 
-  // Name field
-  doc.text("Name:", fieldStartX, currentY);
-  doc.line(fieldStartX + 11, currentY, nameEnd, currentY);
-
-  // Date field
-  doc.text("Date:", nameEnd + 3, currentY);
-  doc.line(nameEnd + 13, currentY, fieldEndX, currentY);
+  if (questionsPerSheet === 50) {
+    // 50-item: Name / Date / Course Code all on one line
+    const nameEnd50 = fieldStartX + usableW * 0.40;
+    const dateEnd50 = nameEnd50 + usableW * 0.22;
+    doc.text("Name:", fieldStartX, currentY);
+    doc.line(fieldStartX + 11, currentY, nameEnd50, currentY);
+    doc.text("Date:", nameEnd50 + 3, currentY);
+    doc.line(nameEnd50 + 13, currentY, dateEnd50, currentY);
+    doc.text("Course Code:", dateEnd50 + 3, currentY);
+    doc.line(dateEnd50 + 24, currentY, fieldEndX, currentY);
+  } else {
+    // 20-item: Name / Date only (Course Code is above shading guide in right panel)
+    const nameEnd = fieldStartX + usableW * 0.65;
+    doc.text("Name:", fieldStartX, currentY);
+    doc.line(fieldStartX + 11, currentY, nameEnd, currentY);
+    doc.text("Date:", nameEnd + 3, currentY);
+    doc.line(nameEnd + 13, currentY, fieldEndX, currentY);
+  }
 
   currentY += 4;
 
@@ -303,6 +416,25 @@ function drawMiniSheet(
   doc.setLineWidth(0.5);
   doc.rect(idBorderXMini, idTopY, idBorderWMini, idBottomYMini - idTopY + 1);
   doc.setLineWidth(0.2);
+
+  // Shading guide — placed to the right of the ID section
+  const miniGuideX = idBorderXMini + idBorderWMini + 4;
+  const miniGuideW = startX + width - margin - miniGuideX;
+  if (miniGuideW >= 20) {
+    let guideStartY = idTopY + 4;
+    if (questionsPerSheet !== 50) {
+      // 20-item: show Course Code fill-in above the shading guide
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      const ccLabelW = doc.getTextWidth("Course Code:");
+      doc.text("Course Code:", miniGuideX, idTopY + 4);
+      doc.setLineWidth(0.2);
+      doc.line(miniGuideX + ccLabelW + 1, idTopY + 4, miniGuideX + miniGuideW, idTopY + 4);
+      guideStartY = idTopY + 8;
+    }
+
+    drawShadingGuide(doc, miniGuideX, guideStartY, miniGuideW, 2.5);
+  }
 
   currentY = idBottomYMini + 3;
 
@@ -532,24 +664,25 @@ function drawFullSheet(
     currentY += markerSize + 2;
   }
 
-  // Exam Code
+  // Exam Code (if provided)
   if (template.examCode) {
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
-    doc.text(`Exam Code: ${template.examCode}`, startX + width / 2, currentY, {
-      align: "center",
-    });
+    doc.text(`Exam Code: ${template.examCode}`, startX + width / 2, currentY, { align: "center" });
     currentY += 4;
   }
 
-  // Name and Date fields
+  // Name / Date / Course Code on one line
   doc.setFontSize(7);
   doc.setFont("helvetica", "bold");
-  const nameEnd = lx + usableW * 0.65;
+  const nameEnd = lx + usableW * 0.40;
+  const dateEnd = nameEnd + usableW * 0.22;
   doc.text("Name:", lx, currentY);
   doc.line(lx + 11, currentY, nameEnd, currentY);
   doc.text("Date:", nameEnd + 3, currentY);
-  doc.line(nameEnd + 13, currentY, rx, currentY);
+  doc.line(nameEnd + 13, currentY, dateEnd, currentY);
+  doc.text("Course Code:", dateEnd + 3, currentY);
+  doc.line(dateEnd + 23, currentY, rx, currentY);
   currentY += 4;
 
   // Student ZipGrade ID section - 9 columns consistent with mini sheets
@@ -594,6 +727,11 @@ function drawFullSheet(
   doc.setLineWidth(0.4);
   doc.rect(idBorderX, idTopY - 1, idBorderW, idBottomY - idTopY + 2);
   doc.setLineWidth(0.2);
+
+  // Shading guide — placed to the right of the ID section, aligned with ID top
+  const guideX = idBorderX + idBorderW + 4;
+  const guideW = rx - guideX;
+  drawShadingGuide(doc, guideX, idTopY + 8, guideW, 3.0);
 
   currentY = idBottomY + 3;
 
@@ -769,24 +907,25 @@ function drawFullSheet150(
     currentY += markerSize + 2;
   }
 
-  // Exam Code
+  // Exam Code (if provided)
   if (template.examCode) {
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
-    doc.text(`Exam Code: ${template.examCode}`, startX + width / 2, currentY, {
-      align: "center",
-    });
+    doc.text(`Exam Code: ${template.examCode}`, startX + width / 2, currentY, { align: "center" });
     currentY += 4;
   }
 
-  // Name and Date fields
+  // Name / Date / Course Code on one line
   doc.setFontSize(7);
   doc.setFont("helvetica", "bold");
-  const nameEnd = lx + usableW * 0.65;
+  const nameEnd = lx + usableW * 0.40;
+  const dateEnd = nameEnd + usableW * 0.22;
   doc.text("Name:", lx, currentY);
   doc.line(lx + 11, currentY, nameEnd, currentY);
   doc.text("Date:", nameEnd + 3, currentY);
-  doc.line(nameEnd + 13, currentY, rx, currentY);
+  doc.line(nameEnd + 13, currentY, dateEnd, currentY);
+  doc.text("Course Code:", dateEnd + 3, currentY);
+  doc.line(dateEnd + 23, currentY, rx, currentY);
   currentY += 4;
 
   // Student ZipGrade ID - 9 columns consistent with mini sheets
@@ -831,6 +970,11 @@ function drawFullSheet150(
   doc.setLineWidth(0.4);
   doc.rect(idBorderX, idTopY - 1, idBorderW, idBottomY - idTopY + 2);
   doc.setLineWidth(0.2);
+
+  // Shading guide — placed to the right of the ID section, aligned with ID top
+  const guideX = idBorderX + idBorderW + 4;
+  const guideW = rx - guideX;
+  drawShadingGuide(doc, guideX, idTopY + 9, guideW, 3.0);
 
   currentY = idBottomY + 3;
 

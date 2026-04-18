@@ -25,6 +25,7 @@ import {
   GraduationCap,
   Archive,
   Users,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -194,12 +195,14 @@ export default function ClassManagement() {
 
   return (
     <div className="page-container">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
             Classes
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Manage your classes</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Create and manage your classes and students.
+          </p>
         </div>
         <div className="flex w-full sm:w-auto justify-end gap-3">
           <Button
@@ -244,91 +247,103 @@ export default function ClassManagement() {
       </div>
 
       {!loading && filteredClasses.length === 0 ? (
-        <div className="text-center py-12">
-          <GraduationCap className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">
-            {search
-              ? "No classes found matching your search"
-              : "No classes yet"}
+        <div className="flex flex-col items-center justify-center py-24 bg-white border border-dashed border-gray-200 rounded-2xl">
+          <GraduationCap className="w-16 h-16 text-gray-200 mb-4" />
+          <p className="text-gray-500 text-lg font-medium">
+            {search ? "No classes match your search" : "No classes created yet"}
           </p>
+          {!search && (
+            <Button
+              variant="link"
+              className="mt-2 text-[#22c55e] hover:text-[#16a34a] font-semibold"
+              onClick={() => setShowAddDialog(true)}
+            >
+              Start by creating your first class
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClasses.map((classItem) => (
             <Card
               key={classItem.id}
-              className="group bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden flex flex-col h-full rounded-2xl border-b-4 border-b-green-500/10 hover:border-b-green-500/40"
+              className="group bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden flex flex-col h-full rounded-2xl border-b-4 border-b-green-500/10 hover:border-b-green-500/40 relative"
               onClick={() => {
                 router.push(`/classes/edit/${classItem.id}`);
               }}
             >
               <CardContent className="p-6 flex flex-col h-full">
+                {/* Top row: icon + year badge */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-green-100 transition-colors">
                     <GraduationCap className="w-6 h-6 text-green-600" />
                   </div>
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleArchive(classItem.id);
-                    }}
-                    className="p-2.5 rounded-lg text-gray-600 hover:text-yellow-600 hover:bg-yellow-50 transition-all duration-200"
-                    title="Archive Class"
-                  >
-                    <Archive className="w-6 h-6" />
-                  </div>
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-bold text-lg text-gray-900 group-hover:text-green-700 transition-colors">
-                      {classItem.class_name}
-                    </h3>
-                    {classItem.year && (
-                      <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                        Year {classItem.year}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 font-medium">
-                    {classItem.course_subject}
-                  </p>
-                  {classItem.section_block && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Section: {classItem.section_block}
-                    </p>
+                  {classItem.year && (
+                    <div className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-[10px] font-bold uppercase tracking-wider border border-green-100">
+                      Year {classItem.year}
+                    </div>
                   )}
                 </div>
 
+                {/* Body */}
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg text-gray-900 group-hover:text-green-700 transition-colors line-clamp-1 mb-1">
+                    {classItem.class_name}
+                  </h3>
+                  <p className="text-sm text-gray-500 font-medium line-clamp-1">
+                    {classItem.course_subject}
+                  </p>
+
+                  <div className="mt-4 flex flex-col gap-2">
+                    {classItem.section_block && (
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="text-sm font-bold opacity-30">#</span>
+                        <span className="text-xs font-mono font-bold tracking-tight text-gray-600">
+                          {classItem.section_block}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <Calendar className="w-3.5 h-3.5 opacity-60" />
+                      <span className="text-[11px] font-bold">
+                        {classItem.created_at
+                          ? new Date(classItem.created_at).toLocaleDateString("en-US", {
+                              month: "short", day: "numeric", year: "numeric",
+                            })
+                          : "---"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer: students count + archive button */}
                 <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                       <Users className="w-4 h-4 text-blue-600" />
                     </div>
-                    <span className="text-sm font-semibold text-gray-700">
+                    <span className="text-xs font-bold text-gray-700">
                       {classItem.students.length}{" "}
-                      <span className="text-xs font-normal text-gray-400">
+                      <span className="text-[10px] font-normal text-gray-400 uppercase tracking-tight">
                         Students
                       </span>
                     </span>
                   </div>
 
-                  <div className="text-right">
-                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-tight">
-                      Created
-                    </p>
-                    <p className="text-[11px] text-gray-500 font-medium">
-                      {classItem.created_at
-                        ? new Date(classItem.created_at).toLocaleDateString(
-                            "en-US",
-                            {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            },
-                          )
-                        : "---"}
-                    </p>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleArchive(classItem.id);
+                      }}
+                      title="Archive Class"
+                    >
+                      <Archive className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               </CardContent>

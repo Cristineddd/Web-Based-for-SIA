@@ -1,627 +1,640 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  FileText,
-  Search,
-  ChevronUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  Users
-} from 'lucide-react';
-import { getExamById, Exam } from '@/services/examService';
-import { AnswerKeyService } from '@/services/answerKeyService';
-import { ScanningService } from '@/services/scanningService';
-import { getClassById, Class } from '@/services/classService';
-import { AnswerChoice, ScannedResult } from '@/types/scanning';
+import { FileText, Loader2, Mail, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { BackButton } from '@/components/ui/BackButton';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useAuth } from '@/contexts/AuthContext';
+import { getClassById, getClasses, type Class } from '@/services/classService';
+import { getExamById, getExams, type Exam } from '@/services/examService';
+import { ScanningService } from '@/services/scanningService';
+import type { ScannedResult } from '@/types/scanning';
 
 interface ReviewPapersProps {
   params: { id: string };
+  embedded?: boolean;
 }
 
-interface PaperWithDetails extends ScannedResult {
+interface StudentResultRow {
+  studentId: string;
   studentName: string;
+  className: string;
+  course: string;
+  section: string;
+  score: number;
+  totalQuestions: number;
   percentage: number;
+  status: 'Passed' | 'Failed';
   letterGrade: string;
+  email?: string;
+  scannedDate: string;
 }
 
-type SortField = 'studentId' | 'studentName' | 'score' | 'percentage' | 'scannedAt';
-type SortDirection = 'asc' | 'desc';
+const PASSING_PERCENTAGE = 75;
 
-const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+function calculateLetterGrade(percentage: number): string {
+  if (percentage >= 90) return 'A';
+  if (percentage >= 85) return 'A-';
+  if (percentage >= 80) return 'B+';
+  if (percentage >= 75) return 'B';
+  if (percentage >= 70) return 'C+';
+  if (percentage >= 65) return 'C';
+  if (percentage >= 60) return 'D';
+  return 'F';
+}
 
-export default function ReviewPapersPage({ params }: ReviewPapersProps) {
-  const [exam, setExam] = useState<Exam | null>(null);
-  const [papers, setPapers] = useState<PaperWithDetails[]>([]);
-  const [answerKey, setAnswerKey] = useState<AnswerChoice[]>([]);
-  const [loading, setLoading] = useState(true);
+function normalizeDate(value?: string): string {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function dedupeLatestByStudent(results: ScannedResult[]): ScannedResult[] {
+  const sorted = [...results].sort((a, b) => {
+    const tsA = new Date(a.scannedAt || 0).getTime();
+    const tsB = new Date(b.scannedAt || 0).getTime();
+    return tsB - tsA;
+  });
+
+  const seen = new Set<string>();
+  const deduped: ScannedResult[] = [];
+
+  for (const result of sorted) {
+    if (seen.has(result.studentId)) continue;
+    seen.add(result.studentId);
+    deduped.push(result);
+  }
+
+  return deduped;
+}
+
+export default function ReviewPapersPage({ params, embedded = false }: ReviewPapersProps) {
+  const { user } = useAuth();
   const examId = params.id;
 
-  // Search, Sort, Pagination state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState<SortField>('scannedAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [loading, setLoading] = useState(true);
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [sendingMode, setSendingMode] = useState<'selected' | 'all' | null>(null);
 
-  // Expanded row for answer comparison
-  const [expandedPaperId, setExpandedPaperId] = useState<string | null>(null);
+  const [availableExams, setAvailableExams] = useState<Exam[]>([]);
+  const [availableClasses, setAvailableClasses] = useState<Class[]>([]);
+  const [activeExam, setActiveExam] = useState<Exam | null>(null);
+  const [rows, setRows] = useState<StudentResultRow[]>([]);
 
-  const calculateLetterGrade = (percentage: number): string => {
-    if (percentage >= 90) return 'A';
-    if (percentage >= 85) return 'A-';
-    if (percentage >= 80) return 'B+';
-    if (percentage >= 75) return 'B';
-    if (percentage >= 70) return 'C+';
-    if (percentage >= 65) return 'C';
-    if (percentage >= 60) return 'D';
-    return 'F';
-  };
-
-  const getGradeColor = (grade: string): string => {
-    if (grade.startsWith('A')) return 'text-green-700 bg-green-100';
-    if (grade.startsWith('B')) return 'text-lime-700 bg-lime-100';
-    if (grade.startsWith('C')) return 'text-yellow-700 bg-yellow-100';
-    if (grade.startsWith('D')) return 'text-orange-700 bg-orange-100';
-    return 'text-red-700 bg-red-100';
-  };
-
-  const getStatusIndicator = (percentage: number) => {
-    if (percentage >= 75) {
-      return { icon: CheckCircle, color: 'text-green-500', label: 'Passed' };
-    } else if (percentage >= 60) {
-      return { icon: AlertTriangle, color: 'text-yellow-500', label: 'Needs Improvement' };
-    } else {
-      return { icon: XCircle, color: 'text-red-500', label: 'Failed' };
-    }
-  };
+  const [selectedExamId, setSelectedExamId] = useState(examId);
+  const [selectedCourse, setSelectedCourse] = useState('all');
+  const [selectedSection, setSelectedSection] = useState('all');
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const fetchData = async () => {
+    let isMounted = true;
+
+    const loadBootstrapData = async () => {
+      setLoading(true);
       try {
-        const examData = await getExamById(examId);
-        if (!examData) {
-          toast.error('Exam not found');
-          setLoading(false);
+        const initialExam = await getExamById(examId);
+        if (!initialExam) {
+          if (isMounted) {
+            setActiveExam(null);
+            setAvailableExams([]);
+          }
           return;
         }
-        setExam(examData);
 
-        const akResult = await AnswerKeyService.getAnswerKeyByExamId(examId);
-        if (akResult.success && akResult.data) {
-          setAnswerKey(akResult.data.answers);
+        if (!user?.id) {
+          let singleClassList: Class[] = [];
+          if (initialExam.classId) {
+            const cls = await getClassById(initialExam.classId);
+            if (cls) singleClassList = [cls];
+          }
+
+          if (isMounted) {
+            setAvailableExams([initialExam]);
+            setAvailableClasses(singleClassList);
+            setSelectedExamId(initialExam.id);
+            setActiveExam(initialExam);
+          }
+          return;
         }
 
-        let cls: Class | null = null;
-        if ((examData as any).classId) {
-          cls = await getClassById((examData as any).classId);
-        }
+        const [allExams, allClasses] = await Promise.all([
+          getExams(user.id),
+          getClasses(user.id),
+        ]);
 
-        const scannedResult = await ScanningService.getScannedResultsByExamId(examId);
-        if (scannedResult.success && scannedResult.data) {
-          const papersWithDetails: PaperWithDetails[] = scannedResult.data
-            .filter(r => !r.isNullId)
-            .map(result => {
-              let studentName = result.studentId;
-              if (cls) {
-                const student = cls.students.find(s => s.student_id === result.studentId);
-                if (student) {
-                  studentName = `${student.last_name}, ${student.first_name}`;
-                }
-              }
-              const percentage = result.totalQuestions > 0
-                ? Math.round((result.score / result.totalQuestions) * 100)
-                : 0;
-              return {
-                ...result,
-                studentName,
-                percentage,
-                letterGrade: calculateLetterGrade(percentage),
-              };
-            });
-          setPapers(papersWithDetails);
+        const examMap = new Map<string, Exam>();
+        examMap.set(initialExam.id, initialExam);
+        allExams.forEach((exam) => examMap.set(exam.id, exam));
+
+        const mergedExams = Array.from(examMap.values()).sort((a, b) =>
+          a.title.localeCompare(b.title),
+        );
+
+        if (isMounted) {
+          setAvailableExams(mergedExams);
+          setAvailableClasses(allClasses);
+          setSelectedExamId((prev) => prev || initialExam.id);
+          setActiveExam(initialExam);
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
-        toast.error('Failed to load exam data');
+        console.error('Failed to load review paper data:', error);
+        if (isMounted) {
+          toast.error('Failed to load review paper data');
+          setAvailableExams([]);
+          setAvailableClasses([]);
+          setActiveExam(null);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
-    fetchData();
-  }, [examId]);
 
-  // Filtered and sorted papers
-  const filteredAndSortedPapers = useMemo(() => {
-    let result = [...papers];
+    loadBootstrapData();
 
-    // Filter by search query (Student ID or Name)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(p => {
-        const studentId = p.studentId.toLowerCase();
-        const studentName = p.studentName.toLowerCase();
+    return () => {
+      isMounted = false;
+    };
+  }, [examId, user?.id]);
 
-        // Check if the entire query matches any field
-        if (studentId.includes(query) || studentName.includes(query)) {
-          return true;
-        }
-
-        // Split by spaces and check if ALL terms match at least one field
-        const terms = query.split(/\s+/).filter(Boolean);
-        if (terms.length > 1) {
-          return terms.every(term =>
-            studentId.includes(term) || studentName.includes(term)
-          );
-        }
-
-        return false;
-      });
-    }
-
-    // Sort
-    result.sort((a, b) => {
-      let comparison = 0;
-      switch (sortField) {
-        case 'studentId':
-          comparison = a.studentId.localeCompare(b.studentId);
-          break;
-        case 'studentName':
-          comparison = a.studentName.localeCompare(b.studentName);
-          break;
-        case 'score':
-          comparison = a.score - b.score;
-          break;
-        case 'percentage':
-          comparison = a.percentage - b.percentage;
-          break;
-        case 'scannedAt': {
-          const dateA = a.scannedAt ? new Date(a.scannedAt).getTime() : 0;
-          const dateB = b.scannedAt ? new Date(b.scannedAt).getTime() : 0;
-          comparison = dateA - dateB;
-          break;
-        }
+  const resolveClassForExam = useCallback(
+    async (exam: Exam): Promise<Class | null> => {
+      if (exam.classId) {
+        const byId = availableClasses.find((cls) => cls.id === exam.classId);
+        if (byId) return byId;
+        const fetched = await getClassById(exam.classId);
+        if (fetched) return fetched;
       }
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
 
-    return result;
-  }, [papers, searchQuery, sortField, sortDirection]);
+      if (exam.className) {
+        const byName = availableClasses.find((cls) => cls.class_name === exam.className);
+        if (byName) return byName;
+      }
 
-  // Pagination
-  const totalPages = Math.ceil(filteredAndSortedPapers.length / itemsPerPage);
-  const paginatedPapers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredAndSortedPapers.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredAndSortedPapers, currentPage, itemsPerPage]);
+      return null;
+    },
+    [availableClasses],
+  );
 
-  // Reset to page 1 when search or items per page changes
+  const loadRowsForExam = useCallback(
+    async (targetExamId: string) => {
+      setLoadingRows(true);
+      try {
+        const examFromList = availableExams.find((exam) => exam.id === targetExamId);
+        const targetExam = examFromList || (await getExamById(targetExamId));
+
+        if (!targetExam) {
+          setActiveExam(null);
+          setRows([]);
+          return;
+        }
+
+        setActiveExam(targetExam);
+        const cls = await resolveClassForExam(targetExam);
+        const rosterMap = new Map((cls?.students || []).map((student) => [student.student_id, student]));
+
+        const scannedResult = await ScanningService.getScannedResultsByExamId(targetExam.id);
+        if (!scannedResult.success || !scannedResult.data) {
+          throw new Error(scannedResult.error || 'Failed to fetch scanned results');
+        }
+
+        const latestResults = dedupeLatestByStudent(
+          scannedResult.data.filter((result) => !result.isNullId),
+        );
+
+        const nextRows = latestResults
+          .map((result) => {
+            const student = rosterMap.get(result.studentId);
+            const percentage =
+              result.totalQuestions > 0
+                ? Math.round((result.score / result.totalQuestions) * 100)
+                : 0;
+
+            return {
+              studentId: result.studentId,
+              studentName: student
+                ? `${student.last_name}, ${student.first_name}`
+                : result.studentId,
+              className: cls?.class_name || targetExam.className || 'N/A',
+              course: cls?.course_subject || targetExam.subject || 'N/A',
+              section: student?.section || cls?.section_block || 'N/A',
+              score: result.score,
+              totalQuestions: result.totalQuestions,
+              percentage,
+              status: percentage >= PASSING_PERCENTAGE ? 'Passed' : 'Failed',
+              letterGrade: calculateLetterGrade(percentage),
+              email: student?.email,
+              scannedDate: normalizeDate(result.scannedAt),
+            } as StudentResultRow;
+          })
+          .sort((a, b) => a.studentName.localeCompare(b.studentName));
+
+        setRows(nextRows);
+        setSelectedStudentIds(new Set());
+        setSelectedCourse('all');
+        setSelectedSection('all');
+      } catch (error) {
+        console.error('Failed to load exam review rows:', error);
+        toast.error('Failed to load student results');
+        setRows([]);
+        setSelectedStudentIds(new Set());
+      } finally {
+        setLoadingRows(false);
+      }
+    },
+    [availableExams, resolveClassForExam],
+  );
+
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, itemsPerPage]);
+    if (!selectedExamId) return;
+    loadRowsForExam(selectedExamId);
+  }, [selectedExamId, loadRowsForExam]);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
+  const courseOptions = useMemo(() => {
+    return Array.from(new Set(rows.map((row) => row.course))).sort();
+  }, [rows]);
 
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ChevronUp className="w-4 h-4 text-gray-300" />;
-    return sortDirection === 'asc'
-      ? <ChevronUp className="w-4 h-4 text-primary" />
-      : <ChevronDown className="w-4 h-4 text-primary" />;
-  };
+  const sectionOptions = useMemo(() => {
+    return Array.from(new Set(rows.map((row) => row.section))).sort();
+  }, [rows]);
 
-  const formatDate = (dateStr: string | undefined) => {
-    if (!dateStr) return '-';
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+  const filteredRows = useMemo(() => {
+    return rows
+      .filter((row) => (selectedCourse === 'all' ? true : row.course === selectedCourse))
+      .filter((row) => (selectedSection === 'all' ? true : row.section === selectedSection));
+  }, [rows, selectedCourse, selectedSection]);
+
+  const selectedRows = useMemo(() => {
+    return filteredRows.filter((row) => selectedStudentIds.has(row.studentId));
+  }, [filteredRows, selectedStudentIds]);
+
+  const headerCheckboxState: boolean | 'indeterminate' = useMemo(() => {
+    if (filteredRows.length === 0) return false;
+    const selectedCount = filteredRows.filter((row) => selectedStudentIds.has(row.studentId)).length;
+    if (selectedCount === 0) return false;
+    if (selectedCount === filteredRows.length) return true;
+    return 'indeterminate';
+  }, [filteredRows, selectedStudentIds]);
+
+  const totalPassed = useMemo(
+    () => rows.filter((row) => row.status === 'Passed').length,
+    [rows],
+  );
+
+  const handleToggleStudent = useCallback((studentId: string, checked: boolean) => {
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(studentId);
+      else next.delete(studentId);
+      return next;
     });
-  };
+  }, []);
 
-  const toggleExpanded = (paperId: string) => {
-    setExpandedPaperId(prev => prev === paperId ? null : paperId);
-  };
+  const handleToggleSelectAll = useCallback(
+    (checked: boolean) => {
+      setSelectedStudentIds((prev) => {
+        const next = new Set(prev);
+        filteredRows.forEach((row) => {
+          if (checked) next.add(row.studentId);
+          else next.delete(row.studentId);
+        });
+        return next;
+      });
+    },
+    [filteredRows],
+  );
 
-  // Answer Comparison Component - Simple grid layout
-  const AnswerComparisonGrid = ({ paper }: { paper: PaperWithDetails }) => {
-    const totalQuestions = paper.totalQuestions;
-    const studentAnswers = paper.answers || [];
-
-    // Split into groups of 50 for 100-item exams
-    const hasMultipleSections = totalQuestions > 50;
-    const firstHalf = Math.min(50, totalQuestions);
-    const secondHalf = totalQuestions > 50 ? totalQuestions - 50 : 0;
-
-    const renderQuestionBox = (questionIndex: number, displayNum: number) => {
-      const studentAnswer = studentAnswers[questionIndex] || null;
-      const correctAnswer = answerKey[questionIndex] || null;
-      const isCorrect = studentAnswer && correctAnswer && studentAnswer === correctAnswer;
-      const isUnanswered = !studentAnswer;
-
-      let borderColor = 'border-red-500';
-      let bgColor = 'bg-red-50';
-      let textColor = 'text-red-600';
-
-      if (isUnanswered) {
-        borderColor = 'border-gray-300';
-        bgColor = 'bg-gray-100';
-        textColor = 'text-gray-400';
-      } else if (isCorrect) {
-        borderColor = 'border-green-500';
-        bgColor = 'bg-green-50';
-        textColor = 'text-green-600';
+  const sendScores = useCallback(
+    async (studentsToSend: StudentResultRow[], mode: 'selected' | 'all') => {
+      if (!activeExam) {
+        toast.error('No exam selected');
+        return;
       }
 
-      return (
-        <div key={questionIndex} className="flex flex-col items-center">
-          <div className="text-[10px] text-muted-foreground mb-1">{displayNum}</div>
-          <div
-            className={`w-9 h-9 rounded-md border-2 ${borderColor} ${bgColor} flex items-center justify-center`}
-          >
-            <span className={`text-base font-bold ${textColor}`}>
-              {studentAnswer || '-'}
-            </span>
-          </div>
-          {/* Show correct answer below if incorrect */}
-          {!isCorrect && !isUnanswered && correctAnswer && (
-            <div className="text-[10px] text-green-600 mt-0.5 font-medium">
-              {correctAnswer}
-            </div>
-          )}
-          {/* Show correct answer for unanswered */}
-          {isUnanswered && correctAnswer && (
-            <div className="text-[10px] text-gray-500 mt-0.5">
-              {correctAnswer}
-            </div>
-          )}
-        </div>
-      );
-    };
+      if (studentsToSend.length === 0) {
+        toast.info('No students available to send');
+        return;
+      }
 
-    return (
-      <div className="mt-4 pt-4 border-t" onClick={(e) => e.stopPropagation()}>
-        {/* Legend */}
-        <div className="flex flex-wrap gap-4 mb-4 text-xs">
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded border-2 border-green-500 bg-green-50" />
-            <span>Correct</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded border-2 border-red-500 bg-red-50" />
-            <span>Incorrect</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded border-2 border-gray-300 bg-gray-100" />
-            <span>Unanswered</span>
-          </div>
-        </div>
+      setSendingMode(mode);
+      try {
+        const payload = {
+          className: studentsToSend[0]?.className || activeExam.className || 'General',
+          examTitle: activeExam.title,
+          subject: activeExam.subject,
+          passingThreshold: PASSING_PERCENTAGE,
+          instructorName: user?.displayName || undefined,
+          instructorEmail: user?.email || undefined,
+          students: studentsToSend.map((row) => ({
+            studentId: row.studentId,
+            studentName: row.studentName,
+            email: row.email || `${row.studentId}@gordoncollege.edu.ph`,
+            score: row.score,
+            totalQuestions: row.totalQuestions,
+            percentage: row.percentage,
+            grade: row.letterGrade,
+            date: row.scannedDate,
+          })),
+        };
 
-        {/* Questions 1-50 */}
-        {hasMultipleSections && (
-          <h5 className="text-xs font-semibold text-muted-foreground mb-2">Questions 1-50</h5>
-        )}
-        <div className="grid grid-cols-10 gap-2 mb-4">
-          {Array.from({ length: firstHalf }, (_, i) => renderQuestionBox(i, i + 1))}
-        </div>
+        const response = await fetch('/api/send-results', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-        {/* Questions 51-100 */}
-        {secondHalf > 0 && (
-          <>
-            <h5 className="text-xs font-semibold text-muted-foreground mb-2 mt-4">Questions 51-100</h5>
-            <div className="grid grid-cols-10 gap-2">
-              {Array.from({ length: secondHalf }, (_, i) => renderQuestionBox(50 + i, 51 + i))}
-            </div>
-          </>
-        )}
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Failed to send scores');
+        }
 
-        {/* Summary */}
-        <div className="mt-4 flex flex-wrap gap-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">Correct: </span>
-            <span className="font-semibold text-green-600">{paper.score}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Incorrect: </span>
-            <span className="font-semibold text-red-600">
-              {studentAnswers.filter((a, i) => a && answerKey[i] && a !== answerKey[i]).length}
-            </span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Unanswered: </span>
-            <span className="font-semibold text-gray-600">
-              {totalQuestions - studentAnswers.filter(a => a).length}
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  };
+        const sent = Number(data.sent || 0);
+        const failed = Number(data.failed || 0);
+        const total = Number(data.total || studentsToSend.length);
+
+        if (failed > 0) {
+          toast.error(`Sent ${sent}/${total}. ${failed} email(s) failed.`);
+        } else {
+          toast.success(`Sent ${sent}/${total} score email(s).`);
+        }
+      } catch (error) {
+        console.error('Failed sending scores:', error);
+        toast.error('Failed to send scores');
+      } finally {
+        setSendingMode(null);
+      }
+    },
+    [activeExam, user?.displayName, user?.email],
+  );
+
+  const handleSendSelected = useCallback(async () => {
+    if (selectedRows.length === 0) {
+      toast.info('Select at least one student first');
+      return;
+    }
+    await sendScores(selectedRows, 'selected');
+  }, [selectedRows, sendScores]);
+
+  const handleSendAll = useCallback(async () => {
+    if (filteredRows.length === 0) {
+      toast.info('No students in the current filters');
+      return;
+    }
+    await sendScores(filteredRows, 'all');
+  }, [filteredRows, sendScores]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-muted-foreground">Loading papers...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+          <p className="text-muted-foreground">Loading review papers...</p>
         </div>
       </div>
     );
   }
 
-  if (!exam) {
+  if (!activeExam) {
     return (
       <div className="space-y-6">
-        <BackButton href="/exams" asLink />
+        {!embedded && <BackButton href="/exams" asLink />}
         <p className="text-foreground">Exam not found</p>
       </div>
     );
   }
 
-  const avgScore = papers.length > 0
-    ? Math.round(papers.reduce((sum, p) => sum + p.percentage, 0) / papers.length)
-    : 0;
-  const highestScore = papers.length > 0 ? Math.max(...papers.map(p => p.percentage)) : 0;
-  const lowestScore = papers.length > 0 ? Math.min(...papers.map(p => p.percentage)) : 0;
-  const passedCount = papers.filter(p => p.percentage >= 75).length;
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 sm:gap-4">
-        <BackButton href={`/exams/${examId}`} asLink />
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText className="w-6 h-6 flex-shrink-0 text-green-600" />
-            Review Papers
-          </h1>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">Exam: {exam.title}</p>
+      {!embedded && (
+        <div className="flex items-center gap-3 sm:gap-4">
+          <BackButton href={`/exams/${examId}`} asLink />
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <FileText className="w-6 h-6 flex-shrink-0 text-green-600" />
+              Review Papers
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">Exam: {activeExam.title}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="border-green-100">
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-500">Student Results</p>
+            <p className="text-2xl font-bold text-green-700">{rows.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-green-100">
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-500">Passed ({PASSING_PERCENTAGE}%+)</p>
+            <p className="text-2xl font-bold text-green-700">{totalPassed}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-green-100">
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-500">Selected to Send</p>
+            <p className="text-2xl font-bold text-green-700">{selectedRows.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border border-green-100 bg-white shadow-sm">
+        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Exam</p>
+            <Select value={selectedExamId} onValueChange={setSelectedExamId}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select exam" />
+              </SelectTrigger>
+              <SelectContent className="bg-white">
+                {availableExams.map((exam) => (
+                  <SelectItem key={exam.id} value={exam.id}>
+                    {exam.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Section</p>
+            <Select value={selectedSection} onValueChange={setSelectedSection}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="All Sections" />
+              </SelectTrigger>
+              <SelectContent className="bg-white">
+                <SelectItem value="all">All Sections</SelectItem>
+                {sectionOptions.map((section) => (
+                  <SelectItem key={section} value={section}>
+                    {section}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Course</p>
+            <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="All Courses" />
+              </SelectTrigger>
+              <SelectContent className="bg-white">
+                <SelectItem value="all">All Courses</SelectItem>
+                {courseOptions.map((course) => (
+                  <SelectItem key={course} value={course}>
+                    {course}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Badge variant="outline" className="border-green-200 text-green-700">
+          {filteredRows.length} student(s) in current filters
+        </Badge>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            className="border-green-200 text-green-700"
+            onClick={handleSendSelected}
+            disabled={sendingMode !== null || loadingRows || selectedRows.length === 0}
+          >
+            {sendingMode === 'selected' ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Sending Scores...
+              </>
+            ) : (
+              <>
+                <Mail className="w-4 h-4 mr-2" />
+                Send Scores
+              </>
+            )}
+          </Button>
+          <Button
+            className="bg-green-700 hover:bg-green-800"
+            onClick={handleSendAll}
+            disabled={sendingMode !== null || loadingRows || filteredRows.length === 0}
+          >
+            {sendingMode === 'all' ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Sending All...
+              </>
+            ) : (
+              <>
+                <Users className="w-4 h-4 mr-2" />
+                Send All
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-xs font-semibold text-muted-foreground mb-1">Total Scanned</p>
-          <p className="text-xl sm:text-2xl font-bold text-primary">{papers.length}</p>
-        </Card>
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-xs font-semibold text-muted-foreground mb-1">Passed (≥75%)</p>
-          <p className="text-xl sm:text-2xl font-bold text-green-600">{passedCount}</p>
-        </Card>
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-xs font-semibold text-muted-foreground mb-1">Average</p>
-          <p className="text-xl sm:text-2xl font-bold text-primary">{avgScore}%</p>
-        </Card>
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-xs font-semibold text-muted-foreground mb-1">Highest</p>
-          <p className="text-xl sm:text-2xl font-bold text-green-600">{highestScore}%</p>
-        </Card>
-        <Card className="p-3 sm:p-4 border">
-          <p className="text-xs font-semibold text-muted-foreground mb-1">Lowest</p>
-          <p className="text-xl sm:text-2xl font-bold text-red-600">{lowestScore}%</p>
-        </Card>
-      </div>
-
-      {/* Results List */}
       <Card className="border">
-        {/* Search and Controls */}
-        <div className="p-4 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search by Student ID or Name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+        {loadingRows ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+            <p className="text-muted-foreground">Loading student results...</p>
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Show:</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(Number(e.target.value))}
-              className="border rounded px-2 py-1 text-sm bg-background"
-            >
-              {ITEMS_PER_PAGE_OPTIONS.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-            <span className="text-muted-foreground">per page</span>
-          </div>
-        </div>
-
-        {papers.length === 0 ? (
+        ) : rows.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground font-medium">No papers scanned yet</p>
             <p className="text-sm text-muted-foreground mt-1">
               Scan answer sheets from the exam page to see results here.
             </p>
-            <Link href={`/exams/${examId}/scanning`}>
+            <Link href={`/exams/${selectedExamId}/scanning`}>
               <Button className="mt-4" variant="outline">Go to Scanner</Button>
             </Link>
           </div>
+        ) : filteredRows.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground font-medium">No students match the current filters.</p>
+          </div>
         ) : (
-          <>
-            {/* Table Header */}
-            <div className="hidden md:grid md:grid-cols-12 gap-2 px-4 py-3 bg-muted/50 text-sm font-medium text-muted-foreground border-b">
-              <button
-                onClick={() => handleSort('studentId')}
-                className="col-span-2 flex items-center gap-1 hover:text-foreground transition-colors text-left"
-              >
-                Student ID <SortIcon field="studentId" />
-              </button>
-              <button
-                onClick={() => handleSort('studentName')}
-                className="col-span-3 flex items-center gap-1 hover:text-foreground transition-colors text-left"
-              >
-                Name <SortIcon field="studentName" />
-              </button>
-              <button
-                onClick={() => handleSort('score')}
-                className="col-span-2 flex items-center gap-1 hover:text-foreground transition-colors text-left"
-              >
-                Score <SortIcon field="score" />
-              </button>
-              <button
-                onClick={() => handleSort('percentage')}
-                className="col-span-2 flex items-center gap-1 hover:text-foreground transition-colors text-left"
-              >
-                Percentage <SortIcon field="percentage" />
-              </button>
-              <button
-                onClick={() => handleSort('scannedAt')}
-                className="col-span-2 flex items-center gap-1 hover:text-foreground transition-colors text-left"
-              >
-                Scanned <SortIcon field="scannedAt" />
-              </button>
-              <div className="col-span-1 text-center">Status</div>
-            </div>
-
-            {/* Table Body */}
-            <div className="divide-y">
-              {paginatedPapers.map(paper => {
-                const status = getStatusIndicator(paper.percentage);
-                const StatusIcon = status.icon;
-                const isExpanded = expandedPaperId === paper.id;
-                return (
-                  <div
-                    key={paper.id}
-                    onClick={() => toggleExpanded(paper.id)}
-                    className="px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
-                  >
-                    {/* Desktop View */}
-                    <div className="hidden md:grid md:grid-cols-12 gap-2 items-center">
-                      <div className="col-span-2 font-mono text-sm">{paper.studentId}</div>
-                      <div className="col-span-3 font-medium break-words">{paper.studentName}</div>
-                      <div className="col-span-2">
-                        <span className="font-semibold">{paper.score}</span>
-                        <span className="text-muted-foreground">/{paper.totalQuestions}</span>
-                      </div>
-                      <div className="col-span-2 flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-sm font-bold ${getGradeColor(paper.letterGrade)}`}>
-                          {paper.letterGrade}
-                        </span>
-                        <span className="text-muted-foreground">{paper.percentage}%</span>
-                      </div>
-                      <div className="col-span-2 text-sm text-muted-foreground">
-                        {formatDate(paper.scannedAt)}
-                      </div>
-                      <div className="col-span-1 flex justify-center items-center gap-2">
-                        <StatusIcon className={`w-5 h-5 ${status.color}`} />
-                        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                      </div>
-                    </div>
-
-                    {/* Mobile View */}
-                    <div className="md:hidden space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm">{paper.studentId}</span>
-                        <div className="flex items-center gap-2">
-                          <StatusIcon className={`w-5 h-5 ${status.color}`} />
-                          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        </div>
-                      </div>
-                      <div className="font-medium">{paper.studentName}</div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div>
-                          <span className="font-semibold">{paper.score}</span>
-                          <span className="text-muted-foreground">/{paper.totalQuestions}</span>
-                          <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold ${getGradeColor(paper.letterGrade)}`}>
-                            {paper.letterGrade}
-                          </span>
-                        </div>
-                        <span className="text-muted-foreground">{formatDate(paper.scannedAt)}</span>
-                      </div>
-                    </div>
-
-                    {/* Answer Comparison (Expanded) */}
-                    {isExpanded && <AnswerComparisonGrid paper={paper} />}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* No Results */}
-            {filteredAndSortedPapers.length === 0 && searchQuery && (
-              <div className="text-center py-8">
-                <Search className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-muted-foreground">No results found for "{searchQuery}"</p>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredAndSortedPapers.length)} of {filteredAndSortedPapers.length} results
-                </p>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
-                    className="px-2"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    <ChevronLeft className="w-4 h-4 -ml-2" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="px-2"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="px-3 text-sm font-medium">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="px-2"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                    className="px-2"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                    <ChevronRight className="w-4 h-4 -ml-2" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={headerCheckboxState}
+                      onCheckedChange={(checked) => handleToggleSelectAll(checked === true)}
+                      aria-label="Select all filtered students"
+                    />
+                  </TableHead>
+                  <TableHead>Student Name</TableHead>
+                  <TableHead>Student ID</TableHead>
+                  <TableHead>Class</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRows.map((row) => (
+                  <TableRow key={row.studentId}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedStudentIds.has(row.studentId)}
+                        onCheckedChange={(checked) => handleToggleStudent(row.studentId, checked === true)}
+                        aria-label={`Select ${row.studentName}`}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">{row.studentName}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.studentId}</TableCell>
+                    <TableCell>{row.className}</TableCell>
+                    <TableCell>
+                      <span className="font-semibold">{row.score}</span>
+                      <span className="text-muted-foreground">/{row.totalQuestions}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          row.status === 'Passed'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }
+                      >
+                        {row.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </Card>
     </div>

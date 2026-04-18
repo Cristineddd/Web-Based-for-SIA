@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   FileText,
@@ -31,14 +32,13 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { toast } from "sonner";
 import { BackButton } from "@/components/ui/BackButton";
-import {
-  generateTemplatePDF,
-  getTemplatePDFBlobUrl,
-} from "@/lib/templatePdfGenerator";
+import ReviewPapersPage from "@/components/pages/ReviewPapers";
+import { generateTemplatePDF, getTemplatePDFBlobUrl } from "@/lib/templatePdfGenerator";
 import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
 import { TemplateService } from "@/services/templateService";
 import * as XLSX from "xlsx";
+import { setPendingImage, setPendingPage } from "@/lib/omrImageStore";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -46,7 +46,9 @@ interface ExamDetailsProps {
 
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const importKeyRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [exam, setExam] = useState<Exam | null>(null);
   const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [scannedCount, setScannedCount] = useState(0);
   const [activeTab, setActiveTab] = useState("key_answer");
+  const [uploadPage, setUploadPage] = useState<1 | 2>(1);
   const [answerKey, setAnswerKey] = useState<Record<number, string>>({});
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [existingKeyId, setExistingKeyId] = useState<string | null>(null);
@@ -263,6 +266,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
       choicesPerQuestion: exam.choices_per_item,
       examName: exam.title,
       examCode: exam.examCode,
+      courseCode: exam.courseCode,
       institutionName: exam.institutionName || settings?.institutionName,
       logoUrl: exam.logoUrl || settings?.logoUrl,
     };
@@ -794,19 +798,82 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                 Ready to Scan?
               </h3>
               <p className="text-gray-500 max-w-md mx-auto mt-2">
-                Use your mobile device to scan the answer sheets.
+                Use your mobile device to scan the answer sheets, or upload a
+                photo from your device.
               </p>
-              <div className="mt-8 flex items-center justify-center">
+
+              {/* 200-item: page selector shown inline */}
+              {exam && exam.num_items > 150 && (
+                <div className="mt-6 inline-flex flex-col items-center gap-2">
+                  <p className="text-sm font-semibold text-gray-700">Which page are you scanning?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setUploadPage(1)}
+                      className={`px-5 py-2 rounded-lg text-sm font-bold border-2 transition-all ${
+                        uploadPage === 1
+                          ? 'border-[#22c55e] bg-[#22c55e] text-white shadow'
+                          : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
+                      }`}
+                    >
+                      Page 1 · Q1–100
+                    </button>
+                    <button
+                      onClick={() => setUploadPage(2)}
+                      className={`px-5 py-2 rounded-lg text-sm font-bold border-2 transition-all ${
+                        uploadPage === 2
+                          ? 'border-[#22c55e] bg-[#22c55e] text-white shadow'
+                          : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
+                      }`}
+                    >
+                      Page 2 · Q101–200
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link href={`/exams/${params.id}/scan-papers`}>
                   <button className="bg-[#22c55e] text-white px-10 py-3.5 rounded-xl font-bold hover:bg-[#16a34a] shadow-lg shadow-green-500/20 transition-all">
                     Open Scanner UI
                   </button>
                 </Link>
+                <button
+                  onClick={() => uploadInputRef.current?.click()}
+                  className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold border-2 border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700 hover:bg-green-50 transition-all"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload Image
+                </button>
               </div>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    const dataUrl = ev.target?.result as string;
+                    setPendingImage(dataUrl);
+                    if (exam && exam.num_items > 150) {
+                      setPendingPage(uploadPage);
+                    }
+                    router.push(`/exams/${params.id}/scan-papers`);
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = '';
+                }}
+              />
             </div>
           )}
 
-          {["review_paper", "item_analysis"].includes(activeTab) && (
+          {activeTab === "review_paper" && (
+            <ReviewPapersPage params={{ id: params.id }} embedded />
+          )}
+
+          {activeTab === "item_analysis" && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
               <BarChart2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-gray-900 capitalize">

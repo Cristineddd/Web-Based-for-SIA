@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,9 @@ import {
   FileText,
   Mail,
   BarChart3,
+  Archive,
+  Pencil,
+  RefreshCw,
 } from "lucide-react";
 import {
   getClassById,
@@ -39,6 +42,7 @@ import {
   getExamsByClassId,
   getExams,
   updateExam,
+  archiveExam,
   type Exam,
 } from "@/services/examService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -65,6 +69,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import * as XLSX from "xlsx";
 
 // Extended Student interface for editing with additional fields
@@ -119,9 +131,50 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [showCreateExam, setShowCreateExam] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(
-    null,
+  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
+  const [isEditingStudents, setIsEditingStudents] = useState(false);
+  const [editingStudentsData, setEditingStudentsData] = useState<Student[]>([]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    subject: "",
+    num_items: 0,
+    choices_per_item: 4,
+    examType: "board" as "board" | "diagnostic",
+    examCode: "",
+    courseCode: "",
+    institutionName: "",
+    logoUrl: "",
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Derived stats from exam data
+  const examsWithData = useMemo(
+    () => exams.filter((e) => (e.scannedCount ?? 0) > 0 && e.averageScore != null),
+    [exams]
   );
+
+  const classAverage = useMemo(() => {
+    if (examsWithData.length === 0) return null;
+    const totalScanned = examsWithData.reduce((s, e) => s + (e.scannedCount ?? 0), 0);
+    const weightedSum = examsWithData.reduce(
+      (s, e) => s + parseFloat(e.averageScore ?? "0") * (e.scannedCount ?? 0),
+      0
+    );
+    return Math.round(weightedSum / totalScanned);
+  }, [examsWithData]);
+
+  const passRate = useMemo(() => {
+    if (examsWithData.length === 0) return null;
+    const totalScanned = examsWithData.reduce((s, e) => s + (e.scannedCount ?? 0), 0);
+    // Weight exams that averaged >= 60% (passing threshold)
+    const passingScanned = examsWithData
+      .filter((e) => parseFloat(e.averageScore ?? "0") >= 60)
+      .reduce((s, e) => s + (e.scannedCount ?? 0), 0);
+    return Math.round((passingScanned / totalScanned) * 100);
+  }, [examsWithData]);
 
   useEffect(() => {
     if (!classId) {
@@ -169,6 +222,97 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       fetchAllExams();
     }
   }, [activeTab, classId, user?.id]);
+
+  const handleEditExam = (exam: Exam) => {
+    setEditingExam(exam);
+    setEditForm({
+      title: exam.title,
+      subject: exam.subject,
+      num_items: exam.num_items,
+      choices_per_item: exam.choices_per_item || 4,
+      examType: (exam.examType as any) || "board",
+      examCode: exam.examCode || "",
+      courseCode: exam.courseCode || "",
+      institutionName: exam.institutionName || "",
+      logoUrl: exam.logoUrl || "",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingExam) return;
+    if (!editForm.title.trim()) {
+      toast.error("Exam name is required");
+      return;
+    }
+    if (!editForm.num_items || editForm.num_items < 1) {
+      toast.error("Number of items must be at least 1");
+      return;
+    }
+    try {
+      setIsSavingEdit(true);
+      const updated: Partial<Exam> = {
+        title: editForm.title.trim(),
+        subject: editForm.subject.trim(),
+        num_items: editForm.num_items,
+        choices_per_item: editForm.choices_per_item,
+        examType: editForm.examType,
+        examCode: editForm.examCode.trim().toUpperCase(),
+        courseCode: editForm.courseCode.trim(),
+        institutionName: editForm.institutionName,
+        logoUrl: editForm.logoUrl,
+      };
+      await updateExam(editingExam.id, updated);
+      // Delete any existing template so a fresh one can be generated
+      const templateQuery = query(
+        collection(db, "templates"),
+        where("examId", "==", editingExam.id),
+      );
+      const templateSnap = await getDocs(templateQuery);
+      if (!templateSnap.empty) {
+        await Promise.all(templateSnap.docs.map((d) => deleteDoc(d.ref)));
+        toast.info("Existing template deleted — please generate a new one.");
+      }
+      setExams((prev) =>
+        prev.map((e) =>
+          e.id === editingExam.id
+            ? {
+                ...e,
+                ...updated,
+                updatedAt: new Date().toISOString(),
+                hasTemplate: false,
+              }
+            : e,
+        ),
+      );
+      toast.success("Exam updated successfully");
+      if (user?.email) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "exam_updated",
+          `Updated exam: ${editForm.title.trim()}`,
+          { entityId: editingExam.id, entityType: "exam" },
+        ).catch(console.error);
+      }
+      setEditingExam(null);
+    } catch (error) {
+      console.error("Error updating exam:", error);
+      toast.error("Failed to update exam");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleArchiveExam = async (examId: string, examTitle: string) => {
+    try {
+      await archiveExam(examId);
+      setExams((prev) => prev.filter((e) => e.id !== examId));
+      toast.success(`"${examTitle}" has been archived`);
+    } catch (error) {
+      console.error("Error archiving exam:", error);
+      toast.error("Failed to archive exam");
+    }
+  };
 
   const handleCreateExam = async (formData: any) => {
     try {
@@ -218,30 +362,20 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       return;
     }
     try {
-      const headers = ["Student ID", "First Name", "Last Name", "Email"];
-      const rows = students.map((s) => [
-        `"${s.student_id || ""}"`,
-        `"${s.first_name || ""}"`,
-        `"${s.last_name || ""}"`,
-        `"${(s as any).email || ""}"`,
-      ]);
-      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
-        "\n",
-      );
-      const blob = new Blob(["\uFEFF" + csv], {
-        type: "text/csv;charset=utf-8;",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.setAttribute(
-        "download",
-        `${classData?.class_name || "class"}_${classData?.course_subject || "roster"}.csv`,
-      );
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const wsData = [
+        ["Student ID", "First Name", "Last Name", "Middle Name", "Email"],
+        ...students.map((s) => [
+          s.student_id || "",
+          s.first_name || "",
+          s.last_name || "",
+          (s as any).middle_name || "",
+          (s as any).email || "",
+        ]),
+      ];
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, "Roster");
+      XLSX.writeFile(wb, `${classData?.class_name || "class"}_${classData?.course_subject || "roster"}.xlsx`);
       toast.success(`Exported ${students.length} student(s) successfully`);
     } catch (err) {
       console.error("Export error:", err);
@@ -369,7 +503,53 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     }
   };
 
-  const handleImportStudents = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Student ID", "First Name", "Last Name", "Middle Name (Optional)"],
+      ["201234567", "Juan", "Dela Cruz", "Santos"],
+    ]);
+    ws["!cols"] = [{ wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 25 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Students");
+    XLSX.writeFile(wb, "student_import_template.xlsx");
+  };
+
+  const handleSaveMultipleStudents = async () => {
+    if (!classData) return;
+    const errors: string[] = [];
+    editingStudentsData.forEach((s, i) => {
+      if (!s.student_id || !/^\d{9}$/.test(s.student_id) || !s.student_id.startsWith("20"))
+        errors.push(`Row ${i + 1}: Invalid Student ID "${s.student_id}"`);
+      else if (!s.first_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.first_name) || s.first_name.length < 4)
+        errors.push(`Row ${i + 1}: Invalid First Name`);
+      else if (!s.last_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.last_name) || s.last_name.length < 4)
+        errors.push(`Row ${i + 1}: Invalid Last Name`);
+    });
+    if (errors.length > 0) {
+      toast.error(errors.slice(0, 3).join("\n") + (errors.length > 3 ? `\n...and ${errors.length - 3} more` : ""));
+      return;
+    }
+    const ids = editingStudentsData.map((s) => s.student_id);
+    const dupIds = ids.filter((id, i) => ids.indexOf(id) !== i);
+    if (dupIds.length > 0) {
+      toast.error(`Duplicate Student IDs: ${[...new Set(dupIds)].join(", ")}`);
+      return;
+    }
+    try {
+      await updateClass(classData.id, {
+        students: editingStudentsData,
+        updatedAt: new Date().toISOString(),
+      });
+      setClassData({ ...classData, students: editingStudentsData });
+      toast.success("Students saved successfully");
+      setIsEditingStudents(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to save changes");
+    }
+  };
+
+  const handleImportStudents = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -398,7 +578,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         .replace(/[^a-z0-9 ]/g, "");
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const data = reader.result;
         if (!(data instanceof ArrayBuffer)) {
@@ -558,26 +738,18 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           return;
         }
 
-        const updatedStudents = [...classData.students, ...parsed];
-        setClassData({
-          ...classData,
-          students: updatedStudents,
-        });
+        const newStudents = [...classData.students, ...parsed];
+        setClassData({ ...classData, students: newStudents });
 
-        // Auto-save immediately — matching the manual add behavior
         try {
-          updateClass(classData.id, {
-            students: updatedStudents,
+          await updateClass(classData.id, {
+            students: newStudents,
             updatedAt: new Date().toISOString(),
           });
-          toast.success(
-            `Imported and saved ${parsed.length} student(s) successfully.`,
-          );
-        } catch (error) {
-          console.error("Auto-save after import failed:", error);
-          toast.error(
-            `Imported ${parsed.length} students locally, but failed to save to database. Please click "Save Changes" to retry.`,
-          );
+          toast.success(`Imported ${parsed.length} student(s) — saved automatically.`);
+        } catch (saveErr) {
+          console.error("Auto-save after import failed:", saveErr);
+          toast.error(`Imported ${parsed.length} student(s) locally, but save failed. Please retry.`);
         }
       } catch (err) {
         console.error("Error importing students:", err);
@@ -1068,22 +1240,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                     <Download className="w-4 h-4" />
                     Export
                   </Button>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls"
-                      onChange={handleImportStudents}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Import Excel
-                    </Button>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowImportModal(true)}
+                    className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Import Excel
+                  </Button>
                   <Button
                     size="sm"
                     onClick={() => setShowAddStudent(true)}
@@ -1096,15 +1261,41 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               </div>
 
               {/* Edit Multiple Students button row */}
-              <div className="flex justify-end px-6 py-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="flex items-center gap-1.5 text-gray-500 hover:text-gray-700 text-xs font-medium"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  Edit Multiple Students
-                </Button>
+              <div className="flex justify-end gap-2 px-6 py-2">
+                {isEditingStudents ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingStudents(false)}
+                      className="text-xs font-medium text-gray-500"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveMultipleStudents}
+                      className="text-xs font-medium bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Save All
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditingStudentsData(
+                        (classData?.students ?? []).map((s) => ({ ...s })) as Student[]
+                      );
+                      setIsEditingStudents(true);
+                    }}
+                    className="flex items-center gap-1.5 text-gray-500 hover:text-gray-700 text-xs font-medium"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    Edit Multiple Students
+                  </Button>
+                )}
               </div>
 
               {/* Search bar */}
@@ -1173,44 +1364,96 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filteredAndSortedStudents.map((student) => {
-                      const s = student as Student;
-                      return (
-                        <tr
-                          key={s.student_id}
-                          className="hover:bg-gray-50/60 transition-colors"
-                        >
-                          <td className="px-6 py-3 text-gray-700 font-mono text-xs">
-                            {s.student_id}
-                          </td>
-                          <td className="px-4 py-3 text-gray-800 font-medium">
-                            {s.first_name}
-                          </td>
-                          <td className="px-4 py-3 text-gray-800">
-                            {s.last_name}
-                          </td>
-                          <td className="px-4 py-3 text-gray-500">
-                            {s.middle_name || (
-                              <span className="text-gray-300">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setStudentToDeleteId(s.student_id);
-                                setIsDeleteDialogOpen(true);
-                              }}
-                              className="h-8 w-8 p-0 text-red-500 bg-red-50 hover:bg-red-100 transition-all rounded-lg"
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {showAddStudent && (
+                    {isEditingStudents
+                      ? editingStudentsData.map((s, idx) => (
+                          <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                            <td className="px-6 py-2">
+                              <Input
+                                value={s.student_id}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 9);
+                                  setEditingStudentsData((prev) =>
+                                    prev.map((r, i) => (i === idx ? { ...r, student_id: val } : r))
+                                  );
+                                }}
+                                className="h-7 text-xs font-mono w-full"
+                                inputMode="numeric"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Input
+                                value={s.first_name}
+                                onChange={(e) =>
+                                  setEditingStudentsData((prev) =>
+                                    prev.map((r, i) => (i === idx ? { ...r, first_name: e.target.value } : r))
+                                  )
+                                }
+                                className="h-7 text-xs w-full"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Input
+                                value={s.last_name}
+                                onChange={(e) =>
+                                  setEditingStudentsData((prev) =>
+                                    prev.map((r, i) => (i === idx ? { ...r, last_name: e.target.value } : r))
+                                  )
+                                }
+                                className="h-7 text-xs w-full"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Input
+                                value={s.middle_name || ""}
+                                onChange={(e) =>
+                                  setEditingStudentsData((prev) =>
+                                    prev.map((r, i) => (i === idx ? { ...r, middle_name: e.target.value } : r))
+                                  )
+                                }
+                                className="h-7 text-xs w-full"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setEditingStudentsData((prev) => prev.filter((_, i) => i !== idx))
+                                }
+                                className="h-8 w-8 p-0 text-red-500 bg-red-50 hover:bg-red-100 transition-all rounded-lg"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))
+                      : filteredAndSortedStudents.map((student) => {
+                          const s = student as Student;
+                          return (
+                            <tr key={s.student_id} className="hover:bg-gray-50/60 transition-colors">
+                              <td className="px-6 py-3 text-gray-700 font-mono text-xs">{s.student_id}</td>
+                              <td className="px-4 py-3 text-gray-800 font-medium">{s.first_name}</td>
+                              <td className="px-4 py-3 text-gray-800">{s.last_name}</td>
+                              <td className="px-4 py-3 text-gray-500">
+                                {s.middle_name || <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setStudentToDeleteId(s.student_id);
+                                    setIsDeleteDialogOpen(true);
+                                  }}
+                                  className="h-8 w-8 p-0 text-red-500 bg-red-50 hover:bg-red-100 transition-all rounded-lg"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    {!isEditingStudents && showAddStudent && (
                       <tr className="border-t-2 border-green-200 bg-green-50/30">
                         {/* Student ID */}
                         <td className="px-6 py-2 align-top">
@@ -1395,18 +1638,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                         </td>
                       </tr>
                     )}
-                    {filteredAndSortedStudents.length === 0 &&
-                      !showAddStudent && (
-                        <tr>
-                          <td
-                            colSpan={5}
-                            className="px-6 py-10 text-center text-gray-400 text-sm"
-                          >
-                            <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                            No students in this class yet.
-                          </td>
-                        </tr>
-                      )}
+                    {!isEditingStudents && filteredAndSortedStudents.length === 0 && !showAddStudent && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-10 text-center text-gray-400 text-sm">
+                          <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                          No students in this class yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1535,6 +1774,22 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                             </span>
                           </span>
                         </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEditExam(exam); }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                            title="Edit exam"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleArchiveExam(exam.id, exam.title); }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                            title="Archive exam"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -1558,8 +1813,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   </p>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <p className="text-[38px] font-bold text-[#1e293b]">88</p>
-                  <span className="text-xl font-bold text-gray-300">%</span>
+                  {classAverage !== null ? (
+                    <>
+                      <p className="text-[38px] font-bold text-[#1e293b]">{classAverage}</p>
+                      <span className="text-xl font-bold text-gray-300">%</span>
+                    </>
+                  ) : (
+                    <p className="text-[38px] font-bold text-gray-300">—</p>
+                  )}
                 </div>
               </Card>
 
@@ -1573,8 +1834,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   </p>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <p className="text-[38px] font-bold text-[#1e293b]">100</p>
-                  <span className="text-xl font-bold text-gray-300">%</span>
+                  {passRate !== null ? (
+                    <>
+                      <p className="text-[38px] font-bold text-[#1e293b]">{passRate}</p>
+                      <span className="text-xl font-bold text-gray-300">%</span>
+                    </>
+                  ) : (
+                    <p className="text-[38px] font-bold text-gray-300">—</p>
+                  )}
                 </div>
               </Card>
             </div>
@@ -1696,10 +1963,205 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         />
       )}
 
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
+      {/* Import Students Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Import Students</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Upload an Excel file (.xlsx) to import multiple students at once.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Drop Zone */}
+              <label
+                className={`flex flex-col items-center justify-center gap-3 w-full h-44 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+                  isDraggingOver
+                    ? "border-green-400 bg-green-50"
+                    : "border-gray-200 bg-gray-50 hover:border-green-300 hover:bg-green-50/50"
+                }`}
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
+                onDragLeave={() => setIsDraggingOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingOver(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (!file) return;
+                  const fakeEvent = { target: { files: e.dataTransfer.files, value: "" } } as any;
+                  handleImportStudents(fakeEvent);
+                  setShowImportModal(false);
+                }}
+              >
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleImportStudents(e);
+                    setShowImportModal(false);
+                  }}
+                />
+                <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-gray-400" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-gray-700">Click to upload an Excel file</p>
+                  <p className="text-xs text-gray-400 mt-0.5">or drag and drop here</p>
+                  <p className="text-xs text-gray-400 mt-1">Required columns: Student ID, First Name, Last Name</p>
+                </div>
+              </label>
+              {/* Download Template */}
+              <Button
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2 border-gray-200 text-gray-600 hover:bg-gray-50 font-medium"
+                onClick={handleDownloadTemplate}
+              >
+                <Download className="w-4 h-4" />
+                Download Template
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Exam Modal */}
+      {editingExam && (
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
+              <button
+                onClick={() => setEditingExam(null)}
+                className="p-1 hover:bg-muted rounded-md"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Exam Code <span className="text-destructive">*</span>
+                </label>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    value={editForm.examCode}
+                    onChange={(e) => setEditForm({ ...editForm, examCode: e.target.value.toUpperCase() })}
+                    className="w-full font-mono"
+                    placeholder="e.g. EX-ABC123"
+                    maxLength={12}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                      let code = "";
+                      for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+                      setEditForm({ ...editForm, examCode: `EX-${code}` });
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                    title="Regenerate random code"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Course Code <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+                </label>
+                <Input
+                  type="text"
+                  value={editForm.courseCode}
+                  onChange={(e) => setEditForm({ ...editForm, courseCode: e.target.value })}
+                  className="w-full"
+                  placeholder="e.g. CS101, MATH201"
+                  maxLength={20}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Exam Name <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  placeholder="Exam name"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Number of Items <span className="text-destructive">*</span></label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[20, 50, 100, 150, 200].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setEditForm({ ...editForm, num_items: num })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${editForm.num_items === num ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:border-primary"}`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Choices per Question</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{ label: "4 Choices (A–D)", value: 4 }, { label: "5 Choices (A–E)", value: 5 }].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${editForm.choices_per_item === opt.value ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:border-primary"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Exam Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{ label: "Board Exam", value: "board" }, { label: "Diagnostic Test", value: "diagnostic" }].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${editForm.examType === opt.value ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:border-primary"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t">
+              <button
+                onClick={() => setEditingExam(null)}
+                className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent className="rounded-2xl border-none shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold text-gray-900">
