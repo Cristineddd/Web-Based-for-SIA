@@ -427,6 +427,32 @@ export function CreateExamModal({
                   ))}
                 </div>
               </div>
+
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  Answer Choices
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "A-D", value: 4 },
+                    { label: "A-E", value: 5 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleInputChange("choicesPerItem", opt.value)}
+                      className={`py-1.5 px-2 rounded-xl border-2 transition-all text-center ${
+                        formData.choicesPerItem === opt.value
+                          ? "bg-green-50 text-green-600 border-green-500"
+                          : "border-gray-100 text-gray-400 hover:border-green-200 hover:bg-green-50/50"
+                      }`}
+                    >
+                      <div className="font-bold text-[13px]">{opt.label}</div>
+                      <div className="text-xs mt-0.5 opacity-80">{opt.sub}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </>
           ) : (
             <>

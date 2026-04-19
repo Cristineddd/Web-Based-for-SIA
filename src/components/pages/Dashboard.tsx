@@ -452,7 +452,7 @@ export default function Dashboard() {
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                   {stats.recentClasses.map((cls) => (
                     <div key={cls.id}>
-                      <Link href={`/classes`}>
+                      <Link href={`/classes/edit/${cls.id}`}>
                         <div className="p-4 rounded-xl border border-gray-200 hover:border-green-400 hover:bg-green-50/50 transition-all duration-150 cursor-pointer group">
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
