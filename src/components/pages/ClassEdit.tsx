@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -795,7 +795,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       if (!value) return `${label} name is required`;
       if (!LETTERS_ONLY.test(value))
         return "Letters only — numbers and symbols not allowed";
-      if (value.trim().length < 4) return "Minimum 4 characters required";
     }
 
     // Build the full name we're about to check, using `value` for the field being changed
@@ -1010,7 +1009,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       <div className="flex items-center gap-4 mb-8">
         <BackButton href="/classes" />
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
             {classData.class_name}{" "}
             {classData.course_subject ? `– ${classData.course_subject}` : ""}
           </h1>
@@ -1022,13 +1021,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
       <div className="space-y-6">
         {/* Class Information Panel */}
-        <Card className="border border-gray-100 shadow-sm rounded-xl bg-white">
-          <CardHeader className="bg-white px-6 pt-6 pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-[17px] font-bold text-[#1e293b] border-none">
-                Class Information
-              </CardTitle>
-              <div className="flex items-center gap-2">
+        <Card className="border border-gray-200 shadow-sm rounded-xl bg-white">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-600">
+              Class Information
+            </p>
+            <div className="flex items-center gap-2">
                 {!isEditingInfo ? (
                   <Button
                     variant="ghost"
@@ -1063,43 +1061,42 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                     </Button>
                   </div>
                 )}
-              </div>
             </div>
-          </CardHeader>
-          <CardContent className="px-6 pb-6 pt-4">
+          </div>
+          <div className="px-4 pb-3 pt-1">
             {!isEditingInfo ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0 bg-white rounded-xl border border-gray-100">
-                <div className="space-y-1.5 pl-5 py-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0">
+                <div className="space-y-0.5 py-1 pr-4">
                   <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     Program
                   </label>
-                  <p className="text-[15px] font-bold text-[#1e293b]">
+                  <p className="text-sm font-bold text-[#1e293b]">
                     {classData.class_name}
                   </p>
                 </div>
-                <div className="space-y-1.5 border-l border-gray-100 pl-5 py-5">
+                <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1 pr-4">
                   <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     Course
                   </label>
-                  <p className="text-[15px] font-bold text-[#1e293b] truncate pr-2">
+                  <p className="text-sm font-bold text-[#1e293b] truncate pr-2">
                     {classData.course_subject}
                   </p>
                 </div>
-                <div className="space-y-1.5 border-l border-gray-100 pl-5 py-5">
+                <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1 pr-4">
                   <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     Year Level
                   </label>
-                  <p className="text-[15px] font-bold text-[#1e293b]">
+                  <p className="text-sm font-bold text-[#1e293b]">
                     {classData.year
                       ? `${classData.year}${classData.year === "1" ? "st" : classData.year === "2" ? "nd" : classData.year === "3" ? "rd" : "th"} Year`
                       : "—"}
                   </p>
                 </div>
-                <div className="space-y-1.5 border-l border-gray-100 pl-5 py-5">
+                <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1">
                   <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     Room
                   </label>
-                  <p className="text-[15px] font-bold text-[#1e293b]">
+                  <p className="text-sm font-bold text-[#1e293b]">
                     {classData.room || "—"}
                   </p>
                 </div>
@@ -1191,7 +1188,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                 </div>
               </div>
             )}
-          </CardContent>
+          </div>
         </Card>
 
         {/* Bottom Stats Section / Tabs */}
@@ -1224,51 +1221,63 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         {activeTab === "students" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             {/* Student Roster */}
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="mt-4 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
               {/* Roster Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                <h2 className="text-base font-bold text-gray-900">
-                  Student Roster
-                </h2>
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100">
+                <h2 className="text-base font-bold text-gray-900">Student Roster</h2>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleExportRoster}
-                    className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium"
+                    className="flex items-center gap-1.5 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium text-xs"
                   >
-                    <Download className="w-4 h-4" />
-                    Export
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden xs:inline">Export</span>
+                    <span className="xs:hidden">Export</span>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowImportModal(true)}
-                    className="flex items-center gap-2 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium"
+                    className="flex items-center gap-1.5 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium text-xs"
                   >
-                    <Upload className="w-4 h-4" />
-                    Import Excel
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Import Excel</span>
                   </Button>
                   <Button
                     size="sm"
                     onClick={() => setShowAddStudent(true)}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium shadow-sm"
+                    className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white font-medium shadow-sm text-xs"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-3.5 h-3.5" />
                     Add Student
                   </Button>
                 </div>
               </div>
 
+              {/* Search bar */}
+              <div className="px-4 sm:px-6 pb-3 pt-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Input
+                    placeholder="Search by ID or name..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="pl-10 h-9 text-sm border-gray-200 rounded-xl bg-gray-50/30 focus-visible:ring-0 focus-visible:border-gray-300"
+                  />
+                </div>
+              </div>
+
               {/* Edit Multiple Students button row */}
-              <div className="flex justify-end gap-2 px-6 py-2">
+              <div className="flex justify-end gap-2 px-4 sm:px-6 py-2">
                 {isEditingStudents ? (
                   <>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setIsEditingStudents(false)}
-                      className="text-xs font-medium text-gray-500"
+                      className="text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                     >
                       Cancel
                     </Button>
@@ -1290,25 +1299,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       );
                       setIsEditingStudents(true);
                     }}
-                    className="flex items-center gap-1.5 text-gray-500 hover:text-gray-700 text-xs font-medium"
+                    className="flex items-center gap-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 text-xs font-medium"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     Edit Multiple Students
                   </Button>
                 )}
-              </div>
-
-              {/* Search bar */}
-              <div className="px-6 pb-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input
-                    placeholder="Search by ID or name..."
-                    value={studentSearch}
-                    onChange={(e) => setStudentSearch(e.target.value)}
-                    className="pl-10 h-10 border-gray-100 rounded-xl bg-gray-50/30"
-                  />
-                </div>
               </div>
 
               {/* Table */}
@@ -1317,7 +1313,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   <thead>
                     <tr className="border-y border-gray-100 bg-gray-50/60">
                       <th
-                        className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[130px] cursor-pointer select-none"
+                        className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[120px] cursor-pointer select-none"
                         onClick={() => handleSort("student_id")}
                       >
                         <div className="flex items-center gap-1">
@@ -1350,7 +1346,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                         </div>
                       </th>
                       <th
-                        className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[140px] cursor-pointer select-none"
+                        className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[140px] cursor-pointer select-none"
                         onClick={() => handleSort("middle_name")}
                       >
                         <div className="flex items-center gap-1">
@@ -1431,13 +1427,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                           const s = student as Student;
                           return (
                             <tr key={s.student_id} className="hover:bg-gray-50/60 transition-colors">
-                              <td className="px-6 py-3 text-gray-700 font-mono text-xs">{s.student_id}</td>
+                              <td className="px-4 sm:px-6 py-3 text-gray-700 font-mono text-xs">{s.student_id}</td>
                               <td className="px-4 py-3 text-gray-800 font-medium">{s.first_name}</td>
                               <td className="px-4 py-3 text-gray-800">{s.last_name}</td>
-                              <td className="px-4 py-3 text-gray-500">
+                              <td className="hidden sm:table-cell px-4 py-3 text-gray-500">
                                 {s.middle_name || <span className="text-gray-300">—</span>}
                               </td>
                               <td className="px-4 py-3">
+                                {isEditingStudents && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1449,14 +1446,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                                 >
                                   <X className="w-4 h-4" />
                                 </Button>
+                                )}
                               </td>
                             </tr>
                           );
                         })}
                     {!isEditingStudents && showAddStudent && (
-                      <tr className="border-t-2 border-green-200 bg-green-50/30">
+                      <tr className="border-t border-gray-100 bg-white">
                         {/* Student ID */}
-                        <td className="px-6 py-2 align-top">
+                        <td className="px-4 sm:px-6 py-3 align-middle">
                           <div>
                             <Input
                               value={newStudent.student_id}
@@ -1477,25 +1475,24 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                                 }));
                               }}
                               placeholder="Student ID"
-                              className={`border h-8 text-xs font-mono w-full ${
+                              className={`border h-9 text-xs font-mono w-full rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 ${
                                 fieldErrors.student_id
                                   ? "border-red-400"
-                                  : newStudent.student_id.length === 9 &&
-                                      !fieldErrors.student_id
-                                    ? "border-green-400"
-                                    : ""
+                                  : newStudent.student_id.length === 9 && !fieldErrors.student_id
+                                  ? "border-green-400"
+                                  : "border-gray-200"
                               }`}
                               inputMode="numeric"
                             />
                             {fieldErrors.student_id && (
-                              <p className="text-[10px] text-red-500 mt-0.5 leading-tight">
+                              <p className="text-[10px] text-red-500 mt-1 leading-tight">
                                 {fieldErrors.student_id}
                               </p>
                             )}
                           </div>
                         </td>
                         {/* First Name */}
-                        <td className="px-4 py-2 align-top">
+                        <td className="px-4 py-3 align-middle">
                           <div>
                             <Input
                               value={newStudent.first_name}
@@ -1520,24 +1517,23 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                                 }));
                               }}
                               placeholder="First Name"
-                              className={`border h-8 text-xs w-full ${
+                              className={`border h-9 text-xs w-full rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 ${
                                 fieldErrors.first_name
                                   ? "border-red-400"
-                                  : newStudent.first_name.length >= 4 &&
-                                      !fieldErrors.first_name
-                                    ? "border-green-400"
-                                    : ""
+                                  : newStudent.first_name.length >= 1 && !fieldErrors.first_name
+                                  ? "border-green-400"
+                                  : "border-gray-200"
                               }`}
                             />
                             {fieldErrors.first_name && (
-                              <p className="text-[10px] text-red-500 mt-0.5 leading-tight">
+                              <p className="text-[10px] text-red-500 mt-1 leading-tight">
                                 {fieldErrors.first_name}
                               </p>
                             )}
                           </div>
                         </td>
                         {/* Last Name */}
-                        <td className="px-4 py-2 align-top">
+                        <td className="px-4 py-3 align-middle">
                           <div>
                             <Input
                               value={newStudent.last_name}
@@ -1562,24 +1558,23 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                                 }));
                               }}
                               placeholder="Last Name"
-                              className={`border h-8 text-xs w-full ${
+                              className={`border h-9 text-xs w-full rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 ${
                                 fieldErrors.last_name
                                   ? "border-red-400"
-                                  : newStudent.last_name.length >= 4 &&
-                                      !fieldErrors.last_name
-                                    ? "border-green-400"
-                                    : ""
+                                  : newStudent.last_name.length >= 1 && !fieldErrors.last_name
+                                  ? "border-green-400"
+                                  : "border-gray-200"
                               }`}
                             />
                             {fieldErrors.last_name && (
-                              <p className="text-[10px] text-red-500 mt-0.5 leading-tight">
+                              <p className="text-[10px] text-red-500 mt-1 leading-tight">
                                 {fieldErrors.last_name}
                               </p>
                             )}
                           </div>
                         </td>
                         {/* Middle Name */}
-                        <td className="px-4 py-2 align-top">
+                        <td className="hidden sm:table-cell px-4 py-3 align-middle">
                           <div>
                             <Input
                               value={newStudent.middle_name}
@@ -1604,25 +1599,27 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                                 }));
                               }}
                               placeholder="Middle Name"
-                              className={`border h-8 text-xs w-full ${
-                                fieldErrors.middle_name ? "border-red-400" : ""
+                              className={`border h-9 text-xs w-full rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 ${
+                                fieldErrors.middle_name
+                                  ? "border-red-400"
+                                  : "border-gray-200"
                               }`}
                             />
                             {fieldErrors.middle_name && (
-                              <p className="text-[10px] text-red-500 mt-0.5 leading-tight">
+                              <p className="text-[10px] text-red-500 mt-1 leading-tight">
                                 {fieldErrors.middle_name}
                               </p>
                             )}
                           </div>
                         </td>
                         {/* Actions */}
-                        <td className="px-4 py-2">
-                          <div className="flex gap-1">
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={handleAddStudent}
-                              className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg"
                             >
                               <Plus className="w-4 h-4" />
                             </Button>
@@ -1630,7 +1627,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                               variant="ghost"
                               size="sm"
                               onClick={() => setShowAddStudent(false)}
-                              className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600"
+                              className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
                             >
                               <X className="w-4 h-4" />
                             </Button>
@@ -1651,9 +1648,8 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               </div>
 
               {studentSearch.trim() && (
-                <div className="px-6 py-3 border-t border-gray-100 text-xs text-gray-400">
-                  Showing {filteredAndSortedStudents.length} of{" "}
-                  {classData.students.length} students
+                <div className="px-4 sm:px-6 py-3 border-t border-gray-100 text-xs text-gray-400">
+                  Showing {filteredAndSortedStudents.length} of {classData.students.length} students
                 </div>
               )}
             </div>
@@ -1668,7 +1664,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               </h3>
               <div className="flex items-center gap-3">
                 <Select onValueChange={handleTagExam}>
-                  <SelectTrigger className="w-[200px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600">
+                  <SelectTrigger className="w-[200px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600 focus:ring-0 focus:border-gray-200">
                     <SelectValue placeholder="Tag Existing Exam..." />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-gray-100 shadow-xl">
@@ -1691,7 +1687,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                 </Select>
                 <Button
                   onClick={() => setShowCreateExam(true)}
-                  className="flex items-center gap-2 h-10 px-6 bg-[#10B981] text-white rounded-xl font-bold text-sm hover:bg-[#059669] shadow-md shadow-green-500/10 transition-all"
+                  className="flex items-center gap-2 h-10 px-6 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 shadow-md shadow-green-500/10 transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Create Exam</span>
@@ -1800,129 +1796,101 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         )}
 
         {activeTab === "stats" && (
-          <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-300">
+          <div className="space-y-5 animate-in slide-in-from-bottom-2 duration-300">
             {/* Top Stat Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-green-500/10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Card className="border border-gray-100 shadow-sm rounded-2xl bg-white overflow-hidden">
+                <div className="flex items-center gap-4 p-5">
+                  <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
                     <BarChart3 className="w-5 h-5 text-green-600" />
                   </div>
-                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">
-                    Class Average
-                  </p>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  {classAverage !== null ? (
-                    <>
-                      <p className="text-[38px] font-bold text-[#1e293b]">{classAverage}</p>
-                      <span className="text-xl font-bold text-gray-300">%</span>
-                    </>
-                  ) : (
-                    <p className="text-[38px] font-bold text-gray-300">—</p>
-                  )}
-                </div>
-              </Card>
-
-              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-blue-500/10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Class Average</p>
+                    <div className="flex items-baseline gap-1">
+                      {classAverage !== null ? (
+                        <>
+                          <p className="text-3xl font-bold text-[#1e293b]">{classAverage}</p>
+                          <span className="text-base font-bold text-gray-300">%</span>
+                        </>
+                      ) : (
+                        <p className="text-3xl font-bold text-gray-300">—</p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">
-                    Pass Rate
-                  </p>
                 </div>
-                <div className="flex items-baseline gap-1">
-                  {passRate !== null ? (
-                    <>
-                      <p className="text-[38px] font-bold text-[#1e293b]">{passRate}</p>
-                      <span className="text-xl font-bold text-gray-300">%</span>
-                    </>
-                  ) : (
-                    <p className="text-[38px] font-bold text-gray-300">—</p>
-                  )}
-                </div>
+                <div className="h-1 bg-gradient-to-r from-green-400 to-green-600" />
               </Card>
-            </div>
 
-            <div className="flex justify-end pr-2">
-              <Button
-                variant="outline"
-                className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-12 px-8 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
-              >
-                <Mail className="w-5 h-5 text-gray-400" />
-                <span>Send All Scores to Students</span>
-              </Button>
+              <Card className="border border-gray-100 shadow-sm rounded-2xl bg-white overflow-hidden">
+                <div className="flex items-center gap-4 p-5">
+                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Users className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Pass Rate</p>
+                    <div className="flex items-baseline gap-1">
+                      {passRate !== null ? (
+                        <>
+                          <p className="text-3xl font-bold text-[#1e293b]">{passRate}</p>
+                          <span className="text-base font-bold text-gray-300">%</span>
+                        </>
+                      ) : (
+                        <p className="text-3xl font-bold text-gray-300">—</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="h-1 bg-gradient-to-r from-blue-400 to-blue-500" />
+              </Card>
             </div>
 
             {/* Exam Breakdown Table */}
-            <Card className="border border-gray-100 shadow-sm rounded-[2rem] overflow-hidden bg-white">
-              <div className="p-8">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                  <div>
-                    <h3 className="text-lg font-bold text-[#1e293b]">
-                      Exam Performance Breakdown
-                    </h3>
-                    <p className="text-xs text-gray-400 font-medium">
-                      Detailed results for each exam assigned to this class
-                    </p>
-                  </div>
+            <Card className="border border-gray-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-gray-100">
+                <div>
+                  <h3 className="text-sm font-bold text-[#1e293b]">Exam Performance Breakdown</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Detailed results for each exam assigned to this class</p>
                 </div>
+                <Button variant="outline" className="text-xs font-semibold text-gray-600 hover:bg-gray-50 rounded-xl h-9 px-4 border border-gray-200 flex items-center gap-2 transition-all whitespace-nowrap">
+                  <Mail className="w-4 h-4 text-gray-400" />
+                  Send All Scores
+                </Button>
+              </div>
 
-                <div className="rounded-2xl border border-gray-50 overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-[#f8fafc] border-none">
-                        <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider pl-8">
-                          Exam Title
-                        </TableHead>
-                        <TableHead className="text-[11px] font-bold text-gray-400 text-center h-14 uppercase tracking-wider">
-                          Papers Scanned
-                        </TableHead>
-                        <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-10">
-                          Average Score
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {exams.length > 0 ? (
-                        exams.map((exam) => (
-                          <TableRow
-                            key={exam.id}
-                            className="border-b border-gray-50 h-[75px] hover:bg-gray-50/50 transition-colors group"
-                          >
-                            <TableCell className="pl-8">
-                              <div className="flex items-center gap-4">
-                                <div className="w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors">
-                                  <FileText className="w-4.5 h-4.5 text-gray-400 group-hover:text-green-500 transition-colors" />
-                                </div>
-                                <div>
-                                  <p className="text-[15px] font-bold text-[#1e293b] leading-tight">
-                                    {exam.title}
-                                  </p>
-                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                                    {exam.subject}
-                                  </p>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <span className="inline-flex items-center justify-center w-10 h-6 bg-gray-50 text-gray-700 rounded-full text-[13px] font-bold border border-gray-100">
-                                {exam.scannedCount || 0}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right pr-10">
-                              <span className="text-[16px] font-bold text-[#10B981]">
-                                {exam.averageScore || "0"}{" "}
-                                <span className="text-[11px] font-bold opacity-40">
-                                  %
-                                </span>
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/60 border-none">
+                    <TableHead className="text-[11px] font-bold text-gray-400 h-10 uppercase tracking-wider pl-6">Exam Title</TableHead>
+                    <TableHead className="text-[11px] font-bold text-gray-400 text-center h-10 uppercase tracking-wider">Papers Scanned</TableHead>
+                    <TableHead className="text-[11px] font-bold text-gray-400 text-right h-10 uppercase tracking-wider pr-6">Avg Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {exams.length > 0 ? exams.map(exam => (
+                    <TableRow key={exam.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors group">
+                      <TableCell className="pl-6 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors flex-shrink-0">
+                            <FileText className="w-4 h-4 text-gray-400 group-hover:text-green-500 transition-colors" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-[#1e293b] leading-tight">{exam.title}</p>
+                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{exam.subject}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center py-3">
+                        <span className="inline-flex items-center justify-center min-w-[2rem] h-6 px-2 bg-gray-100 text-gray-700 rounded-full text-xs font-bold">
+                          {exam.scannedCount || 0}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right pr-6 py-3">
+                        <span className="text-base font-bold text-green-600">
+                          {exam.averageScore || "0"}<span className="text-xs font-semibold text-gray-300 ml-0.5">%</span>
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  )) : (
                         <TableRow>
                           <TableCell colSpan={3} className="h-40 text-center">
                             <div className="flex flex-col items-center justify-center text-gray-400">
@@ -1936,8 +1904,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       )}
                     </TableBody>
                   </Table>
-                </div>
-              </div>
             </Card>
           </div>
         )}

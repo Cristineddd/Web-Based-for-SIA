@@ -217,7 +217,13 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
 
         setActiveExam(targetExam);
         const cls = await resolveClassForExam(targetExam);
-        const rosterMap = new Map((cls?.students || []).map((student) => [student.student_id, student]));
+        const rosterStudents = cls?.students || [];
+        // Build a normalized map for robust lookup (trim + lowercase)
+        // If no class resolved, fall back to searching all available classes
+        const allRosterStudents = rosterStudents.length > 0
+          ? rosterStudents
+          : availableClasses.flatMap((c) => c.students || []);
+        const rosterMap = new Map(allRosterStudents.map((student) => [student.student_id.trim().toLowerCase(), student]));
 
         const scannedResult = await ScanningService.getScannedResultsByExamId(targetExam.id);
         if (!scannedResult.success || !scannedResult.data) {
@@ -230,7 +236,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
 
         const nextRows = latestResults
           .map((result) => {
-            const student = rosterMap.get(result.studentId);
+            const student = rosterMap.get(result.studentId.trim().toLowerCase());
             const percentage =
               result.totalQuestions > 0
                 ? Math.round((result.score / result.totalQuestions) * 100)
@@ -445,27 +451,45 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-green-100">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-500">Student Results</p>
-            <p className="text-2xl font-bold text-green-700">{rows.length}</p>
-          </CardContent>
+        <Card className="border border-gray-100 shadow-sm rounded-xl overflow-hidden bg-white">
+          <div className="flex items-center gap-4 p-4">
+            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Users className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Student Results</p>
+              <p className="text-2xl font-bold text-[#1e293b]">{rows.length}</p>
+            </div>
+          </div>
+          <div className="h-1 bg-gradient-to-r from-green-400 to-green-600" />
         </Card>
-        <Card className="border-green-100">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-500">Passed ({PASSING_PERCENTAGE}%+)</p>
-            <p className="text-2xl font-bold text-green-700">{totalPassed}</p>
-          </CardContent>
+        <Card className="border border-gray-100 shadow-sm rounded-xl overflow-hidden bg-white">
+          <div className="flex items-center gap-4 p-4">
+            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <FileText className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Passed ({PASSING_PERCENTAGE}%+)</p>
+              <p className="text-2xl font-bold text-[#1e293b]">{totalPassed}</p>
+            </div>
+          </div>
+          <div className="h-1 bg-gradient-to-r from-green-400 to-green-600" />
         </Card>
-        <Card className="border-green-100">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-500">Selected to Send</p>
-            <p className="text-2xl font-bold text-green-700">{selectedRows.length}</p>
-          </CardContent>
+        <Card className="border border-gray-100 shadow-sm rounded-xl overflow-hidden bg-white">
+          <div className="flex items-center gap-4 p-4">
+            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Mail className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Selected to Send</p>
+              <p className="text-2xl font-bold text-[#1e293b]">{selectedRows.length}</p>
+            </div>
+          </div>
+          <div className="h-1 bg-gradient-to-r from-green-400 to-green-600" />
         </Card>
       </div>
 
-      <Card className="border border-green-100 bg-white shadow-sm">
+      <Card className="border border-gray-100 shadow-sm rounded-xl bg-white">
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <p className="text-xs text-gray-500 mb-1">Exam</p>
@@ -520,13 +544,13 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Badge variant="outline" className="border-green-200 text-green-700">
+        <Badge variant="outline" className="border-gray-200 text-gray-500 font-medium">
           {filteredRows.length} student(s) in current filters
         </Badge>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            className="border-green-200 text-green-700"
+            className="border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700 hover:bg-green-50"
             onClick={handleSendSelected}
             disabled={sendingMode !== null || loadingRows || selectedRows.length === 0}
           >
@@ -543,7 +567,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
             )}
           </Button>
           <Button
-            className="bg-green-700 hover:bg-green-800"
+            className="bg-green-600 hover:bg-green-700"
             onClick={handleSendAll}
             disabled={sendingMode !== null || loadingRows || filteredRows.length === 0}
           >
@@ -562,7 +586,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
         </div>
       </div>
 
-      <Card className="border">
+      <Card className="border border-gray-100 shadow-sm rounded-xl bg-white overflow-hidden">
         {loadingRows ? (
           <div className="py-16 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-green-600" />

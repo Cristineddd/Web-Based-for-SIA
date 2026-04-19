@@ -169,7 +169,7 @@ export default function Archive() {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-accent" />
+          <Loader2 className="w-8 h-8 animate-spin text-green-600" />
         </div>
       ) : (items.length === 0 && reports.length === 0) ? (
         /* Empty State */

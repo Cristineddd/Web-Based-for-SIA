@@ -325,7 +325,7 @@ export function CreateExamModal({
             <>
               {/* Simple Mode UI matching Screenshot */}
               <div className="space-y-2">
-                <label className="text-[13px] font-bold text-gray-600">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
                   Exam Title
                 </label>
                 <input
@@ -339,7 +339,7 @@ export function CreateExamModal({
 
               {!formData.classId || !simpleMode ? (
                 <div className="space-y-2">
-                  <label className="text-[13px] font-bold text-gray-600">
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
                     Tag Class
                   </label>
                   {loadingClasses ? (
@@ -387,7 +387,7 @@ export function CreateExamModal({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <label className="text-[13px] font-bold text-gray-600">
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
                     Subject
                   </label>
                   <input
@@ -397,14 +397,14 @@ export function CreateExamModal({
                       handleInputChange("folder", e.target.value)
                     }
                     placeholder="e.g. Biology"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-[14px] focus:outline-none transition-all placeholder:text-gray-300 font-medium text-gray-500"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-[14px] focus:outline-none transition-all placeholder:text-gray-300 font-medium text-gray-500 cursor-not-allowed opacity-60"
                     readOnly
                   />
                 </div>
               )}
 
               <div className="space-y-3">
-                <label className="text-[13px] font-bold text-gray-600">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
                   Number of Items
                 </label>
                 <div className="grid grid-cols-3 gap-3">
@@ -609,32 +609,32 @@ export function CreateExamModal({
 
               {step === 6 && (
                 <div className="space-y-4">
-                  <div className="bg-gray-50 border rounded-lg p-4 space-y-2">
-                    <h4 className="text-sm font-semibold pb-2 border-b">
+                  <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-2 shadow-sm">
+                    <h4 className="text-sm font-bold text-gray-700 pb-2 border-b border-gray-100">
                       Summary
                     </h4>
-                    <div className="flex justify-between text-xs">
-                      <span>Name</span>
-                      <span>{formData.name}</span>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span className="text-gray-400">Name</span>
+                      <span className="font-semibold text-gray-700">{formData.name}</span>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span>Items</span>
-                      <span>{formData.totalQuestions}</span>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span className="text-gray-400">Items</span>
+                      <span className="font-semibold text-gray-700">{formData.totalQuestions}</span>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span>Class</span>
-                      <span>{formData.className}</span>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span className="text-gray-400">Class</span>
+                      <span className="font-semibold text-gray-700">{formData.className}</span>
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold">Exam Date</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Exam Date</label>
                     <input
                       type="date"
                       value={formData.date}
                       onChange={(e) =>
                         handleInputChange("date", e.target.value)
                       }
-                      className="w-full px-3 py-2.5 border rounded-lg text-sm"
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
                     />
                   </div>
                 </div>
@@ -644,13 +644,13 @@ export function CreateExamModal({
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 flex gap-3 px-6 py-5 border-t border-gray-100 bg-gray-50/50 rounded-b-xl">
+        <div className="flex-shrink-0 flex gap-3 px-6 py-4 border-t border-gray-100 bg-white rounded-b-xl">
           {simpleMode ? (
             <>
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-[14px] font-bold text-gray-500 hover:bg-gray-100 transition-colors"
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors"
               >
                 Cancel
               </button>
@@ -658,7 +658,7 @@ export function CreateExamModal({
                 type="button"
                 onClick={handleCreateExam}
                 disabled={isSubmitting || !formData.name.trim()}
-                className="flex-[1.5] px-4 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-xl text-[14px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/10 flex items-center justify-center gap-2"
+                className="flex-[1.5] px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>
@@ -674,27 +674,29 @@ export function CreateExamModal({
               {step > 1 && (
                 <button
                   onClick={() => setStep(step - 1)}
-                  className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-100"
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Back
                 </button>
               )}
               {step < 6 ? (
                 <button
+                  data-testid="next-button"
                   onClick={() => setStep(step + 1)}
                   disabled={
                     (step === 1 && !formData.name.trim()) ||
                     (step === 2 && !questionsPicked)
                   }
-                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue
                 </button>
               ) : (
                 <button
+                  data-testid="submit-button"
                   onClick={handleCreateExam}
                   disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? "Creating..." : "Create Exam"}
                 </button>

@@ -14,6 +14,8 @@ import {
   RefreshCw,
   Tag,
   Calendar,
+  Loader2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -37,7 +39,6 @@ import {
   type ExamFormData,
 } from "@/services/examService";
 import { getClasses, type Class } from "@/services/classService";
-import { AnswerKeyService } from "@/services/answerKeyService";
 import {
   collection,
   query,
@@ -179,57 +180,7 @@ export default function Exams() {
       // Filter out archived exams
       const activeExams = fetchedExams.filter((exam) => !exam.isArchived);
 
-      // Fetch answer key status for each exam
-      const examsWithStatus = await Promise.all(
-        activeExams.map(async (exam) => {
-          let answerKeyStatus = {
-            total: exam.num_items,
-            completed: 0,
-            hasAnswerKey: false,
-          };
-
-          try {
-            const result = await AnswerKeyService.getAnswerKeyByExamId(exam.id);
-            if (result.success && result.data) {
-              const answersCount = result.data.answers.length;
-              answerKeyStatus = {
-                total: exam.num_items,
-                completed: answersCount,
-                hasAnswerKey: true,
-              };
-            }
-          } catch (error) {
-            console.error(
-              `Error fetching answer key for exam ${exam.id}:`,
-              error,
-            );
-          }
-
-          // Check if a template exists for this exam
-          let hasTemplate = false;
-          try {
-            const templateQuery = query(
-              collection(db, "templates"),
-              where("examId", "==", exam.id),
-            );
-            const templateSnap = await getDocs(templateQuery);
-            hasTemplate = !templateSnap.empty;
-          } catch (error) {
-            console.error(
-              `Error checking template for exam ${exam.id}:`,
-              error,
-            );
-          }
-
-          return {
-            ...exam,
-            answerKeyStatus,
-            hasTemplate,
-          };
-        }),
-      );
-
-      setExams(examsWithStatus);
+      setExams(activeExams);
     } catch (error) {
       console.error("Error fetching exams:", error);
       toast.error("Failed to load exams");
@@ -522,6 +473,14 @@ export default function Exams() {
       exam.num_items.toString().includes(search),
   );
 
+  if (loading) {
+    return (
+      <div className="page-container flex items-center justify-center min-h-[55vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="page-container">
       {/* Header */}
@@ -712,45 +671,37 @@ export default function Exams() {
 
       {/* Edit Exam Dialog */}
       {editingExam && (
-        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[88vh]">
+
+            {/* Header */}
+            <div className="flex-shrink-0 flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Edit Exam</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Update the details of this exam</p>
+              </div>
               <button
                 onClick={() => setEditingExam(null)}
-                className="p-1 hover:bg-muted rounded-md"
+                className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+                <X className="w-4 h-4 text-gray-400" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Exam Code <span className="text-destructive">*</span>
+
+            {/* Scrollable Fields */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+
+              {/* Exam Code */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  Exam Code <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
                   <Input
                     type="text"
                     value={editForm.examCode}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        examCode: e.target.value.toUpperCase(),
-                      })
-                    }
-                    className="w-full font-mono"
+                    onChange={(e) => setEditForm({ ...editForm, examCode: e.target.value.toUpperCase() })}
+                    className="w-full font-mono text-sm bg-white border-gray-200 rounded-xl h-10 pr-10 focus-visible:ring-green-500/20 focus-visible:border-green-500"
                     placeholder="e.g. EX-ABC123"
                     maxLength={12}
                   />
@@ -759,74 +710,62 @@ export default function Exams() {
                     onClick={() => {
                       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
                       let code = "";
-                      for (let i = 0; i < 6; i++) {
-                        code += chars.charAt(
-                          Math.floor(Math.random() * chars.length),
-                        );
-                      }
+                      for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
                       setEditForm({ ...editForm, examCode: `EX-${code}` });
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-green-600 transition-colors"
                     title="Regenerate random code"
                   >
-                    <RefreshCw className="w-4 h-4" />
+                    <RefreshCw className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p className="text-[10px] text-muted-foreground italic">
-                  Unique identifier used for answer sheet scanning and
-                  identification.
-                </p>
+                <p className="text-[10px] text-gray-400">Unique identifier used for answer sheet scanning and identification.</p>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Course Code <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+              {/* Course Code */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  Course Code <span className="text-gray-300 font-normal normal-case">(optional)</span>
                 </label>
                 <Input
                   type="text"
                   value={editForm.courseCode}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, courseCode: e.target.value })
-                  }
-                  className="w-full"
+                  onChange={(e) => setEditForm({ ...editForm, courseCode: e.target.value })}
+                  className="w-full text-sm bg-white border-gray-200 rounded-xl h-10 focus-visible:ring-green-500/20 focus-visible:border-green-500"
                   placeholder="e.g. CS101, MATH201"
                   maxLength={20}
                 />
-                <p className="text-[10px] text-muted-foreground italic">
-                  Printed on the answer sheet header below the exam code.
-                </p>
+                <p className="text-[10px] text-gray-400">Printed on the answer sheet header below the exam code.</p>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Exam Name <span className="text-destructive">*</span>
+              {/* Exam Name */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  Exam Name <span className="text-red-400">*</span>
                 </label>
-                <input
+                <Input
                   type="text"
                   value={editForm.title}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, title: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full text-sm bg-white border-gray-200 rounded-xl h-10 focus-visible:ring-green-500/20 focus-visible:border-green-500"
                   placeholder="Exam name"
                 />
               </div>
-              <div className="space-y-1">{/* Subject / Folder removed */}</div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Number of Items <span className="text-destructive">*</span>
+
+              {/* Number of Items */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  Number of Items <span className="text-red-400">*</span>
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[20, 50, 100].map((num) => (
                     <button
                       key={num}
-                      onClick={() =>
-                        setEditForm({ ...editForm, num_items: num })
-                      }
-                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                      onClick={() => setEditForm({ ...editForm, num_items: num })}
+                      className={`py-2.5 rounded-xl font-bold text-sm border-2 transition-all ${
                         editForm.num_items === num
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-muted hover:border-primary"
+                          ? "bg-green-600 text-white border-green-600"
+                          : "border-gray-200 text-gray-500 hover:border-green-400 hover:text-green-600 hover:bg-green-50"
                       }`}
                     >
                       {num}
@@ -834,8 +773,10 @@ export default function Exams() {
                   ))}
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
+
+              {/* Choices per Question */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
                   Choices per Question
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -845,16 +786,11 @@ export default function Exams() {
                   ].map((opt) => (
                     <button
                       key={opt.value}
-                      onClick={() =>
-                        setEditForm({
-                          ...editForm,
-                          choices_per_item: opt.value,
-                        })
-                      }
-                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                      onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                      className={`py-2.5 rounded-xl font-bold text-sm border-2 transition-all ${
                         editForm.choices_per_item === opt.value
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-muted hover:border-primary"
+                          ? "bg-green-600 text-white border-green-600"
+                          : "border-gray-200 text-gray-500 hover:border-green-400 hover:text-green-600 hover:bg-green-50"
                       }`}
                     >
                       {opt.label}
@@ -862,8 +798,10 @@ export default function Exams() {
                   ))}
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
+
+              {/* Exam Type */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
                   Exam Type
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -873,16 +811,11 @@ export default function Exams() {
                   ].map((opt) => (
                     <button
                       key={opt.value}
-                      onClick={() =>
-                        setEditForm({
-                          ...editForm,
-                          examType: opt.value as "board" | "diagnostic",
-                        })
-                      }
-                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${
+                      onClick={() => setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })}
+                      className={`py-2.5 rounded-xl font-bold text-sm border-2 transition-all ${
                         editForm.examType === opt.value
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-muted hover:border-primary"
+                          ? "bg-green-600 text-white border-green-600"
+                          : "border-gray-200 text-gray-500 hover:border-green-400 hover:text-green-600 hover:bg-green-50"
                       }`}
                     >
                       {opt.label}
@@ -890,43 +823,45 @@ export default function Exams() {
                   ))}
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
+
+              {/* Tagged Class */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
                   Tagged Class
                 </label>
-                <div className="grid grid-cols-1 gap-2">
-                  <select
-                    value={editForm.classId}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, classId: e.target.value })
-                    }
-                    className="w-full h-10 px-3 rounded-md border-2 border-muted bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  >
-                    <option value="">No Class (Unallocated)</option>
-                    {Object.values(classById).map((cls) => (
-                      <option key={cls.id} value={cls.id}>
-                        {cls.class_name} ({cls.course_subject})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <select
+                  value={editForm.classId}
+                  onChange={(e) => setEditForm({ ...editForm, classId: e.target.value })}
+                  className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm text-gray-700 transition-all"
+                >
+                  <option value="">No Class (Unallocated)</option>
+                  {Object.values(classById).map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.class_name} ({cls.course_subject})
+                    </option>
+                  ))}
+                </select>
               </div>
+
             </div>
-            <div className="flex gap-3 p-6 border-t">
+
+            {/* Footer */}
+            <div className="flex-shrink-0 flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
               <button
                 onClick={() => setEditingExam(null)}
-                className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
+                className="px-5 py-2 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit}
-                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
                 {isSavingEdit ? "Saving..." : "Save Changes"}
               </button>
             </div>
+
           </div>
         </div>
       )}
