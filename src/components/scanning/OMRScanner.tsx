@@ -1236,6 +1236,56 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             oCtx.fillText(label, cx, cy + 1);
           }
 
+          // 2b. Student ID box overlays (full ID area + per-column boxes)
+          const idLayout = getTemplateLayout(overlayItems);
+          const idPadNX = idLayout.bubbleDiameterNX * 0.9;
+          const idPadNY = idLayout.bubbleDiameterNY * 0.8;
+          const idLeftNX = idLayout.id.firstColNX - idPadNX;
+          const idTopNY = idLayout.id.firstRowNY - idPadNY;
+          const idRightNX = idLayout.id.firstColNX + 8 * idLayout.id.colSpacingNX + idLayout.bubbleDiameterNX + idPadNX;
+          const idBottomNY = idLayout.id.firstRowNY + 9 * idLayout.id.rowSpacingNY + idLayout.bubbleDiameterNY + idPadNY;
+          const idP1 = mapToPixel(debugMarkers, idLeftNX, idTopNY);
+          const idP2 = mapToPixel(debugMarkers, idRightNX, idTopNY);
+          const idP3 = mapToPixel(debugMarkers, idRightNX, idBottomNY);
+          const idP4 = mapToPixel(debugMarkers, idLeftNX, idBottomNY);
+          const baseLineW = Math.max(2, Math.round(Math.min(iw, ih) * 0.004));
+
+          oCtx.beginPath();
+          oCtx.moveTo(idP1.px, idP1.py);
+          oCtx.lineTo(idP2.px, idP2.py);
+          oCtx.lineTo(idP3.px, idP3.py);
+          oCtx.lineTo(idP4.px, idP4.py);
+          oCtx.closePath();
+          oCtx.fillStyle = 'rgba(59, 130, 246, 0.10)';
+          oCtx.fill();
+          oCtx.strokeStyle = 'rgba(37, 99, 235, 0.95)';
+          oCtx.lineWidth = baseLineW;
+          oCtx.stroke();
+
+          for (let col = 0; col < 9; col++) {
+            const colLeftNX = idLayout.id.firstColNX + col * idLayout.id.colSpacingNX - idLayout.bubbleDiameterNX * 0.45;
+            const colRightNX = idLayout.id.firstColNX + col * idLayout.id.colSpacingNX + idLayout.bubbleDiameterNX * 0.55;
+            const c1 = mapToPixel(debugMarkers, colLeftNX, idTopNY);
+            const c2 = mapToPixel(debugMarkers, colRightNX, idTopNY);
+            const c3 = mapToPixel(debugMarkers, colRightNX, idBottomNY);
+            const c4 = mapToPixel(debugMarkers, colLeftNX, idBottomNY);
+            const digit = detectedRawIdDigits?.[col] ?? -1;
+            const colStroke = digit >= 0 ? 'rgba(37, 99, 235, 0.85)' : 'rgba(239, 68, 68, 0.95)';
+            const colFill = digit >= 0 ? 'rgba(59, 130, 246, 0.06)' : 'rgba(239, 68, 68, 0.08)';
+
+            oCtx.beginPath();
+            oCtx.moveTo(c1.px, c1.py);
+            oCtx.lineTo(c2.px, c2.py);
+            oCtx.lineTo(c3.px, c3.py);
+            oCtx.lineTo(c4.px, c4.py);
+            oCtx.closePath();
+            oCtx.fillStyle = colFill;
+            oCtx.fill();
+            oCtx.strokeStyle = colStroke;
+            oCtx.lineWidth = Math.max(1.5, baseLineW - 1);
+            oCtx.stroke();
+          }
+
           // 3. Optional per-bubble circles (disabled by default to keep a clean
           // square-box overlay view).
           const showBubbleCircles = true;
@@ -1243,7 +1293,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             // For page 2 of a 200-item exam, qIndex is 0-99 but represents Q101-200,
             // so offset the answerKey lookup by 100.
             const answerKeyOffset = exam.num_items > 150 && scanPage === 2 ? 100 : 0;
-            const lineW = Math.max(2, Math.round(Math.min(iw, ih) * 0.004));
+            const lineW = baseLineW;
             for (const hit of bubbleHits) {
               const qIdx = hit.qIndex;
               const isMultiple = multipleAnswers.includes(qIdx + 1);
@@ -1263,9 +1313,31 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               oCtx.stroke();
             }
 
+            // If a question has no detected answer, draw all choices in red for that row.
+            const frameWOverlay = debugMarkers.topRight.x - debugMarkers.topLeft.x;
+            const frameHOverlay = debugMarkers.bottomLeft.y - debugMarkers.topLeft.y;
+            const missRX = Math.max(4, (overlayLayout.bubbleDiameterNX * frameWOverlay) / 2);
+            const missRY = Math.max(4, (overlayLayout.bubbleDiameterNY * frameHOverlay) / 2);
+            for (const block of overlayLayout.answerBlocks) {
+              for (let q = block.startQ; q <= block.endQ && q <= answers.length; q++) {
+                const qIdx = q - 1;
+                if (answers[qIdx]) continue;
+                const rowInBlock = q - block.startQ;
+                for (let c = 0; c < exam.choices_per_item; c++) {
+                  const nx = block.firstBubbleNX + c * block.bubbleSpacingNX;
+                  const ny = block.firstBubbleNY + rowInBlock * block.rowSpacingNY;
+                  const { px, py } = mapToPixel(debugMarkers, nx, ny);
+                  oCtx.strokeStyle = '#ef4444';
+                  oCtx.lineWidth = lineW;
+                  oCtx.beginPath();
+                  oCtx.ellipse(px, py, missRX, missRY, 0, 0, Math.PI * 2);
+                  oCtx.stroke();
+                }
+              }
+            }
+
             // Blue circles over detected ID bubbles
             if (detectedRawIdDigits && detectedRawIdDigits.length > 0) {
-              const idLayout = getTemplateLayout(exam.num_items);
               const idBubbleR = Math.max(4, Math.round(Math.min(iw, ih) * 0.008));
               oCtx.lineWidth = lineW;
               for (let col = 0; col < 9; col++) {
