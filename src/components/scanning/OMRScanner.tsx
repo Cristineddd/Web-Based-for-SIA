@@ -1154,45 +1154,131 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             oCtx.stroke();
           }
 
-          // 2. Circles over answered bubbles
-          // For page 2 of a 200-item exam, qIndex is 0-99 but represents Q101-200,
-          // so offset the answerKey lookup by 100.
-          const answerKeyOffset = exam.num_items > 150 && scanPage === 2 ? 100 : 0;
-          const lineW = Math.max(2, Math.round(Math.min(iw, ih) * 0.004));
-          for (const hit of bubbleHits) {
-            const qIdx = hit.qIndex;
-            const isMultiple = multipleAnswers.includes(qIdx + 1);
-            const akIdx = qIdx + answerKeyOffset;
-            const isCorrect = answerKey[akIdx] && hit.choice.toUpperCase() === answerKey[akIdx].toUpperCase();
+          // 2. Draw colored box overlays per question block (Q1-10, Q11-20, etc.)
+          // This makes each section boundary explicit and helps visualize block drift.
+          const overlayItems = exam.num_items > 150 ? 100 : exam.num_items;
+          const overlayLayout = getTemplateLayout(overlayItems);
+          const pageOffset = exam.num_items > 150 && scanPage === 2 ? 100 : 0;
+          const blockLineW = Math.max(2, Math.round(Math.min(iw, ih) * 0.003));
+          const blockColors = [
+            'rgba(239, 68, 68, 0.14)',
+            'rgba(34, 197, 94, 0.14)',
+            'rgba(245, 158, 11, 0.14)',
+            'rgba(234, 179, 8, 0.14)',
+            'rgba(168, 85, 247, 0.14)',
+            'rgba(6, 182, 212, 0.14)',
+            'rgba(99, 102, 241, 0.14)',
+            'rgba(217, 70, 239, 0.14)',
+            'rgba(14, 165, 233, 0.14)',
+            'rgba(132, 204, 22, 0.14)',
+            'rgba(244, 114, 182, 0.14)',
+            'rgba(251, 146, 60, 0.14)',
+            'rgba(45, 212, 191, 0.14)',
+            'rgba(250, 204, 21, 0.14)',
+            'rgba(192, 132, 252, 0.14)',
+          ];
 
-            if (isMultiple) {
-              oCtx.strokeStyle = '#facc15'; // yellow-400
-            } else if (isCorrect) {
-              oCtx.strokeStyle = '#22c55e'; // green-500
-            } else {
-              oCtx.strokeStyle = '#ef4444'; // red-500
-            }
-            oCtx.lineWidth = lineW;
+          for (let bi = 0; bi < overlayLayout.answerBlocks.length; bi++) {
+            const block = overlayLayout.answerBlocks[bi];
+            const rows = Math.max(1, Math.min(10, block.endQ - block.startQ + 1));
+            const padNX = overlayLayout.bubbleDiameterNX * 0.9;
+            const padNY = overlayLayout.bubbleDiameterNY * 0.8;
+            const leftNX = block.firstBubbleNX - padNX;
+            const topNY = block.firstBubbleNY - padNY;
+            const rightNX =
+              block.firstBubbleNX +
+              Math.max(0, exam.choices_per_item - 1) * block.bubbleSpacingNX +
+              overlayLayout.bubbleDiameterNX +
+              padNX;
+            const bottomNY =
+              block.firstBubbleNY +
+              Math.max(0, rows - 1) * block.rowSpacingNY +
+              overlayLayout.bubbleDiameterNY +
+              padNY;
+
+            const p1 = mapToPixel(debugMarkers, leftNX, topNY);
+            const p2 = mapToPixel(debugMarkers, rightNX, topNY);
+            const p3 = mapToPixel(debugMarkers, rightNX, bottomNY);
+            const p4 = mapToPixel(debugMarkers, leftNX, bottomNY);
+
+            const fill = blockColors[bi % blockColors.length];
+            const stroke = fill.replace('0.14', '0.95');
+
             oCtx.beginPath();
-            oCtx.ellipse(hit.px, hit.py, hit.rx, hit.ry, 0, 0, Math.PI * 2);
+            oCtx.moveTo(p1.px, p1.py);
+            oCtx.lineTo(p2.px, p2.py);
+            oCtx.lineTo(p3.px, p3.py);
+            oCtx.lineTo(p4.px, p4.py);
+            oCtx.closePath();
+            oCtx.fillStyle = fill;
+            oCtx.fill();
+            oCtx.lineWidth = blockLineW;
+            oCtx.strokeStyle = stroke;
             oCtx.stroke();
+
+            const label = `${block.startQ + pageOffset}-${block.endQ + pageOffset}`;
+            const cx = (p1.px + p2.px) / 2;
+            const cy = (p1.py + p2.py) / 2;
+            const fontSize = Math.max(10, Math.round(Math.min(iw, ih) * 0.014));
+            oCtx.font = `700 ${fontSize}px sans-serif`;
+            const tw = oCtx.measureText(label).width;
+            const pad = Math.max(4, Math.round(fontSize * 0.35));
+            const boxW = tw + pad * 2;
+            const boxH = fontSize + pad * 1.6;
+            const boxX = cx - boxW / 2;
+            const boxY = cy - boxH / 2;
+
+            oCtx.fillStyle = 'rgba(17, 24, 39, 0.85)';
+            oCtx.fillRect(boxX, boxY, boxW, boxH);
+            oCtx.fillStyle = '#ffffff';
+            oCtx.textAlign = 'center';
+            oCtx.textBaseline = 'middle';
+            oCtx.fillText(label, cx, cy + 1);
           }
 
-          // 3. Blue circles over detected ID bubbles
-          if (detectedRawIdDigits && detectedRawIdDigits.length > 0) {
-            const idLayout = getTemplateLayout(exam.num_items);
-            const idBubbleR = Math.max(4, Math.round(Math.min(iw, ih) * 0.008));
-            oCtx.lineWidth = lineW;
-            for (let col = 0; col < 9; col++) {
-              const digit = detectedRawIdDigits[col];
-              if (digit < 0) continue; // unshaded (-1) or double-shade (-2)
-              const nx = idLayout.id.firstColNX + col * idLayout.id.colSpacingNX;
-              const ny = idLayout.id.firstRowNY + digit * idLayout.id.rowSpacingNY;
-              const { px: idPx, py: idPy } = mapToPixel(debugMarkers, nx, ny);
-              oCtx.strokeStyle = '#3b82f6'; // blue-500
+          // 3. Optional per-bubble circles (disabled by default to keep a clean
+          // square-box overlay view).
+          const showBubbleCircles = true;
+          if (showBubbleCircles) {
+            // For page 2 of a 200-item exam, qIndex is 0-99 but represents Q101-200,
+            // so offset the answerKey lookup by 100.
+            const answerKeyOffset = exam.num_items > 150 && scanPage === 2 ? 100 : 0;
+            const lineW = Math.max(2, Math.round(Math.min(iw, ih) * 0.004));
+            for (const hit of bubbleHits) {
+              const qIdx = hit.qIndex;
+              const isMultiple = multipleAnswers.includes(qIdx + 1);
+              const akIdx = qIdx + answerKeyOffset;
+              const isCorrect = answerKey[akIdx] && hit.choice.toUpperCase() === answerKey[akIdx].toUpperCase();
+
+              if (isMultiple) {
+                oCtx.strokeStyle = '#facc15'; // yellow-400
+              } else if (isCorrect) {
+                oCtx.strokeStyle = '#22c55e'; // green-500
+              } else {
+                oCtx.strokeStyle = '#ef4444'; // red-500
+              }
+              oCtx.lineWidth = lineW;
               oCtx.beginPath();
-              oCtx.ellipse(idPx, idPy, idBubbleR, idBubbleR, 0, 0, Math.PI * 2);
+              oCtx.ellipse(hit.px, hit.py, hit.rx, hit.ry, 0, 0, Math.PI * 2);
               oCtx.stroke();
+            }
+
+            // Blue circles over detected ID bubbles
+            if (detectedRawIdDigits && detectedRawIdDigits.length > 0) {
+              const idLayout = getTemplateLayout(exam.num_items);
+              const idBubbleR = Math.max(4, Math.round(Math.min(iw, ih) * 0.008));
+              oCtx.lineWidth = lineW;
+              for (let col = 0; col < 9; col++) {
+                const digit = detectedRawIdDigits[col];
+                if (digit < 0) continue; // unshaded (-1) or double-shade (-2)
+                const nx = idLayout.id.firstColNX + col * idLayout.id.colSpacingNX;
+                const ny = idLayout.id.firstRowNY + digit * idLayout.id.rowSpacingNY;
+                const { px: idPx, py: idPy } = mapToPixel(debugMarkers, nx, ny);
+                oCtx.strokeStyle = '#3b82f6'; // blue-500
+                oCtx.beginPath();
+                oCtx.ellipse(idPx, idPy, idBubbleR, idBubbleR, 0, 0, Math.PI * 2);
+                oCtx.stroke();
+              }
             }
           }
 
@@ -1212,7 +1298,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       let matched: Student | null = null;
 
       // If there's an alignment error and ID detection issues, prioritize the alignment message
-      const hasAlignmentIssue = !markersFound || markerConfidence < 0.2;
+      const hasAlignmentIssue = !markersFound || markerConfidence < 0.32;
       
       if (idDoubleShades.length > 0) {
         // Check if this might be caused by alignment issues
@@ -2061,7 +2147,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     // Gaussian σ = half the inner radius; weight falls to ~14% at the edge
     const sigX = innerRX * 0.5;
     const sigY = innerRY * 0.5;
-    const step = Math.max(1, Math.floor(Math.min(innerRX, innerRY) / 5));
+    // Use a finer step for small bubbles: target at least 4 steps per radius
+    // so tiny bubbles (~4-6px radius) still get meaningful sample coverage.
+    const step = Math.max(1, Math.floor(Math.min(innerRX, innerRY) / 4));
 
     let wSum = 0, sum = 0;
     const samples: number[] = [];
@@ -2093,7 +2181,46 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     // Return the lower (darker) of the two — catches both large-area fills and
     // concentrated centre-only fills (e.g. short pencil strokes).
-    return Math.min(weightedMean, p10 * 0.85 + weightedMean * 0.15);
+    // Blend leans more on p10 (0.75 weight) so a solidly-filled centre isn't
+    // diluted by bright border pixels sampled at the inner-radius edge.
+    return Math.min(weightedMean, p10 * 0.75 + weightedMean * 0.25);
+  };
+
+  // Refine a nominal bubble center by searching nearby offsets for the darkest
+  // sampled center. This compensates for small perspective/layout drift that can
+  // make sampling land between bubbles.
+  const refineBubbleCenter = (
+    grayscale: Uint8Array,
+    imgW: number,
+    imgH: number,
+    basePx: number,
+    basePy: number,
+    radiusX: number,
+    radiusY: number
+  ): { px: number; py: number } => {
+    const maxShiftX = Math.max(1, Math.round(radiusX * 0.6));
+    const maxShiftY = Math.max(1, Math.round(radiusY * 0.6));
+    const stepX = Math.max(1, Math.round(maxShiftX / 2));
+    const stepY = Math.max(1, Math.round(maxShiftY / 2));
+
+    let bestPx = Math.round(basePx);
+    let bestPy = Math.round(basePy);
+    let bestVal = sampleBubbleAt(grayscale, imgW, imgH, bestPx, bestPy, radiusX, radiusY);
+
+    for (let dy = -maxShiftY; dy <= maxShiftY; dy += stepY) {
+      for (let dx = -maxShiftX; dx <= maxShiftX; dx += stepX) {
+        const px = Math.round(basePx + dx);
+        const py = Math.round(basePy + dy);
+        const val = sampleBubbleAt(grayscale, imgW, imgH, px, py, radiusX, radiusY);
+        if (val < bestVal) {
+          bestVal = val;
+          bestPx = px;
+          bestPy = py;
+        }
+      }
+    }
+
+    return { px: bestPx, py: bestPy };
   };
 
   // ─── DETECT STUDENT ID ───
@@ -2126,6 +2253,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     // ID bubbles are slightly smaller than answer bubbles
     const idBubbleRX = bubbleRX * (3.5 / 3.8);
     const idBubbleRY = bubbleRY * (3.5 / 3.8);
+    const idMinR = Math.max(1, Math.min(idBubbleRX, idBubbleRY));
+    const idSmallFactor = Math.max(0, Math.min(1, (4.0 - idMinR) / 2.0));
+    const idTier1Ratio = 0.74 + idSmallFactor * 0.03;
+    const idTier2Ratio = 0.86 + idSmallFactor * 0.03;
+    const idGapMin = 0.10 - idSmallFactor * 0.02;
 
     console.log('[ID] BubbleR:', idBubbleRX.toFixed(1), 'x', idBubbleRY.toFixed(1));
 
@@ -2143,7 +2275,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const nx = id.firstColNX + col * id.colSpacingNX;
         const ny = id.firstRowNY + row * id.rowSpacingNY;
         const { px, py } = mapToPixel(markers, nx, ny);
-        const brightness = sampleBubbleAt(grayscale, width, height, px, py, idBubbleRX, idBubbleRY);
+        const refined = refineBubbleCenter(grayscale, width, height, px, py, idBubbleRX, idBubbleRY);
+        const brightness = sampleBubbleAt(grayscale, width, height, refined.px, refined.py, idBubbleRX, idBubbleRY);
         fills.push(brightness);
       }
 
@@ -2164,18 +2297,20 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       // darkest sample, so filled bubbles appear darker than before.
       //
       // Tier 1 – Strong fill (clear dark mark):
-      //   darkest < 68% of upper-quartile reference  → definite fill
+      //   darkest < idTier1Ratio of reference  → definite fill
       // Tier 2 – Light fill (light pencil / faded ink):
-      //   darkest < 82% of upper-quartile  AND  gap to 2nd > 12% of reference
+      //   darkest < idTier2Ratio of reference  AND  gap to 2nd > idGapMin
       //   → probably intentional (stands out from neighbours)
-      const darkRatio = upperQ > 20 ? darkest / upperQ : 1;
+      const secondBrightest = sorted.length >= 2 ? sorted[sorted.length - 2] : upperQ;
+      const ref = (upperQ + secondBrightest) / 2;
+      const darkRatio = ref > 20 ? darkest / ref : 1;
       const gapFromSecond = secondDark - darkest;
-      const gapRatio = upperQ > 20 ? gapFromSecond / upperQ : 0;
+      const gapRatio = ref > 20 ? gapFromSecond / ref : 0;
 
-      if (darkRatio < 0.68) {
+      if (darkRatio < idTier1Ratio) {
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
-      } else if (darkRatio < 0.82 && gapRatio > 0.12) {
+      } else if (darkRatio < idTier2Ratio && gapRatio > idGapMin) {
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
       }
@@ -2185,11 +2320,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         // meet the Tier-1 fill threshold (< 68% of ref), AND they must be very
         // close together (gap < 6%). This prevents print noise / slightly-absorbed
         // ink from triggering a false double-shade.
-        const secondRatio = upperQ > 20 ? secondDark / upperQ : 1;
-        const gapBetweenTopTwo = upperQ > 20 ? gapFromSecond / upperQ : 1;
-        if (secondRatio < 0.68 && gapBetweenTopTwo < 0.06) {
+        const secondRatio = ref > 20 ? secondDark / ref : 1;
+        const gapBetweenTopTwo = ref > 20 ? gapFromSecond / ref : 1;
+        if (secondRatio < 0.74 && gapBetweenTopTwo < 0.07) {
           doubleShadeColumns.push(col + 1);
-          console.log(`[ID] ⚠️ Col ${col} DOUBLE SHADE: darkest=${darkest.toFixed(0)} 2nd=${secondDark.toFixed(0)} upperQ=${upperQ.toFixed(0)}`);
+          console.log(`[ID] ⚠️ Col ${col} DOUBLE SHADE: darkest=${darkest.toFixed(0)} 2nd=${secondDark.toFixed(0)} ref=${ref.toFixed(0)}`);
           idDigits.push(-2);
           continue;
         }
@@ -2200,7 +2335,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       // The digit '0' should ONLY appear if the '0' bubble is actually shaded
       const digitChar = hasDetection && detectedDigit !== null ? String(detectedDigit) : '_';
       
-      console.log(`[ID] Col ${col}: brightness=[${fills.map(f => f.toFixed(0)).join(',')}] → ${digitChar} (darkest=${darkest.toFixed(0)} upperQ=${upperQ.toFixed(0)} ratio=${darkRatio.toFixed(2)} gap=${gapRatio.toFixed(2)})`);
+      console.log(`[ID] Col ${col}: brightness=[${fills.map(f => f.toFixed(0)).join(',')}] → ${digitChar} (darkest=${darkest.toFixed(0)} ref=${ref.toFixed(0)} ratio=${darkRatio.toFixed(2)} gap=${gapRatio.toFixed(2)})`);
       idDigits.push(hasDetection && detectedDigit !== null ? detectedDigit : -1); // -1 = unshaded, -2 = double-shade
     }
 
@@ -2246,6 +2381,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const frameH = markers.bottomLeft.y - markers.topLeft.y;
     const bubbleRX = (layout.bubbleDiameterNX * frameW) / 2;
     const bubbleRY = (layout.bubbleDiameterNY * frameH) / 2;
+    const minR = Math.max(1, Math.min(bubbleRX, bubbleRY));
+    const smallBubbleFactor = Math.max(0, Math.min(1, (4.5 - minR) / 2.5));
+    const ansTier1Ratio = 0.68 + smallBubbleFactor * 0.03;
+    const ansTier2Ratio = 0.82 + smallBubbleFactor * 0.03;
+    const ansGapMin = 0.12 - smallBubbleFactor * 0.02;
 
     console.log(`[ANS] Frame: ${Math.round(frameW)}x${Math.round(frameH)}px, BubbleR: ${bubbleRX.toFixed(1)}x${bubbleRY.toFixed(1)}px`);
 
@@ -2263,8 +2403,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           const nx = block.firstBubbleNX + c * block.bubbleSpacingNX;
           const ny = block.firstBubbleNY + rowInBlock * block.rowSpacingNY;
           const { px, py } = mapToPixel(markers, nx, ny);
-          const brightness = sampleBubbleAt(grayscale, width, height, px, py, bubbleRX, bubbleRY);
-          fills.push({ choice: choiceLabels[c], brightness, px, py });
+          const refined = refineBubbleCenter(grayscale, width, height, px, py, bubbleRX, bubbleRY);
+          const brightness = sampleBubbleAt(grayscale, width, height, refined.px, refined.py, bubbleRX, bubbleRY);
+          fills.push({ choice: choiceLabels[c], brightness, px: refined.px, py: refined.py });
         }
 
         // Sort ASCENDING by brightness — darkest (most filled) first
@@ -2275,20 +2416,22 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
         let selectedChoice = '';
 
-        // Use the brightest bubble as the "unfilled" reference.
-        // For a row of N choices, at most 1 is filled — the brightest N-1 are unfilled.
-        const ref = brightest;
+        // Use the average of the 2 brightest bubbles as the "unfilled" reference.
+        // Averaging two prevents a single glare spot from inflating the reference
+        // and making a real mark look unfilled.
+        const secondBrightest = sorted.length >= 2 ? sorted[sorted.length - 2].brightness : brightest;
+        const ref = (brightest + secondBrightest) / 2;
         const darkRatio = ref > 20 ? darkest / ref : 1;
         const gapFromSecond = secondDark - darkest;
         const gapRatio = ref > 20 ? gapFromSecond / ref : 0;
 
         // ── Detection tiers (Gaussian-weighted sampler) ──
-        // Tier 1 – Strong fill:   darkest < 68% of brightest  → definite mark
-        // Tier 2 – Light fill:    darkest < 82% of brightest  AND gap to 2nd > 12%
+        // Tier 1 – Strong fill:   darkest < ansTier1Ratio of reference  → definite mark
+        // Tier 2 – Light fill:    darkest < ansTier2Ratio of reference  AND gap to 2nd > ansGapMin
         //          → intentional light mark (pen nearly dry, hard-pressure pencil, etc.)
-        if (darkRatio < 0.68) {
+        if (darkRatio < ansTier1Ratio) {
           selectedChoice = sorted[0].choice;
-        } else if (darkRatio < 0.82 && gapRatio > 0.12) {
+        } else if (darkRatio < ansTier2Ratio && gapRatio > ansGapMin) {
           selectedChoice = sorted[0].choice;
         }
 
