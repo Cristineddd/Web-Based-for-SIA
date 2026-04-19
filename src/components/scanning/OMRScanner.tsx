@@ -2331,6 +2331,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const idTier2Ratio = 0.82 + idSmallFactor * 0.03;
     const idGapMin = 0.11 - idSmallFactor * 0.015;
     const idAbsGapMin = 9 - idSmallFactor * 2;
+    const idFallbackDarkMax = 172;
+    const idFallbackSpreadMin = 7 - idSmallFactor * 1.5;
 
     console.log('[ID] BubbleR:', idBubbleRX.toFixed(1), 'x', idBubbleRY.toFixed(1));
     console.log(`[ID] thresholds: tier1=${idTier1Ratio.toFixed(2)} tier2=${idTier2Ratio.toFixed(2)} gapRatio>${idGapMin.toFixed(2)} absGap>${idAbsGapMin.toFixed(1)}`);
@@ -2351,7 +2353,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const { px, py } = mapToPixel(markers, nx, ny);
         // ID rows are dense near the write-in boxes; avoid center-refinement drift
         // so a shaded digit doesn't jump to row 0 due nearby border darkness.
-        const brightness = sampleBubbleAt(grayscale, width, height, px, py, idBubbleRX, idBubbleRY);
+        const pyAdjusted = py + idBubbleRY * 0.12;
+        const brightness = sampleBubbleAt(grayscale, width, height, px, pyAdjusted, idBubbleRX, idBubbleRY);
         fills.push(brightness);
       }
 
@@ -2381,11 +2384,17 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       const darkRatio = ref > 20 ? darkest / ref : 1;
       const gapFromSecond = secondDark - darkest;
       const gapRatio = ref > 20 ? gapFromSecond / ref : 0;
+      const spread = upperQ - darkest;
 
       if (darkRatio < idTier1Ratio && gapFromSecond > idAbsGapMin * 0.45) {
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
       } else if (darkRatio < idTier2Ratio && (gapRatio > idGapMin || gapFromSecond > idAbsGapMin)) {
+        detectedDigit = fills.indexOf(darkest);
+        hasDetection = true;
+      } else if (darkest < idFallbackDarkMax && spread > idFallbackSpreadMin && gapFromSecond > 2) {
+        // Fallback for light Mongol #2 pencil marks: accept a clear darkest bubble
+        // when absolute darkness/spread indicates an intentional shade.
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
       }
@@ -2462,6 +2471,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const ansTier2Ratio = 0.87 + smallBubbleFactor * 0.03;
     const ansGapMin = 0.08 - smallBubbleFactor * 0.015;
     const ansAbsGapMin = 7 - smallBubbleFactor * 2;
+    const ansFallbackDarkMax = 176;
+    const ansFallbackSpreadMin = 8 - smallBubbleFactor * 1.5;
 
     console.log(`[ANS] Frame: ${Math.round(frameW)}x${Math.round(frameH)}px, BubbleR: ${bubbleRX.toFixed(1)}x${bubbleRY.toFixed(1)}px`);
     console.log(`[ANS] thresholds: tier1=${ansTier1Ratio.toFixed(2)} tier2=${ansTier2Ratio.toFixed(2)} gapRatio>${ansGapMin.toFixed(2)} absGap>${ansAbsGapMin.toFixed(1)}`);
@@ -2501,6 +2512,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const darkRatio = ref > 20 ? darkest / ref : 1;
         const gapFromSecond = secondDark - darkest;
         const gapRatio = ref > 20 ? gapFromSecond / ref : 0;
+        const spread = brightest - darkest;
 
         // ── Detection tiers (Gaussian-weighted sampler) ──
         // Tier 1 – Strong fill:   darkest < ansTier1Ratio of reference  → definite mark
@@ -2509,6 +2521,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         if (darkRatio < ansTier1Ratio) {
           selectedChoice = sorted[0].choice;
         } else if (darkRatio < ansTier2Ratio && (gapRatio > ansGapMin || gapFromSecond > ansAbsGapMin)) {
+          selectedChoice = sorted[0].choice;
+        } else if (darkest < ansFallbackDarkMax && spread > ansFallbackSpreadMin && gapFromSecond > 2) {
+          // Fallback for lighter pencil fills when ratio checks are too strict.
           selectedChoice = sorted[0].choice;
         }
 
