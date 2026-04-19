@@ -1,52 +1,42 @@
 /**
- * POST /api/send-results
+ * POST /api/send-class-scores
  *
- * Sends GC-branded exam result emails to students.
- * Each student receives their own individual score notification.
- * SMTP is configured via environment variables (.env.local).
+ * Sends each student their complete class score record across exams.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  sendEmail,
-  processEmailQueue,
   isEmailConfigured,
+  processEmailQueue,
+  sendEmail,
   type EmailMessage,
 } from '@/services/emailService';
 import {
+  classScoreSummaryEmail,
+  classScoreSummaryText,
   facultyDeliveryEmail,
   facultyDeliveryText,
-  studentScoreEmail,
-  studentScoreText,
+  type ClassScoreRecord,
+  type ClassScoreSummaryEmailData,
   type FacultyDeliveryStudentStatus,
-  type StudentScoreEmailData,
 } from '@/services/emailTemplateService';
 import { GC_FULL_NAME } from '@/lib/gcBranding';
 
-// ─── Request body ───────────────────────────────────────────────────────────
-
-interface StudentPayload {
+interface StudentClassScorePayload {
   studentId: string;
   studentName: string;
   email: string;
-  score: number;
-  totalQuestions: number;
-  percentage: number;
-  grade: string;
-  date: string;
+  examRecords: ClassScoreRecord[];
 }
 
-interface SendResultsBody {
+interface SendClassScoresBody {
   className: string;
-  examTitle: string;
   passingThreshold: number;
-  students: StudentPayload[];
+  students: StudentClassScorePayload[];
+  course?: string;
   instructorName?: string;
   instructorEmail?: string;
-  subject?: string;
 }
-
-// ─── Handler ────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,7 +51,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: SendResultsBody = await request.json();
+    const body: SendClassScoresBody = await request.json();
+
+    if (!body.className) {
+      return NextResponse.json(
+        { success: false, error: 'className is required.' },
+        { status: 400 },
+      );
+    }
 
     if (!body.students?.length) {
       return NextResponse.json(
@@ -70,45 +67,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!body.className || !body.examTitle) {
-      return NextResponse.json(
-        { success: false, error: 'className and examTitle are required.' },
-        { status: 400 },
-      );
-    }
-
-    // Build one email per student
-    const messages: EmailMessage[] = body.students.map((s) => {
-      const scoreData: StudentScoreEmailData = {
-        studentName: s.studentName,
-        studentId: s.studentId,
+    const messages: EmailMessage[] = body.students.map((student) => {
+      const emailData: ClassScoreSummaryEmailData = {
+        studentName: student.studentName,
+        studentId: student.studentId,
         className: body.className,
-        examTitle: body.examTitle,
-        score: s.score,
-        totalQuestions: s.totalQuestions,
-        percentage: s.percentage,
-        grade: s.grade,
-        date: s.date,
+        course: body.course,
         passingThreshold: body.passingThreshold,
+        examRecords: student.examRecords || [],
         instructorName: body.instructorName,
-        subject: body.subject,
       };
 
       return {
-        to: s.email,
-        subject: `${GC_FULL_NAME} — Your ${body.examTitle} Results`,
-        html: studentScoreEmail(scoreData),
-        text: studentScoreText(scoreData),
+        to: student.email,
+        subject: `${GC_FULL_NAME} — ${body.className} Score Summary`,
+        html: classScoreSummaryEmail(emailData),
+        text: classScoreSummaryText(emailData),
       };
     });
 
-    // Send to all students
     const results = await processEmailQueue(messages);
+    const sentCount = results.filter((result) => result.success).length;
+    const failedCount = results.filter((result) => !result.success).length;
 
-    const sentCount = results.filter((r) => r.success).length;
-    const failedCount = results.filter((r) => !r.success).length;
-
-    // Optional: send a delivery confirmation to the instructor
     if (body.instructorEmail && body.instructorName) {
       const deliveryStudents: FacultyDeliveryStudentStatus[] = body.students.map(
         (student, index) => {
@@ -130,12 +111,12 @@ export async function POST(request: NextRequest) {
 
       await sendEmail({
         to: body.instructorEmail,
-        subject: `${GC_FULL_NAME} — ${body.examTitle} Delivery Report`,
+        subject: `${GC_FULL_NAME} — ${body.className} Score Delivery Report`,
         html: facultyDeliveryEmail({
           instructorName: body.instructorName,
-          examTitle: body.examTitle,
+          examTitle: 'Class Score Summary',
           className: body.className,
-          subject: body.subject,
+          subject: body.course,
           date: reportDate,
           total: body.students.length,
           sent: sentCount,
@@ -144,9 +125,9 @@ export async function POST(request: NextRequest) {
         }),
         text: facultyDeliveryText({
           instructorName: body.instructorName,
-          examTitle: body.examTitle,
+          examTitle: 'Class Score Summary',
           className: body.className,
-          subject: body.subject,
+          subject: body.course,
           date: reportDate,
           total: body.students.length,
           sent: sentCount,
@@ -161,15 +142,15 @@ export async function POST(request: NextRequest) {
       sent: sentCount,
       failed: failedCount,
       total: body.students.length,
-      results: results.map((r) => ({
-        to: r.to,
-        success: r.success,
-        error: r.error || null,
+      results: results.map((result) => ({
+        to: result.to,
+        success: result.success,
+        error: result.error || null,
       })),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[API /send-results] Error:', message);
+    console.error('[API /send-class-scores] Error:', message);
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 },

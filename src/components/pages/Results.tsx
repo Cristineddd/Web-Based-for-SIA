@@ -23,6 +23,9 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { getClasses, Class } from "@/services/classService";
 import { getExams, Exam } from "@/services/examService";
+import StudentSearchCombobox, {
+  type SearchableStudent,
+} from "@/components/ui/StudentSearchCombobox";
 import { exportExamReportToExcel } from "@/services/excelExportService";
 import { ExportMetadata, generateExamReportPdf } from "@/services/pdfReportService";
 import {
@@ -63,6 +66,13 @@ interface BulkSendState {
   sent: number;
   failed: number;
   skipped: number;
+}
+
+interface PendingStudentJump {
+  studentId: string;
+  classId: string;
+  startedAt: number;
+  classScrolled: boolean;
 }
 
 function calculateLetterGrade(percentage: number): string {
@@ -111,6 +121,11 @@ export default function Results() {
   const [yearFilter, setYearFilter] = useState("all");
   const [classFilter, setClassFilter] = useState("all");
   const [examFilter, setExamFilter] = useState("all");
+  const [classStudentSearch, setClassStudentSearch] = useState<Record<string, string>>({});
+  const [classSelectedStudentId, setClassSelectedStudentId] = useState<
+    Record<string, string | null>
+  >({});
+  const [pendingStudentJump, setPendingStudentJump] = useState<PendingStudentJump | null>(null);
 
   const [expandedClassIds, setExpandedClassIds] = useState<Set<string>>(new Set());
   const [rowsCache, setRowsCache] = useState<Record<string, HubStudentRow[]>>({});
@@ -153,17 +168,40 @@ export default function Results() {
   }, [fetchBaseData]);
 
   const allClassViews = useMemo<ClassView[]>(() => {
-    return classes.map((cls) => {
-      const linkedExams = exams.filter(
-        (exam) => exam.classId === cls.id || exam.className === cls.class_name,
-      );
+    const examsByClassId = new Map<string, Exam[]>(
+      classes.map((cls) => [cls.id, [] as Exam[]]),
+    );
+    const classIdsByName = new Map<string, string[]>();
 
-      return {
-        cls,
-        exams: linkedExams,
-        yearLevel: cls.year || "Unspecified",
-      };
+    classes.forEach((cls) => {
+      const existing = classIdsByName.get(cls.class_name) || [];
+      existing.push(cls.id);
+      existing.sort();
+      classIdsByName.set(cls.class_name, existing);
     });
+
+    exams.forEach((exam) => {
+      const examClassId = exam.classId?.trim();
+      if (examClassId && examsByClassId.has(examClassId)) {
+        examsByClassId.get(examClassId)?.push(exam);
+        return;
+      }
+
+      const legacyClassName = exam.className?.trim();
+      if (!legacyClassName) return;
+
+      const matchedClassIds = classIdsByName.get(legacyClassName);
+      if (!matchedClassIds?.length) return;
+
+      // Legacy records may only have className; assign to one class to avoid duplicates.
+      examsByClassId.get(matchedClassIds[0])?.push(exam);
+    });
+
+    return classes.map((cls) => ({
+      cls,
+      exams: examsByClassId.get(cls.id) || [],
+      yearLevel: cls.year || "Unspecified",
+    }));
   }, [classes, exams]);
 
   const filteredClassViews = useMemo<ClassView[]>(() => {
@@ -197,6 +235,115 @@ export default function Results() {
   const totalFilteredExams = useMemo(
     () => filteredClassViews.reduce((sum, view) => sum + view.exams.length, 0),
     [filteredClassViews],
+  );
+
+  const searchableStudentsByClassId = useMemo<Record<string, SearchableStudent[]>>(() => {
+    const byClassId: Record<string, SearchableStudent[]> = {};
+    filteredClassViews.forEach((view) => {
+      byClassId[view.cls.id] = (view.cls.students || [])
+        .map((student) => ({
+          studentId: student.student_id,
+          studentName: `${student.last_name}, ${student.first_name}`,
+          section:
+            student.section ||
+            [view.cls.course_subject, view.cls.section_block].filter(Boolean).join(" • "),
+          email: student.email,
+        }))
+        .sort((a, b) => a.studentName.localeCompare(b.studentName));
+    });
+    return byClassId;
+  }, [filteredClassViews]);
+
+  useEffect(() => {
+    const visibleClassIds = new Set(filteredClassViews.map((view) => view.cls.id));
+
+    setClassStudentSearch((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).filter(([classId]) => visibleClassIds.has(classId)),
+      ),
+    );
+
+    setClassSelectedStudentId((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).filter(([classId]) => visibleClassIds.has(classId)),
+      ),
+    );
+  }, [filteredClassViews]);
+
+  useEffect(() => {
+    setClassSelectedStudentId((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      Object.entries(next).forEach(([classId, studentId]) => {
+        if (!studentId) return;
+        const options = searchableStudentsByClassId[classId] || [];
+        const stillVisible = options.some((student) => student.studentId === studentId);
+        if (!stillVisible) {
+          next[classId] = null;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [searchableStudentsByClassId]);
+
+  useEffect(() => {
+    if (!pendingStudentJump) return;
+
+    const { studentId, classId, startedAt, classScrolled } = pendingStudentJump;
+    const targetViews = classId
+      ? filteredClassViews.filter((view) => view.cls.id === classId)
+      : filteredClassViews;
+
+    for (const view of targetViews) {
+      for (const exam of view.exams) {
+        const cacheKey = keyFor(view.cls.id, exam.id);
+        const rowEl = document.getElementById(`results-row-${cacheKey}-${studentId}`);
+        if (!rowEl) continue;
+
+        rowEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        rowEl.classList.add("bg-emerald-50");
+        window.setTimeout(() => {
+          rowEl.classList.remove("bg-emerald-50");
+        }, 1200);
+        setPendingStudentJump(null);
+        return;
+      }
+    }
+
+    if (classId && !classScrolled) {
+      const classCardEl = document.getElementById(`results-class-${classId}`);
+      if (classCardEl) {
+        classCardEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      setPendingStudentJump((prev) =>
+        prev ? { ...prev, classScrolled: true } : prev,
+      );
+      return;
+    }
+
+    if (Date.now() - startedAt > 5000) {
+      setPendingStudentJump(null);
+    }
+  }, [pendingStudentJump, filteredClassViews, rowsCache, loadingRows]);
+
+  const filterRowsByStudent = useCallback(
+    (rows: HubStudentRow[], classId: string) => {
+      const selectedId = classSelectedStudentId[classId];
+      if (selectedId) {
+        return rows.filter((row) => row.studentId === selectedId);
+      }
+
+      const query = (classStudentSearch[classId] || "").trim().toLowerCase();
+      if (!query) return rows;
+
+      return rows.filter(
+        (row) =>
+          row.studentId.toLowerCase().includes(query) ||
+          row.studentName.toLowerCase().includes(query),
+      );
+    },
+    [classSelectedStudentId, classStudentSearch],
   );
 
   const buildExamRows = useCallback(
@@ -735,7 +882,11 @@ export default function Results() {
             const isExpanded = expandedClassIds.has(view.cls.id);
 
             return (
-              <div key={view.cls.id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              <div
+                key={view.cls.id}
+                id={`results-class-${view.cls.id}`}
+                className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
+              >
                 <button
                   className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50/60 transition-colors"
                   onClick={() => toggleExpandClass(view.cls.id)}
@@ -755,118 +906,221 @@ export default function Results() {
                 </button>
 
                 {isExpanded && (
-                  <div className="border-t border-gray-100 p-4 space-y-3">
+                  <div className="border-t bg-white p-4 space-y-4">
+                    <div className="rounded-xl border border-green-100 bg-green-50/40 p-3">
+                      <p className="text-xs text-green-800 font-semibold mb-2">
+                        Search student in this class
+                      </p>
+                      <StudentSearchCombobox
+                        students={searchableStudentsByClassId[view.cls.id] || []}
+                        value={classStudentSearch[view.cls.id] || ""}
+                        onChange={(value) => {
+                          setClassStudentSearch((prev) => ({
+                            ...prev,
+                            [view.cls.id]: value,
+                          }));
+                          setClassSelectedStudentId((prev) => ({
+                            ...prev,
+                            [view.cls.id]: null,
+                          }));
+                          setPendingStudentJump(null);
+                        }}
+                        onSelect={(student) => {
+                          setClassSelectedStudentId((prev) => ({
+                            ...prev,
+                            [view.cls.id]: student.studentId,
+                          }));
+                          setClassStudentSearch((prev) => ({
+                            ...prev,
+                            [view.cls.id]: student.studentName,
+                          }));
+                          setPendingStudentJump({
+                            studentId: student.studentId,
+                            classId: view.cls.id,
+                            startedAt: Date.now(),
+                            classScrolled: false,
+                          });
+                        }}
+                        placeholder="Search ID or name"
+                        className="w-full"
+                      />
+                    </div>
                     {view.exams.length === 0 ? (
                       <p className="text-sm text-gray-400">No exams associated with this class.</p>
                     ) : (
-                      view.exams.map((exam) => {
-                        const cacheKey = keyFor(view.cls.id, exam.id);
-                        const rows = rowsCache[cacheKey] || [];
-                        const isRowsLoading = !!loadingRows[cacheKey];
-                        const avg =
-                          rows.length > 0
-                            ? Math.round(rows.reduce((sum, row) => sum + row.percentage, 0) / rows.length)
-                            : 0;
+                      (() => {
+                        const classSearchActive =
+                          Boolean(classSelectedStudentId[view.cls.id]) ||
+                          Boolean((classStudentSearch[view.cls.id] || "").trim());
 
-                        return (
-                          <div key={exam.id} className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
-                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-bold text-gray-900">{exam.title}</p>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {exam.subject || "General"} &nbsp;·&nbsp; {exam.num_items} items
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                {isRowsLoading && (
-                                  <span className="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-100 px-2.5 py-1 rounded-full flex items-center gap-1">
-                                    <Loader2 className="w-3 h-3 animate-spin" /> Syncing...
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => handleSendSingleExam(view.cls, exam)}
-                                  disabled={sendingExamKey === cacheKey}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                                >
-                                  {sendingExamKey === cacheKey ? (
-                                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending</>
-                                  ) : (
-                                    <><Mail className="w-3.5 h-3.5" /> Send Results</>
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => handleExport(view.cls, exam, "xlsx")}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-                                >
-                                  <FileSpreadsheet className="w-3.5 h-3.5" /> Export XLSX
-                                </button>
-                                <button
-                                  onClick={() => handleExport(view.cls, exam, "pdf")}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-                                >
-                                  <FileText className="w-3.5 h-3.5" /> Export PDF
-                                </button>
-                              </div>
-                            </div>
+                        const examCards = view.exams
+                          .map((exam) => {
+                            const cacheKey = keyFor(view.cls.id, exam.id);
+                            const rows = rowsCache[cacheKey] || [];
+                            const displayRows = filterRowsByStudent(rows, view.cls.id);
+                            const isRowsLoading = !!loadingRows[cacheKey];
+                            const avg =
+                              displayRows.length > 0
+                                ? Math.round(
+                                    displayRows.reduce((sum, row) => sum + row.percentage, 0) /
+                                      displayRows.length,
+                                  )
+                                : 0;
 
-                            {/* Mini stat row */}
-                            <div className="grid grid-cols-3 gap-3">
-                              {[
-                                { label: "Reported Students", value: rows.length },
-                                { label: "Average Percentage", value: rows.length ? `${avg}%` : "—" },
-                                { label: "Pass Count", value: rows.filter((r) => r.status === "Passed").length },
-                              ].map((s) => (
-                                <div key={s.label} className="border border-gray-100 rounded-xl p-3">
-                                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{s.label}</p>
-                                  <p className="text-xl font-bold text-green-600 mt-0.5">{s.value}</p>
-                                </div>
-                              ))}
-                            </div>
+                            if (classSearchActive && !isRowsLoading && displayRows.length === 0) {
+                              return null;
+                            }
 
-                            {rows.length > 0 && (
-                              <div className="overflow-x-auto rounded-xl border border-gray-100">
-                                <table className="min-w-full text-xs">
-                                  <thead>
-                                    <tr className="border-b border-gray-100 bg-gray-50/50">
-                                      <th className="px-3 py-2.5 text-left font-bold text-gray-400 uppercase tracking-wider">Student ID</th>
-                                      <th className="px-3 py-2.5 text-left font-bold text-gray-400 uppercase tracking-wider">Name</th>
-                                      <th className="px-3 py-2.5 text-left font-bold text-gray-400 uppercase tracking-wider">Score</th>
-                                      <th className="px-3 py-2.5 text-left font-bold text-gray-400 uppercase tracking-wider">%</th>
-                                      <th className="px-3 py-2.5 text-left font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                                      <th className="px-3 py-2.5 text-left font-bold text-gray-400 uppercase tracking-wider">Date</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-gray-50">
-                                    {rows.slice(0, 8).map((row) => (
-                                      <tr key={row.studentId} className="hover:bg-gray-50/40 transition-colors">
-                                        <td className="px-3 py-2 font-mono text-gray-600">{row.studentId}</td>
-                                        <td className="px-3 py-2 font-medium text-gray-800">{row.studentName}</td>
-                                        <td className="px-3 py-2 text-gray-600">{row.score}/{row.totalQuestions}</td>
-                                        <td className="px-3 py-2 text-gray-600">{row.percentage}%</td>
-                                        <td className="px-3 py-2">
-                                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                            row.status === "Passed"
-                                              ? "bg-green-50 text-green-600 border border-green-100"
-                                              : "bg-red-50 text-red-500 border border-red-100"
-                                          }`}>
-                                            {row.status}
-                                          </span>
-                                        </td>
-                                        <td className="px-3 py-2 text-gray-400">{row.date}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                                {rows.length > 8 && (
-                                  <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-400">
-                                    Showing 8 of {rows.length} rows. Use Export to download full report.
+                            return (
+                              <Card key={exam.id} className="border border-green-100">
+                                <CardContent className="p-4 space-y-3">
+                                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                                    <div>
+                                      <p className="font-semibold text-gray-900">{exam.title}</p>
+                                      <p className="text-sm text-gray-500">
+                                        {exam.subject || "General"} | {exam.num_items} items
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      {isRowsLoading && (
+                                        <Badge variant="outline" className="border-amber-200 text-amber-700">
+                                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                          Syncing...
+                                        </Badge>
+                                      )}
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleSendSingleExam(view.cls, exam)}
+                                        disabled={sendingExamKey === cacheKey}
+                                        className="border-green-200 text-green-700"
+                                      >
+                                        {sendingExamKey === cacheKey ? (
+                                          <>
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            Sending
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Mail className="w-4 h-4 mr-2" />
+                                            Send Results
+                                          </>
+                                        )}
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleExport(view.cls, exam, "xlsx")}
+                                        className="border-emerald-200 text-emerald-700"
+                                      >
+                                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                                        Export XLSX
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleExport(view.cls, exam, "pdf")}
+                                        className="border-red-200 text-red-700"
+                                      >
+                                        <FileText className="w-4 h-4 mr-2" />
+                                        Export PDF
+                                      </Button>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="rounded-lg border bg-white p-3">
+                                      <p className="text-xs text-gray-500">Reported Students</p>
+                                      <p className="text-xl font-bold text-green-700">
+                                        {displayRows.length}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-lg border bg-white p-3">
+                                      <p className="text-xs text-gray-500">Average Percentage</p>
+                                      <p className="text-xl font-bold text-green-700">
+                                        {displayRows.length ? `${avg}%` : "-"}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-lg border bg-white p-3">
+                                      <p className="text-xs text-gray-500">Pass Count</p>
+                                      <p className="text-xl font-bold text-green-700">
+                                        {displayRows.filter((r) => r.status === "Passed").length}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {displayRows.length > 0 ? (
+                                    <div className="overflow-x-auto rounded-lg border">
+                                      <table className="min-w-full text-sm">
+                                        <thead className="bg-green-50 text-left">
+                                          <tr>
+                                            <th className="px-3 py-2 font-semibold">Student ID</th>
+                                            <th className="px-3 py-2 font-semibold">Name</th>
+                                            <th className="px-3 py-2 font-semibold">Score</th>
+                                            <th className="px-3 py-2 font-semibold">Percentage</th>
+                                            <th className="px-3 py-2 font-semibold">Status</th>
+                                            <th className="px-3 py-2 font-semibold">Date</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {displayRows.slice(0, 8).map((row) => (
+                                            <tr
+                                              key={row.studentId}
+                                              id={`results-row-${cacheKey}-${row.studentId}`}
+                                              className="border-t transition-colors"
+                                            >
+                                              <td className="px-3 py-2 font-mono text-xs">
+                                                {row.studentId}
+                                              </td>
+                                              <td className="px-3 py-2">{row.studentName}</td>
+                                              <td className="px-3 py-2">
+                                                {row.score}/{row.totalQuestions}
+                                              </td>
+                                              <td className="px-3 py-2">{row.percentage}%</td>
+                                              <td className="px-3 py-2">
+                                                <Badge
+                                                  className={
+                                                    row.status === "Passed"
+                                                      ? "bg-green-100 text-green-700"
+                                                      : "bg-red-100 text-red-700"
+                                                  }
+                                                >
+                                                  {row.status}
+                                                </Badge>
+                                              </td>
+                                              <td className="px-3 py-2">{row.date}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                      {displayRows.length > 8 && (
+                                        <div className="px-3 py-2 border-t text-xs text-gray-500 bg-gray-50">
+                                          Showing 8 of {displayRows.length} rows. Use Export Grades
+                                          to download full report.
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-lg border border-dashed bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                                      No student results available yet.
+                                    </div>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            );
+                          })
+                          .filter((card): card is JSX.Element => card !== null);
+
+                        if (examCards.length === 0) {
+                          return (
+                            <div className="rounded-lg border border-dashed bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                              No matching records for this student in the current class.
+                            </div>
+                          );
+                        }
+
+                        return examCards;
+                      })()
                     )}
                   </div>
                 )}
