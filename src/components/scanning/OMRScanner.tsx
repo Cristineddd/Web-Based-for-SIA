@@ -49,6 +49,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   const isAutoCapturingRef = useRef(false);
   const isProcessingImageRef = useRef(false);
   const liveMarkersRef = useRef<{tl:{x:number;y:number};tr:{x:number;y:number};bl:{x:number;y:number};br:{x:number;y:number}} | null>(null);
+  const liveMarkerHitsRef = useRef<{tl:boolean;tr:boolean;bl:boolean;br:boolean}>({ tl: false, tr: false, bl: false, br: false });
   const streamRef = useRef<MediaStream | null>(null);
   const fileUploadRef = useRef<HTMLInputElement>(null);
   
@@ -344,12 +345,34 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
   // Uses an integral image for fast region averages and a stricter
   // uniformity + contrast check to reduce false positives.
   // Returns true if 4 dark squares are found in approximately the right positions.
-  const detectMarkersInFrame = useCallback((): { found: boolean; markers: { tl:{x:number;y:number}; tr:{x:number;y:number}; bl:{x:number;y:number}; br:{x:number;y:number} } | null } => {
-    if (!videoRef.current || !scanCanvasRef.current) return { found: false, markers: null };
+  const detectMarkersInFrame = useCallback((): {
+    found: boolean;
+    markers: { tl:{x:number;y:number}; tr:{x:number;y:number}; bl:{x:number;y:number}; br:{x:number;y:number} } | null;
+    cornerHits: { tl:boolean; tr:boolean; bl:boolean; br:boolean };
+  } => {
+    if (!videoRef.current || !scanCanvasRef.current) {
+      return {
+        found: false,
+        markers: null,
+        cornerHits: { tl: false, tr: false, bl: false, br: false },
+      };
+    }
     
     const video = videoRef.current;
-    if (video.readyState < 2) return { found: false, markers: null }; // HAVE_CURRENT_DATA
-    if (video.videoWidth === 0 || video.videoHeight === 0) return { found: false, markers: null };
+    if (video.readyState < 2) {
+      return {
+        found: false,
+        markers: null,
+        cornerHits: { tl: false, tr: false, bl: false, br: false },
+      };
+    } // HAVE_CURRENT_DATA
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      return {
+        found: false,
+        markers: null,
+        cornerHits: { tl: false, tr: false, bl: false, br: false },
+      };
+    }
     
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -357,7 +380,13 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     
     const scanCanvas = scanCanvasRef.current;
     const ctx = scanCanvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return { found: false, markers: null };
+    if (!ctx) {
+      return {
+        found: false,
+        markers: null,
+        cornerHits: { tl: false, tr: false, bl: false, br: false },
+      };
+    }
     
     // Use 640px wide for better accuracy (increased from 480px)
     const targetW = 640;
@@ -481,13 +510,21 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           // Extremely relaxed uniformity — just ensure it's roughly consistent
           if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 120) continue;
 
-          // 3. Check surrounding paper brightness (more lenient)
+          // 3. Check surrounding paper brightness (stricter so dark background
+          // is not mistaken as a corner square)
           const ringInner = Math.floor(half * 1.2);
           const ringOuter = Math.floor(half * 2.5);
           const tB = rectAvgLive(cx - ringOuter, cy - ringOuter, cx + ringOuter, cy - ringInner);
           const bB = rectAvgLive(cx - ringOuter, cy + ringInner, cx + ringOuter, cy + ringOuter);
           const lB = rectAvgLive(cx - ringOuter, cy - ringInner, cx - ringInner, cy + ringInner);
           const rB = rectAvgLive(cx + ringInner, cy - ringInner, cx + ringOuter, cy + ringInner);
+
+          const brightSideCount =
+            (tB > inner + 14 ? 1 : 0) +
+            (bB > inner + 14 ? 1 : 0) +
+            (lB > inner + 14 ? 1 : 0) +
+            (rB > inner + 14 ? 1 : 0);
+          if (brightSideCount < 3) continue;
           
           // Calculate average border brightness
           const borderAvg = (tB + bB + lB + rB) / 4;
@@ -498,8 +535,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           // 4. Calculate contrast score
           const contrast = borderAvg - inner;
           
-          // Require minimum contrast of 10 (extremely relaxed)
-          if (contrast < 10) continue;
+          // Require stronger contrast to avoid dark-table false positives
+          if (contrast < 16) continue;
           
           if (contrast > bestContrast) {
             bestContrast = contrast;
@@ -509,21 +546,28 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         }
       }
 
-      // Extremely relaxed contrast threshold for live detection
-      if (bestContrast > 10) {
+      // Keep per-corner activation strict so guides light up one-by-one reliably
+      if (bestContrast > 16) {
         cornersFound++;
         foundCorners.push(region.name);
         bestPos[region.name] = { cx: bestCx, cy: bestCy };
       }
     }
+
+    const cornerHits = {
+      tl: !!bestPos.TL,
+      tr: !!bestPos.TR,
+      bl: !!bestPos.BL,
+      br: !!bestPos.BR,
+    };
     
     // Log EVERY frame for troubleshooting until detection works
     if (Math.random() < 0.3) {
       console.log(`[LiveScan] ${dw}x${dh} t=${t} found=${foundCorners.join(',') || 'none'} (${cornersFound}/4) markerSize=${markerSize} darkTh=${darkThreshold.toFixed(0)} globalBright=${globalBrightness.toFixed(0)}`);
     }
     
-    // Accept 3 out of 4 corners (one may be occluded by finger/shadow)
-    const allFound = cornersFound >= 3;
+    // Require all 4 corners for lock-on, same behavior as ZipGrade.
+    const allFound = cornersFound === 4;
 
     if (allFound) {
       // Convert best positions from downscaled-crop space → fraction of full video element
@@ -548,9 +592,10 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           bl: toFrac(defaultPos('BL').cx, defaultPos('BL').cy),
           br: toFrac(defaultPos('BR').cx, defaultPos('BR').cy),
         },
+        cornerHits,
       };
     }
-    return { found: false, markers: null };
+    return { found: false, markers: null, cornerHits };
   }, [exam]);
 
   // ── Draw guide box overlay onto the canvas ──
@@ -627,7 +672,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     ctx.restore();
 
     // ── 2. Paper border rectangle ──
-    const detected = liveMarkersRef.current !== null;
+    const cornerHits = liveMarkerHitsRef.current;
+    const detected = cornerHits.tl && cornerHits.tr && cornerHits.bl && cornerHits.br;
     const borderColor = detected ? '#22c55e' : 'rgba(255,255,255,0.85)';
     ctx.lineWidth = 2;
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
@@ -667,15 +713,17 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
     // ── 4. Marker-position guides — square + crosshair at each corner marker spot ──
     const markerCenters = [
-      { x: paperLeft + gw * mxL, y: paperTop + gh * myT },
-      { x: paperLeft + gw * mxR, y: paperTop + gh * myT },
-      { x: paperLeft + gw * mxL, y: paperTop + gh * myB },
-      { x: paperLeft + gw * mxR, y: paperTop + gh * myB },
+      { x: paperLeft + gw * mxL, y: paperTop + gh * myT, key: 'tl' as const },
+      { x: paperLeft + gw * mxR, y: paperTop + gh * myT, key: 'tr' as const },
+      { x: paperLeft + gw * mxL, y: paperTop + gh * myB, key: 'bl' as const },
+      { x: paperLeft + gw * mxR, y: paperTop + gh * myB, key: 'br' as const },
     ];
     const mSz  = Math.round(Math.min(gw, gh) * 0.040);
     const mArm = Math.round(mSz * 0.85);
-    const activeColor = detected ? '#22c55e' : 'rgba(255,255,255,0.75)';
+    const inactiveColor = 'rgba(255,255,255,0.75)';
     for (const m of markerCenters) {
+      const markerActive = cornerHits[m.key];
+      const activeColor = markerActive ? '#22c55e' : inactiveColor;
       const hSz = mSz / 2;
       // Shadow
       ctx.lineWidth = 3;
@@ -685,8 +733,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       ctx.lineWidth = 2;
       ctx.strokeStyle = activeColor;
       ctx.strokeRect(m.x - hSz, m.y - hSz, mSz, mSz);
-      // Crosshair — only when detected
-      if (detected) {
+      // Crosshair — only on individually matched markers
+      if (markerActive) {
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = activeColor;
         ctx.beginPath();
@@ -720,6 +768,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       if (frameCount % 3 === 0) {
         const result = detectMarkersInFrame();
         const detected = result.found;
+        liveMarkerHitsRef.current = result.cornerHits;
         liveMarkersRef.current = detected ? result.markers : null;
         
         if (detected && result.markers) {
@@ -758,6 +807,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         autoScanTimerRef.current = null;
       }
       liveMarkersRef.current = null;
+      liveMarkerHitsRef.current = { tl: false, tr: false, bl: false, br: false };
       setMarkersDetected(false);
       setStabilizationProgress(0);
     };
@@ -1294,6 +1344,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             // so offset the answerKey lookup by 100.
             const answerKeyOffset = exam.num_items > 150 && scanPage === 2 ? 100 : 0;
             const lineW = baseLineW;
+            const overlayChoiceLabels = 'ABCDEFGH'.slice(0, exam.choices_per_item).split('');
+            const frameWOverlay = debugMarkers.topRight.x - debugMarkers.topLeft.x;
+            const frameHOverlay = debugMarkers.bottomLeft.y - debugMarkers.topLeft.y;
             for (const hit of bubbleHits) {
               const qIdx = hit.qIndex;
               const isMultiple = multipleAnswers.includes(qIdx + 1);
@@ -1301,7 +1354,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               const isCorrect = answerKey[akIdx] && hit.choice.toUpperCase() === answerKey[akIdx].toUpperCase();
 
               if (isMultiple) {
-                oCtx.strokeStyle = '#facc15'; // yellow-400
+                oCtx.strokeStyle = '#f97316'; // orange-500 (multiple-shade)
               } else if (isCorrect) {
                 oCtx.strokeStyle = '#22c55e'; // green-500
               } else {
@@ -1313,9 +1366,36 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               oCtx.stroke();
             }
 
+            // Yellow ring marks the answer-key bubble whenever detected answer is wrong.
+            // This matches ZipGrade-style feedback: red = chosen wrong, yellow = correct key.
+            for (let qIdx = 0; qIdx < answers.length; qIdx++) {
+              const chosen = answers[qIdx]?.toUpperCase();
+              const akIdx = qIdx + answerKeyOffset;
+              const key = answerKey[akIdx]?.toUpperCase();
+              if (!key || !chosen || chosen === key) continue;
+
+              const keyChoiceIndex = overlayChoiceLabels.indexOf(key);
+              if (keyChoiceIndex < 0) continue;
+
+              const questionNumber = qIdx + 1;
+              const block = overlayLayout.answerBlocks.find(b => questionNumber >= b.startQ && questionNumber <= b.endQ);
+              if (!block) continue;
+
+              const rowInBlock = questionNumber - block.startQ;
+              const nx = block.firstBubbleNX + keyChoiceIndex * block.bubbleSpacingNX;
+              const ny = block.firstBubbleNY + rowInBlock * block.rowSpacingNY;
+              const { px, py } = mapToPixel(debugMarkers, nx, ny);
+
+              const keyRX = Math.max(4, (overlayLayout.bubbleDiameterNX * frameWOverlay) / 2);
+              const keyRY = Math.max(4, (overlayLayout.bubbleDiameterNY * frameHOverlay) / 2);
+              oCtx.strokeStyle = '#facc15'; // yellow-400 (correct key)
+              oCtx.lineWidth = lineW;
+              oCtx.beginPath();
+              oCtx.ellipse(px, py, keyRX, keyRY, 0, 0, Math.PI * 2);
+              oCtx.stroke();
+            }
+
             // If a question has no detected answer, draw all choices in red for that row.
-            const frameWOverlay = debugMarkers.topRight.x - debugMarkers.topLeft.x;
-            const frameHOverlay = debugMarkers.bottomLeft.y - debugMarkers.topLeft.y;
             const missRX = Math.max(4, (overlayLayout.bubbleDiameterNX * frameWOverlay) / 2);
             const missRY = Math.max(4, (overlayLayout.bubbleDiameterNY * frameHOverlay) / 2);
             for (const block of overlayLayout.answerBlocks) {
@@ -1354,35 +1434,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             }
           }
 
-          // Crop final preview to the inner paper area so corner markers are not
-          // visible in the result image.
-          const frameWForCrop = Math.abs(debugMarkers.topRight.x - debugMarkers.topLeft.x);
-          const frameHForCrop = Math.abs(debugMarkers.bottomLeft.y - debugMarkers.topLeft.y);
-          const insetX = Math.max(8, Math.round(frameWForCrop * 0.045));
-          const insetY = Math.max(8, Math.round(frameHForCrop * 0.045));
-
-          const left = Math.max(0, Math.floor(Math.min(debugMarkers.topLeft.x, debugMarkers.bottomLeft.x) + insetX));
-          const right = Math.min(overlayCanvas.width, Math.ceil(Math.max(debugMarkers.topRight.x, debugMarkers.bottomRight.x) - insetX));
-          const top = Math.max(0, Math.floor(Math.min(debugMarkers.topLeft.y, debugMarkers.topRight.y) + insetY));
-          const bottom = Math.min(overlayCanvas.height, Math.ceil(Math.max(debugMarkers.bottomLeft.y, debugMarkers.bottomRight.y) - insetY));
-
-          const cropW = Math.max(1, right - left);
-          const cropH = Math.max(1, bottom - top);
-
-          if (cropW > 20 && cropH > 20) {
-            const croppedCanvas = document.createElement('canvas');
-            croppedCanvas.width = cropW;
-            croppedCanvas.height = cropH;
-            const cCtx = croppedCanvas.getContext('2d');
-            if (cCtx) {
-              cCtx.drawImage(overlayCanvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
-              setCapturedImage(croppedCanvas.toDataURL('image/png'));
-            } else {
-              setCapturedImage(overlayCanvas.toDataURL('image/png'));
-            }
-          } else {
-            setCapturedImage(overlayCanvas.toDataURL('image/png'));
-          }
+          // Keep the full overlay in the preview so corner markers stay visible.
+          // This makes alignment issues easier to diagnose on mobile scans.
+          setCapturedImage(overlayCanvas.toDataURL('image/png'));
         }
       }
 
@@ -1622,7 +1676,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     //
     // InnerAvg threshold raised to 120 (from 80): handles JPEG/scan compression
     // artefacts where markers appear as dark-gray (~90-110) instead of near-black.
-    // The uniformity check (qMax-qMin < 60) still rejects text, thin lines, circles.
+      // The uniformity check (qMax-qMin < 75) still rejects text, thin lines, circles.
 
     const baseSize = Math.max(10, Math.round(width * 0.025));
 
@@ -1688,11 +1742,12 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
             // ── Uniformity: all 4 sub-quadrants dark ──
             // Rejects circles (bright corners) and thin lines (mostly bright interior)
+            // Slightly relaxed threshold (75) to handle JPEG/scan compression artifacts
             const q1 = rectAvg(cx - hf, cy - hf, cx,      cy     );
             const q2 = rectAvg(cx,      cy - hf, cx + hf, cy     );
             const q3 = rectAvg(cx - hf, cy,      cx,      cy + hf);
             const q4 = rectAvg(cx,      cy,      cx + hf, cy + hf);
-            if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 60) continue;
+            if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 75) continue;
 
             // ── Surrounding ring: at least 2 sides must be bright ──
             const tR = rectAvg(cx - ro, cy - ro, cx + ro, cy - ri);
@@ -1733,7 +1788,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             const q2 = rectAvg(cx, cy - hf, cx + hf, cy);
             const q3 = rectAvg(cx - hf, cy, cx, cy + hf);
             const q4 = rectAvg(cx, cy, cx + hf, cy + hf);
-            if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 60) continue;
+              if (Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4) > 75) continue;
             const tR = rectAvg(cx - ro, cy - ro, cx + ro, cy - ri);
             const bR = rectAvg(cx - ro, cy + ri, cx + ro, cy + ro);
             const lR = rectAvg(cx - ro, cy - ri, cx - ri, cy + ri);
@@ -2355,12 +2410,13 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const idBubbleRY = bubbleRY * (3.5 / 3.8);
     const idMinR = Math.max(1, Math.min(idBubbleRX, idBubbleRY));
     const idSmallFactor = Math.max(0, Math.min(1, (4.0 - idMinR) / 2.0));
-    const idTier1Ratio = 0.69 + idSmallFactor * 0.02;
-    const idTier2Ratio = 0.82 + idSmallFactor * 0.03;
-    const idGapMin = 0.11 - idSmallFactor * 0.015;
-    const idAbsGapMin = 9 - idSmallFactor * 2;
-    const idFallbackDarkMax = 172;
-    const idFallbackSpreadMin = 7 - idSmallFactor * 1.5;
+    // Optimized ID detection for better recognition: match answer bubble sensitivity
+    const idTier1Ratio = 0.67 + idSmallFactor * 0.04;       // Lower for lighter marks
+    const idTier2Ratio = 0.80 + idSmallFactor * 0.04;       // Consistent with answers
+    const idGapMin = 0.09 - idSmallFactor * 0.02;           // Tighter gap requirement
+    const idAbsGapMin = 8 - idSmallFactor * 2;              // Absolute gap threshold
+    const idFallbackDarkMax = 174;                          // Fade tolerance
+    const idFallbackSpreadMin = 6.5 - idSmallFactor * 1.5;  // Spread sensitivity
 
     console.log('[ID] BubbleR:', idBubbleRX.toFixed(1), 'x', idBubbleRY.toFixed(1));
     console.log(`[ID] thresholds: tier1=${idTier1Ratio.toFixed(2)} tier2=${idTier2Ratio.toFixed(2)} gapRatio>${idGapMin.toFixed(2)} absGap>${idAbsGapMin.toFixed(1)}`);
@@ -2495,12 +2551,13 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const bubbleRY = (layout.bubbleDiameterNY * frameH) / 2;
     const minR = Math.max(1, Math.min(bubbleRX, bubbleRY));
     const smallBubbleFactor = Math.max(0, Math.min(1, (4.5 - minR) / 2.5));
-    const ansTier1Ratio = 0.72 + smallBubbleFactor * 0.03;
-    const ansTier2Ratio = 0.87 + smallBubbleFactor * 0.03;
-    const ansGapMin = 0.08 - smallBubbleFactor * 0.015;
-    const ansAbsGapMin = 7 - smallBubbleFactor * 2;
-    const ansFallbackDarkMax = 176;
-    const ansFallbackSpreadMin = 8 - smallBubbleFactor * 1.5;
+    // Optimized for ZipGrade-like accuracy: handle light pencil marks and fade
+    const ansTier1Ratio = 0.68 + smallBubbleFactor * 0.04;  // Lower → catches fainter marks
+    const ansTier2Ratio = 0.82 + smallBubbleFactor * 0.04;  // Adjusted for consistency
+    const ansGapMin = 0.07 - smallBubbleFactor * 0.02;      // Lower gap tolerance
+    const ansAbsGapMin = 6 - smallBubbleFactor * 1.5;       // Stricter absolute gap
+    const ansFallbackDarkMax = 180;                         // Raised for fade tolerance
+    const ansFallbackSpreadMin = 7 - smallBubbleFactor * 1.5;
 
     console.log(`[ANS] Frame: ${Math.round(frameW)}x${Math.round(frameH)}px, BubbleR: ${bubbleRX.toFixed(1)}x${bubbleRY.toFixed(1)}px`);
     console.log(`[ANS] thresholds: tier1=${ansTier1Ratio.toFixed(2)} tier2=${ansTier2Ratio.toFixed(2)} gapRatio>${ansGapMin.toFixed(2)} absGap>${ansAbsGapMin.toFixed(1)}`);
@@ -3252,126 +3309,6 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             </div>
           </Card>
 
-          {/* Answer Comparison */}
-          <Card className="p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Answer Comparison</h3>
-            
-            {(() => {
-              const halfPoint = Math.ceil(detectedAnswers.length / 2);
-              const firstRow = detectedAnswers.slice(0, halfPoint);
-              const secondRow = detectedAnswers.slice(halfPoint);
-              
-              return (
-                <div className="space-y-6">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-500 mb-2">Questions 1-{halfPoint}</p>
-                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-3">
-                      {firstRow.map((answer, i) => {
-                        const isCorrect = answerKey[i] && answer.toUpperCase() === answerKey[i].toUpperCase();
-                        const hasMultiple = multipleAnswerQuestions.includes(i + 1);
-                        return (
-                          <div key={i} className="text-center">
-                            <span className={`text-xs block mb-1 ${hasMultiple ? 'text-amber-600 font-bold' : 'text-slate-400'}`}>{i + 1}</span>
-                            <div className="relative">
-                              <input
-                                type="text"
-                                value={answer}
-                                onChange={(e) => editAnswer(i, e.target.value)}
-                                maxLength={1}
-                                className={`w-10 h-10 text-center font-bold rounded-lg border-2 transition-colors ${
-                                  hasMultiple
-                                    ? 'border-amber-500 bg-amber-50 text-amber-700 ring-2 ring-amber-200'
-                                    : isCorrect 
-                                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
-                                      : answer 
-                                        ? 'border-rose-500 bg-rose-50 text-rose-700'
-                                        : 'border-gray-200 bg-gray-50 text-gray-400'
-                                }`}
-                              />
-                              {hasMultiple && (
-                                <AlertTriangle className="absolute -top-2 -right-2 w-4 h-4 text-amber-500" />
-                              )}
-                              {answerKey[i] && !isCorrect && (
-                                <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-emerald-600 font-semibold">
-                                  {answerKey[i]}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  
-                  {secondRow.length > 0 && (
-                    <div className="pt-4 border-t border-gray-100">
-                      <p className="text-sm font-semibold text-slate-500 mb-2">Questions {halfPoint + 1}-{detectedAnswers.length}</p>
-                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-3">
-                        {secondRow.map((answer, i) => {
-                          const actualIndex = halfPoint + i;
-                          const isCorrect = answerKey[actualIndex] && answer.toUpperCase() === answerKey[actualIndex].toUpperCase();
-                          const hasMultiple = multipleAnswerQuestions.includes(actualIndex + 1);
-                          return (
-                            <div key={actualIndex} className="text-center">
-                              <span className={`text-xs block mb-1 ${hasMultiple ? 'text-amber-600 font-bold' : 'text-slate-400'}`}>{actualIndex + 1}</span>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  value={answer}
-                                  onChange={(e) => editAnswer(actualIndex, e.target.value)}
-                                  maxLength={1}
-                                  className={`w-10 h-10 text-center font-bold rounded-lg border-2 transition-colors ${
-                                    hasMultiple
-                                      ? 'border-amber-500 bg-amber-50 text-amber-700 ring-2 ring-amber-200'
-                                      : isCorrect 
-                                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
-                                        : answer 
-                                          ? 'border-rose-500 bg-rose-50 text-rose-700'
-                                          : 'border-gray-200 bg-gray-50 text-gray-400'
-                                  }`}
-                                />
-                                {hasMultiple && (
-                                  <AlertTriangle className="absolute -top-2 -right-2 w-4 h-4 text-amber-500" />
-                                )}
-                                {answerKey[actualIndex] && !isCorrect && (
-                                  <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-emerald-600 font-semibold">
-                                    {answerKey[actualIndex]}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            <div className="flex items-center gap-4 mt-6 pt-4 border-t border-gray-100 text-sm flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 bg-emerald-50 border-2 border-emerald-500 rounded" />
-                <span className="text-slate-600">Correct</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 bg-rose-50 border-2 border-rose-500 rounded" />
-                <span className="text-slate-600">Incorrect</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 bg-gray-50 border-2 border-gray-200 rounded" />
-                <span className="text-slate-500">No answer detected</span>
-              </div>
-              {multipleAnswerQuestions.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 bg-amber-50 border-2 border-amber-500 rounded relative">
-                    <AlertTriangle className="absolute -top-1 -right-1 w-3 h-3 text-amber-500" />
-                  </div>
-                  <span className="text-amber-700 font-medium">Multiple answers</span>
-                </div>
-              )}
-            </div>
-          </Card>
-
           <div className="flex justify-center gap-4 flex-wrap">
             <Button variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors" onClick={() => {
               setScanResult(null);
@@ -3423,6 +3360,131 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                 </>
               )}
             </Button>
+          </div>
+
+          {/* Answer Comparison */}
+          <Card className="p-6 bg-white border border-gray-100 shadow-sm rounded-2xl">
+            <h3 className="text-lg font-bold text-slate-800 mb-4">Answer Comparison</h3>
+            
+            {(() => {
+              const halfPoint = Math.ceil(detectedAnswers.length / 2);
+              const firstRow = detectedAnswers.slice(0, halfPoint);
+              const secondRow = detectedAnswers.slice(halfPoint);
+              
+              return (
+                <div className="space-y-6">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-500 mb-2">Questions 1-{halfPoint}</p>
+                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-3">
+                      {firstRow.map((answer, i) => {
+                        const isCorrect = answerKey[i] && answer.toUpperCase() === answerKey[i].toUpperCase();
+                        const hasMultiple = multipleAnswerQuestions.includes(i + 1);
+                        return (
+                          <div key={i} className="text-center">
+                            <span className={`text-xs block mb-1 ${hasMultiple ? 'text-orange-600 font-bold' : 'text-slate-400'}`}>{i + 1}</span>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={answer}
+                                onChange={(e) => editAnswer(i, e.target.value)}
+                                maxLength={1}
+                                className={`w-10 h-10 text-center font-bold rounded-lg border-2 transition-colors ${
+                                  hasMultiple
+                                    ? 'border-orange-500 bg-orange-50 text-orange-700 ring-2 ring-orange-200'
+                                    : isCorrect 
+                                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                                      : answer 
+                                        ? 'border-rose-500 bg-rose-50 text-rose-700'
+                                        : 'border-gray-200 bg-gray-50 text-gray-400'
+                                }`}
+                              />
+                              {hasMultiple && (
+                                <AlertTriangle className="absolute -top-2 -right-2 w-4 h-4 text-orange-500" />
+                              )}
+                              {answerKey[i] && !isCorrect && (
+                                <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-yellow-600 font-semibold">
+                                  {answerKey[i]}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {secondRow.length > 0 && (
+                    <div className="pt-4 border-t border-gray-100">
+                      <p className="text-sm font-semibold text-slate-500 mb-2">Questions {halfPoint + 1}-{detectedAnswers.length}</p>
+                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-3">
+                        {secondRow.map((answer, i) => {
+                          const actualIndex = halfPoint + i;
+                          const isCorrect = answerKey[actualIndex] && answer.toUpperCase() === answerKey[actualIndex].toUpperCase();
+                          const hasMultiple = multipleAnswerQuestions.includes(actualIndex + 1);
+                          return (
+                            <div key={actualIndex} className="text-center">
+                              <span className={`text-xs block mb-1 ${hasMultiple ? 'text-orange-600 font-bold' : 'text-slate-400'}`}>{actualIndex + 1}</span>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={answer}
+                                  onChange={(e) => editAnswer(actualIndex, e.target.value)}
+                                  maxLength={1}
+                                  className={`w-10 h-10 text-center font-bold rounded-lg border-2 transition-colors ${
+                                    hasMultiple
+                                      ? 'border-orange-500 bg-orange-50 text-orange-700 ring-2 ring-orange-200'
+                                      : isCorrect 
+                                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                                        : answer 
+                                          ? 'border-rose-500 bg-rose-50 text-rose-700'
+                                          : 'border-gray-200 bg-gray-50 text-gray-400'
+                                  }`}
+                                />
+                                {hasMultiple && (
+                                  <AlertTriangle className="absolute -top-2 -right-2 w-4 h-4 text-orange-500" />
+                                )}
+                                {answerKey[actualIndex] && !isCorrect && (
+                                  <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-yellow-600 font-semibold">
+                                    {answerKey[actualIndex]}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </Card>
+
+          <div className="flex items-center gap-4 text-sm flex-wrap px-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-4 bg-emerald-50 border-2 border-emerald-500 rounded" />
+              <span className="text-slate-600">Correct</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-4 bg-rose-50 border-2 border-rose-500 rounded" />
+              <span className="text-slate-600">Incorrect</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-4 bg-yellow-50 border-2 border-yellow-500 rounded" />
+              <span className="text-slate-600">Correct answer (when wrong)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-4 bg-gray-50 border-2 border-gray-200 rounded" />
+              <span className="text-slate-500">No answer detected</span>
+            </div>
+            {multipleAnswerQuestions.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-4 bg-orange-50 border-2 border-orange-500 rounded relative">
+                  <AlertTriangle className="absolute -top-1 -right-1 w-3 h-3 text-orange-500" />
+                </div>
+                <span className="text-orange-700 font-medium">Multiple answers</span>
+              </div>
+            )}
           </div>
         </div>
       )}
