@@ -2327,11 +2327,13 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const idBubbleRY = bubbleRY * (3.5 / 3.8);
     const idMinR = Math.max(1, Math.min(idBubbleRX, idBubbleRY));
     const idSmallFactor = Math.max(0, Math.min(1, (4.0 - idMinR) / 2.0));
-    const idTier1Ratio = 0.74 + idSmallFactor * 0.03;
-    const idTier2Ratio = 0.86 + idSmallFactor * 0.03;
-    const idGapMin = 0.10 - idSmallFactor * 0.02;
+    const idTier1Ratio = 0.69 + idSmallFactor * 0.02;
+    const idTier2Ratio = 0.82 + idSmallFactor * 0.03;
+    const idGapMin = 0.11 - idSmallFactor * 0.015;
+    const idAbsGapMin = 9 - idSmallFactor * 2;
 
     console.log('[ID] BubbleR:', idBubbleRX.toFixed(1), 'x', idBubbleRY.toFixed(1));
+    console.log(`[ID] thresholds: tier1=${idTier1Ratio.toFixed(2)} tier2=${idTier2Ratio.toFixed(2)} gapRatio>${idGapMin.toFixed(2)} absGap>${idAbsGapMin.toFixed(1)}`);
 
     // Log the pixel position of the first and last ID bubbles for visual verification
     const firstIdPx = mapToPixel(markers, id.firstColNX, id.firstRowNY);
@@ -2347,8 +2349,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         const nx = id.firstColNX + col * id.colSpacingNX;
         const ny = id.firstRowNY + row * id.rowSpacingNY;
         const { px, py } = mapToPixel(markers, nx, ny);
-        const refined = refineBubbleCenter(grayscale, width, height, px, py, idBubbleRX, idBubbleRY);
-        const brightness = sampleBubbleAt(grayscale, width, height, refined.px, refined.py, idBubbleRX, idBubbleRY);
+        // ID rows are dense near the write-in boxes; avoid center-refinement drift
+        // so a shaded digit doesn't jump to row 0 due nearby border darkness.
+        const brightness = sampleBubbleAt(grayscale, width, height, px, py, idBubbleRX, idBubbleRY);
         fills.push(brightness);
       }
 
@@ -2379,10 +2382,10 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       const gapFromSecond = secondDark - darkest;
       const gapRatio = ref > 20 ? gapFromSecond / ref : 0;
 
-      if (darkRatio < idTier1Ratio) {
+      if (darkRatio < idTier1Ratio && gapFromSecond > idAbsGapMin * 0.45) {
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
-      } else if (darkRatio < idTier2Ratio && gapRatio > idGapMin) {
+      } else if (darkRatio < idTier2Ratio && (gapRatio > idGapMin || gapFromSecond > idAbsGapMin)) {
         detectedDigit = fills.indexOf(darkest);
         hasDetection = true;
       }
@@ -2455,11 +2458,13 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     const bubbleRY = (layout.bubbleDiameterNY * frameH) / 2;
     const minR = Math.max(1, Math.min(bubbleRX, bubbleRY));
     const smallBubbleFactor = Math.max(0, Math.min(1, (4.5 - minR) / 2.5));
-    const ansTier1Ratio = 0.68 + smallBubbleFactor * 0.03;
-    const ansTier2Ratio = 0.82 + smallBubbleFactor * 0.03;
-    const ansGapMin = 0.12 - smallBubbleFactor * 0.02;
+    const ansTier1Ratio = 0.72 + smallBubbleFactor * 0.03;
+    const ansTier2Ratio = 0.87 + smallBubbleFactor * 0.03;
+    const ansGapMin = 0.08 - smallBubbleFactor * 0.015;
+    const ansAbsGapMin = 7 - smallBubbleFactor * 2;
 
     console.log(`[ANS] Frame: ${Math.round(frameW)}x${Math.round(frameH)}px, BubbleR: ${bubbleRX.toFixed(1)}x${bubbleRY.toFixed(1)}px`);
+    console.log(`[ANS] thresholds: tier1=${ansTier1Ratio.toFixed(2)} tier2=${ansTier2Ratio.toFixed(2)} gapRatio>${ansGapMin.toFixed(2)} absGap>${ansAbsGapMin.toFixed(1)}`);
 
     for (const block of layout.answerBlocks) {
       const firstPx = mapToPixel(markers, block.firstBubbleNX, block.firstBubbleNY);
@@ -2503,7 +2508,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         //          → intentional light mark (pen nearly dry, hard-pressure pencil, etc.)
         if (darkRatio < ansTier1Ratio) {
           selectedChoice = sorted[0].choice;
-        } else if (darkRatio < ansTier2Ratio && gapRatio > ansGapMin) {
+        } else if (darkRatio < ansTier2Ratio && (gapRatio > ansGapMin || gapFromSecond > ansAbsGapMin)) {
           selectedChoice = sorted[0].choice;
         }
 
