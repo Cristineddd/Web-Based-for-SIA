@@ -9,8 +9,24 @@ import {
   query,
   where,
   serverTimestamp,
+  writeBatch,
+  type DocumentData,
+  type Query,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+
+const FIRESTORE_BATCH_LIMIT = 450;
+
+function isPermissionDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const firestoreError = error as { code?: string; message?: string };
+  const message = (firestoreError.message || "").toLowerCase();
+  return (
+    firestoreError.code === "permission-denied" ||
+    message.includes("missing or insufficient permissions")
+  );
+}
 
 /**
  * Generate a unique exam code (e.g., "EX-A1B2C3")
@@ -23,6 +39,33 @@ function generateExamCode(): string {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return `EX-${code}`;
+}
+
+async function deleteDocsInBatches(
+  docs: QueryDocumentSnapshot<DocumentData>[],
+): Promise<void> {
+  for (let i = 0; i < docs.length; i += FIRESTORE_BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + FIRESTORE_BATCH_LIMIT).forEach((docSnap) => {
+      batch.delete(docSnap.ref);
+    });
+    await batch.commit();
+  }
+}
+
+async function deleteDocsByQuery(q: Query<DocumentData>): Promise<number> {
+  try {
+    const snap = await getDocs(q);
+    if (snap.empty) return 0;
+    await deleteDocsInBatches(snap.docs);
+    return snap.size;
+  } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      console.warn("[deleteExam] Skipping restricted collection cleanup:", error);
+      return 0;
+    }
+    throw error;
+  }
 }
 
 export interface Exam {
@@ -536,9 +579,20 @@ export async function getArchivedExams(userId: string): Promise<Exam[]> {
  */
 export async function deleteExam(examId: string): Promise<void> {
   try {
+    await deleteDocsByQuery(
+      query(collection(db, "templates"), where("examId", "==", examId)),
+    );
+    await deleteDocsByQuery(
+      query(collection(db, "scannedResults"), where("examId", "==", examId)),
+    );
+    await deleteDocsByQuery(
+      query(collection(db, "studentGrades"), where("exam_id", "==", examId)),
+    );
+    await deleteDocsByQuery(
+      query(collection(db, "studentGrades"), where("examId", "==", examId)),
+    );
+
     const docRef = doc(db, "exams", examId);
-    // Permanently delete the exam document.
-    // NOTE: This does not automatically delete related docs (templates/answer keys/results).
     await deleteDoc(docRef);
   } catch (error) {
     console.error("Error deleting exam:", error);
