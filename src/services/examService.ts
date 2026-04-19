@@ -465,7 +465,7 @@ export async function updateExam(
   const docRef = doc(db, "exams", examId);
   try {
     // Check if we're only updating archive status or other systemic fields
-    const systemicFields = ["isArchived", "archivedAt"];
+    const systemicFields = ["isArchived", "archivedAt", "classId", "className"];
     const isOnlyArchiveUpdate = Object.keys(updates).every((key) =>
       systemicFields.includes(key),
     );

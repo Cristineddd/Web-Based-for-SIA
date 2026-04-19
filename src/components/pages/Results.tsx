@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -760,10 +758,7 @@ export default function Results() {
   if (loading) {
     return (
       <div className="page-container flex items-center justify-center min-h-[55vh]">
-        <div className="flex items-center gap-2 text-gray-600">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          Loading Results & Export Hub...
-        </div>
+        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
       </div>
     );
   }
@@ -780,7 +775,7 @@ export default function Results() {
         <Button
           onClick={handleBulkSend}
           disabled={bulkSend.running || totalFilteredExams === 0}
-          className="bg-green-700 hover:bg-green-800"
+          className="bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-sm disabled:opacity-50"
         >
           {bulkSend.running ? (
             <>
@@ -796,134 +791,117 @@ export default function Results() {
         </Button>
       </div>
 
-      <Card className="border border-green-100 bg-white shadow-sm">
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Year Level</p>
+      {/* Filter Card */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Year Level</label>
             <Select value={yearFilter} onValueChange={setYearFilter}>
-              <SelectTrigger className="bg-white">
+              <SelectTrigger className="bg-white border-gray-200 rounded-xl h-10 text-sm font-medium focus:ring-0">
                 <SelectValue placeholder="All Year Levels" />
               </SelectTrigger>
               <SelectContent className="bg-white">
                 <SelectItem value="all">All Year Levels</SelectItem>
                 {yearOptions.map((year) => (
-                  <SelectItem key={year} value={year}>
-                    {year}
-                  </SelectItem>
+                  <SelectItem key={year} value={year}>{year}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Class</p>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Class</label>
             <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger className="bg-white">
+              <SelectTrigger className="bg-white border-gray-200 rounded-xl h-10 text-sm font-medium focus:ring-0">
                 <SelectValue placeholder="All Classes" />
               </SelectTrigger>
               <SelectContent className="bg-white">
                 <SelectItem value="all">All Classes</SelectItem>
                 {classes.map((cls) => (
-                  <SelectItem key={cls.id} value={cls.id}>
-                    {cls.class_name}
-                  </SelectItem>
+                  <SelectItem key={cls.id} value={cls.id}>{cls.class_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Exam</p>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Exam</label>
             <Select value={examFilter} onValueChange={setExamFilter}>
-              <SelectTrigger className="bg-white">
+              <SelectTrigger className="bg-white border-gray-200 rounded-xl h-10 text-sm font-medium focus:ring-0">
                 <SelectValue placeholder="All Exams" />
               </SelectTrigger>
               <SelectContent className="bg-white">
                 <SelectItem value="all">All Exams</SelectItem>
                 {examOptions.map((exam) => (
-                  <SelectItem key={exam.id} value={exam.id}>
-                    {exam.title}
-                  </SelectItem>
+                  <SelectItem key={exam.id} value={exam.id}>{exam.title}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+        </div>
+      </div>
 
-        </CardContent>
-      </Card>
-
+      {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-green-100">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-500">Filtered Classes</p>
-            <p className="text-2xl font-bold text-green-700">{filteredClassViews.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-green-100">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-500">Filtered Exams</p>
-            <p className="text-2xl font-bold text-green-700">{totalFilteredExams}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-green-100">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-500">Live Reports</p>
-            <p className="text-2xl font-bold text-green-700">{Object.keys(rowsCache).length}</p>
-          </CardContent>
-        </Card>
+        {[
+          { label: "Filtered Classes", value: filteredClassViews.length },
+          { label: "Filtered Exams", value: totalFilteredExams },
+          { label: "Live Reports", value: Object.keys(rowsCache).length },
+        ].map((stat) => (
+          <div key={stat.label} className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{stat.label}</p>
+            <p className="text-3xl font-bold text-green-600 mt-1">{stat.value}</p>
+          </div>
+        ))}
       </div>
 
       {bulkSend.total > 0 && (
-        <Card className="border-green-200 bg-green-50/50">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium text-green-800">Bulk Send Progress</span>
-              <span className="text-green-700">
-                {bulkSend.processed}/{bulkSend.total} exam reports
-              </span>
-            </div>
-            <Progress
-              value={bulkSend.total > 0 ? (bulkSend.processed / bulkSend.total) * 100 : 0}
-              className="h-2"
-            />
-            <p className="text-xs text-green-700">
-              Sent: {bulkSend.sent} | Failed: {bulkSend.failed} | Skipped: {bulkSend.skipped}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-semibold text-gray-700">Bulk Send Progress</span>
+            <span className="text-xs text-gray-400">
+              {bulkSend.processed}/{bulkSend.total} exam reports
+            </span>
+          </div>
+          <Progress
+            value={bulkSend.total > 0 ? (bulkSend.processed / bulkSend.total) * 100 : 0}
+            className="h-2"
+          />
+          <p className="text-xs text-gray-400">
+            Sent: {bulkSend.sent} &nbsp;·&nbsp; Failed: {bulkSend.failed} &nbsp;·&nbsp; Skipped: {bulkSend.skipped}
+          </p>
+        </div>
       )}
 
       {filteredClassViews.length === 0 ? (
-        <Card className="p-10 text-center border-dashed">
+        <div className="bg-white border border-dashed border-gray-200 rounded-xl p-10 text-center">
           <Folder className="w-10 h-10 mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-600 font-medium">No matching classes/exams for current filters.</p>
-        </Card>
+          <p className="text-gray-500 font-medium">No matching classes/exams for current filters.</p>
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {filteredClassViews.map((view) => {
             const isExpanded = expandedClassIds.has(view.cls.id);
 
             return (
-              <Card
+              <div
                 key={view.cls.id}
                 id={`results-class-${view.cls.id}`}
-                className="border border-gray-200 overflow-hidden"
+                className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
               >
                 <button
-                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-green-50/40 transition-colors"
+                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50/60 transition-colors"
                   onClick={() => toggleExpandClass(view.cls.id)}
                 >
                   <div>
-                    <p className="text-lg font-bold text-green-800">{view.cls.class_name}</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Year Level: {view.yearLevel} | Students: {view.cls.students?.length || 0} | Exams: {view.exams.length}
+                    <p className="text-sm font-bold text-gray-900">{view.cls.class_name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Year Level: {view.yearLevel} &nbsp;·&nbsp; Students: {view.cls.students?.length || 0} &nbsp;·&nbsp; Exams: {view.exams.length}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="border-green-300 text-green-700">
+                    <span className="text-xs font-semibold text-green-600 bg-green-50 border border-green-100 px-2.5 py-1 rounded-full">
                       {view.exams.length} reports
-                    </Badge>
-                    {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </span>
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                   </div>
                 </button>
 
@@ -968,7 +946,7 @@ export default function Results() {
                       />
                     </div>
                     {view.exams.length === 0 ? (
-                      <p className="text-sm text-gray-500">No exams associated with this class.</p>
+                      <p className="text-sm text-gray-400">No exams associated with this class.</p>
                     ) : (
                       (() => {
                         const classSearchActive =
@@ -1146,7 +1124,7 @@ export default function Results() {
                     )}
                   </div>
                 )}
-              </Card>
+              </div>
             );
           })}
         </div>

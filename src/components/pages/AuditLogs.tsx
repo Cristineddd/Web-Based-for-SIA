@@ -1035,7 +1035,7 @@ export default function AuditLogsViewer() {
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-12">
                         <div className="flex items-center justify-center gap-2">
-                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
                           Loading activities...
                         </div>
                       </TableCell>
@@ -1289,7 +1289,7 @@ export default function AuditLogsViewer() {
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-12">
                         <div className="flex items-center justify-center gap-2">
-                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
                           Loading template history...
                         </div>
                       </TableCell>

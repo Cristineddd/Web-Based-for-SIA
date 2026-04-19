@@ -170,7 +170,7 @@ export default function ExamDetail() {
     return (
       <div className="page-container flex items-center justify-center min-h-[50vh]">
         <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto" />
+          <Loader2 className="w-8 h-8 animate-spin text-green-600 mx-auto" />
           <p className="text-muted-foreground">Loading exam...</p>
           {isOffline && (
             <p className="text-sm text-warning">You appear to be offline</p>

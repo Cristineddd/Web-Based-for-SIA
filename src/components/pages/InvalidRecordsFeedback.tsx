@@ -207,7 +207,7 @@ export default function InvalidRecordsFeedback() {
         {loading ? (
           <div className="px-6 py-8 text-center">
             <div className="inline-block">
-              <div className="animate-spin h-8 w-8 border-4 border-gray-200 border-t-blue-600 rounded-full"></div>
+              <div className="animate-spin h-8 w-8 border-4 border-gray-200 border-t-green-600 rounded-full"></div>
             </div>
             <p className="text-gray-600 mt-2">Loading records...</p>
           </div>
