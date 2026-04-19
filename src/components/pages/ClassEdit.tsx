@@ -31,6 +31,7 @@ import {
   Archive,
   Pencil,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 import {
   getClassById,
@@ -78,12 +79,87 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import * as XLSX from "xlsx";
+import type { ScannedResult } from "@/types/scanning";
 
 // Extended Student interface for editing with additional fields
 interface Student extends BaseStudent {
   section?: string;
   grade?: string;
   middle_name?: string;
+}
+
+type StudentExamStatus = "Passed" | "Failed" | "Not Taken";
+
+interface StudentExamBreakdown {
+  examId: string;
+  examTitle: string;
+  subject: string;
+  score: number | null;
+  totalQuestions: number;
+  percentage: number | null;
+  grade: string;
+  status: StudentExamStatus;
+  date: string;
+}
+
+interface StudentStatsRow {
+  studentId: string;
+  studentName: string;
+  email?: string;
+  exams: Record<string, StudentExamBreakdown>;
+}
+
+interface ExamStatsSummary {
+  examId: string;
+  examTitle: string;
+  subject: string;
+  scannedCount: number;
+  averagePercentage: number;
+  passCount: number;
+  failCount: number;
+}
+
+const PASSING_THRESHOLD = 75;
+
+function calculateLetterGrade(percentage: number): string {
+  if (percentage >= 90) return "A";
+  if (percentage >= 85) return "A-";
+  if (percentage >= 80) return "B+";
+  if (percentage >= 75) return "B";
+  if (percentage >= 70) return "C+";
+  if (percentage >= 65) return "C";
+  if (percentage >= 60) return "D";
+  return "F";
+}
+
+function normalizeScannedDate(value?: string): string {
+  if (!value) return "N/A";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "N/A";
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function dedupeLatestByStudent(results: ScannedResult[]): ScannedResult[] {
+  const sorted = [...results].sort((a, b) => {
+    const tsA = new Date(a.scannedAt || 0).getTime();
+    const tsB = new Date(b.scannedAt || 0).getTime();
+    return tsB - tsA;
+  });
+
+  const seen = new Set<string>();
+  const deduped: ScannedResult[] = [];
+
+  for (const result of sorted) {
+    if (seen.has(result.studentId)) continue;
+    seen.add(result.studentId);
+    deduped.push(result);
+  }
+
+  return deduped;
 }
 
 interface ClassEditProps {
@@ -149,32 +225,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     logoUrl: "",
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-
-  // Derived stats from exam data
-  const examsWithData = useMemo(
-    () => exams.filter((e) => (e.scannedCount ?? 0) > 0 && e.averageScore != null),
-    [exams]
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [sendingAllScores, setSendingAllScores] = useState(false);
+  const [statsExamFilter, setStatsExamFilter] = useState<string>("all");
+  const [studentStatsRows, setStudentStatsRows] = useState<StudentStatsRow[]>(
+    [],
   );
-
-  const classAverage = useMemo(() => {
-    if (examsWithData.length === 0) return null;
-    const totalScanned = examsWithData.reduce((s, e) => s + (e.scannedCount ?? 0), 0);
-    const weightedSum = examsWithData.reduce(
-      (s, e) => s + parseFloat(e.averageScore ?? "0") * (e.scannedCount ?? 0),
-      0
-    );
-    return Math.round(weightedSum / totalScanned);
-  }, [examsWithData]);
-
-  const passRate = useMemo(() => {
-    if (examsWithData.length === 0) return null;
-    const totalScanned = examsWithData.reduce((s, e) => s + (e.scannedCount ?? 0), 0);
-    // Weight exams that averaged >= 60% (passing threshold)
-    const passingScanned = examsWithData
-      .filter((e) => parseFloat(e.averageScore ?? "0") >= 60)
-      .reduce((s, e) => s + (e.scannedCount ?? 0), 0);
-    return Math.round((passingScanned / totalScanned) * 100);
-  }, [examsWithData]);
+  const [examStatsSummaries, setExamStatsSummaries] = useState<ExamStatsSummary[]>(
+    [],
+  );
 
   useEffect(() => {
     if (!classId) {
@@ -947,6 +1006,299 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     } catch (err) {
       console.error(err);
       toast.error("Failed to tag exam");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== "stats" || !classData) return;
+
+    let isMounted = true;
+
+    const loadStatsData = async () => {
+      setStatsLoading(true);
+      try {
+        const studentMap = new Map<string, StudentStatsRow>();
+        (classData.students || []).forEach((student) => {
+          const middleName = (student as Student).middle_name?.trim();
+          const fullName = middleName
+            ? `${student.last_name}, ${student.first_name} ${middleName}`
+            : `${student.last_name}, ${student.first_name}`;
+          studentMap.set(student.student_id, {
+            studentId: student.student_id,
+            studentName: fullName,
+            email: student.email,
+            exams: {},
+          });
+        });
+
+        const summaryMap = new Map<string, ExamStatsSummary>();
+
+        await Promise.all(
+          exams.map(async (exam) => {
+            const scansQuery = query(
+              collection(db, "scannedResults"),
+              where("examId", "==", exam.id),
+            );
+            const scansSnap = await getDocs(scansQuery);
+            const deduped = dedupeLatestByStudent(
+              scansSnap.docs
+                .map(
+                  (docSnap) =>
+                    ({
+                      id: docSnap.id,
+                      ...docSnap.data(),
+                    }) as ScannedResult,
+                )
+                .filter((row) => !row.isNullId),
+            );
+
+            let passCount = 0;
+            let failCount = 0;
+            let totalPercentage = 0;
+
+            deduped.forEach((row) => {
+              const percentage =
+                row.totalQuestions > 0
+                  ? Math.round((row.score / row.totalQuestions) * 100)
+                  : 0;
+              const status: StudentExamStatus =
+                percentage >= PASSING_THRESHOLD ? "Passed" : "Failed";
+              const grade = calculateLetterGrade(percentage);
+
+              if (status === "Passed") passCount += 1;
+              else failCount += 1;
+              totalPercentage += percentage;
+
+              const existing =
+                studentMap.get(row.studentId) ||
+                ({
+                  studentId: row.studentId,
+                  studentName: row.studentId,
+                  exams: {},
+                } as StudentStatsRow);
+
+              existing.exams[exam.id] = {
+                examId: exam.id,
+                examTitle: exam.title,
+                subject: exam.subject || classData.course_subject || "General",
+                score: row.score,
+                totalQuestions: row.totalQuestions,
+                percentage,
+                grade,
+                status,
+                date: normalizeScannedDate(row.scannedAt),
+              };
+              studentMap.set(row.studentId, existing);
+            });
+
+            summaryMap.set(exam.id, {
+              examId: exam.id,
+              examTitle: exam.title,
+              subject: exam.subject || classData.course_subject || "General",
+              scannedCount: deduped.length,
+              averagePercentage:
+                deduped.length > 0
+                  ? Math.round(totalPercentage / deduped.length)
+                  : 0,
+              passCount,
+              failCount,
+            });
+          }),
+        );
+
+        if (!isMounted) return;
+
+        const summaries = exams.map(
+          (exam) =>
+            summaryMap.get(exam.id) || {
+              examId: exam.id,
+              examTitle: exam.title,
+              subject: exam.subject || classData.course_subject || "General",
+              scannedCount: 0,
+              averagePercentage: 0,
+              passCount: 0,
+              failCount: 0,
+            },
+        );
+
+        const rows = Array.from(studentMap.values()).sort((a, b) =>
+          a.studentName.localeCompare(b.studentName),
+        );
+
+        setExamStatsSummaries(summaries);
+        setStudentStatsRows(rows);
+        setStatsExamFilter((prev) =>
+          prev === "all" || summaries.some((summary) => summary.examId === prev)
+            ? prev
+            : "all",
+        );
+      } catch (error) {
+        console.error("Error loading class stats data:", error);
+        toast.error("Failed to load stats data");
+        if (isMounted) {
+          setExamStatsSummaries([]);
+          setStudentStatsRows([]);
+        }
+      } finally {
+        if (isMounted) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
+    loadStatsData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, classData, exams]);
+
+  const displayedExamSummaries = useMemo(() => {
+    if (statsExamFilter === "all") return examStatsSummaries;
+    return examStatsSummaries.filter(
+      (summary) => summary.examId === statsExamFilter,
+    );
+  }, [examStatsSummaries, statsExamFilter]);
+
+  const displayedExamIds = useMemo(
+    () => displayedExamSummaries.map((summary) => summary.examId),
+    [displayedExamSummaries],
+  );
+
+  const classAverage = useMemo(() => {
+    const totalScanned = displayedExamSummaries.reduce(
+      (sum, summary) => sum + summary.scannedCount,
+      0,
+    );
+    if (totalScanned === 0) return null;
+
+    const weightedSum = displayedExamSummaries.reduce(
+      (sum, summary) =>
+        sum + summary.averagePercentage * summary.scannedCount,
+      0,
+    );
+    return Math.round(weightedSum / totalScanned);
+  }, [displayedExamSummaries]);
+
+  const totalPassCount = useMemo(
+    () =>
+      displayedExamSummaries.reduce(
+        (sum, summary) => sum + summary.passCount,
+        0,
+      ),
+    [displayedExamSummaries],
+  );
+
+  const totalFailCount = useMemo(
+    () =>
+      displayedExamSummaries.reduce(
+        (sum, summary) => sum + summary.failCount,
+        0,
+      ),
+    [displayedExamSummaries],
+  );
+
+  const totalScans = useMemo(
+    () =>
+      displayedExamSummaries.reduce(
+        (sum, summary) => sum + summary.scannedCount,
+        0,
+      ),
+    [displayedExamSummaries],
+  );
+
+  const handleSendAllScores = async () => {
+    if (!classData) return;
+    if ((classData.students || []).length === 0) {
+      toast.info("No students in this class");
+      return;
+    }
+    if (exams.length === 0) {
+      toast.info("No exams available to send");
+      return;
+    }
+
+    setSendingAllScores(true);
+    try {
+      const statsByStudentId = new Map(
+        studentStatsRows.map((row) => [row.studentId, row]),
+      );
+
+      const students = (classData.students || []).map((student) => {
+        const middleName = (student as Student).middle_name?.trim();
+        const fullName = middleName
+          ? `${student.last_name}, ${student.first_name} ${middleName}`
+          : `${student.last_name}, ${student.first_name}`;
+        const statsRow = statsByStudentId.get(student.student_id);
+
+        const examRecords = exams.map((exam) => {
+          const existing = statsRow?.exams[exam.id];
+          if (existing) {
+            return {
+              examId: existing.examId,
+              examTitle: existing.examTitle,
+              subject: existing.subject,
+              score: existing.score,
+              totalQuestions: existing.totalQuestions,
+              percentage: existing.percentage,
+              grade: existing.grade,
+              status: existing.status,
+              date: existing.date,
+            };
+          }
+          return {
+            examId: exam.id,
+            examTitle: exam.title,
+            subject: exam.subject || classData.course_subject || "General",
+            score: null,
+            totalQuestions: exam.num_items || 0,
+            percentage: null,
+            grade: "-",
+            status: "Not Taken" as StudentExamStatus,
+            date: "N/A",
+          };
+        });
+
+        return {
+          studentId: student.student_id,
+          studentName: fullName,
+          email: student.email || `${student.student_id}@gordoncollege.edu.ph`,
+          examRecords,
+        };
+      });
+
+      const response = await fetch("/api/send-class-scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          className: classData.class_name,
+          course: classData.course_subject,
+          passingThreshold: PASSING_THRESHOLD,
+          instructorName: user?.displayName || undefined,
+          instructorEmail: user?.email || undefined,
+          students,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to send class score summaries");
+      }
+
+      const sent = Number(data.sent || 0);
+      const failed = Number(data.failed || 0);
+      const total = Number(data.total || students.length);
+
+      if (failed > 0) {
+        toast.error(`Sent ${sent}/${total} score summaries. ${failed} failed.`);
+      } else {
+        toast.success(`Sent ${sent}/${total} score summaries.`);
+      }
+    } catch (error) {
+      console.error("Error sending class score summaries:", error);
+      toast.error("Failed to send all scores");
+    } finally {
+      setSendingAllScores(false);
     }
   };
 
@@ -1796,115 +2148,288 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         )}
 
         {activeTab === "stats" && (
-          <div className="space-y-5 animate-in slide-in-from-bottom-2 duration-300">
-            {/* Top Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Card className="border border-gray-100 shadow-sm rounded-2xl bg-white overflow-hidden">
-                <div className="flex items-center gap-4 p-5">
-                  <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <BarChart3 className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Class Average</p>
+          <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-300">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-[#1e293b]">
+                  Class Score Aggregates
+                </h3>
+                <p className="text-xs text-gray-400 font-medium">
+                  Latest scanned result per student per exam (same basis as Review Papers).
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={statsExamFilter} onValueChange={setStatsExamFilter}>
+                  <SelectTrigger className="w-[220px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600">
+                    <SelectValue placeholder="Filter by exam" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                    <SelectItem value="all" className="font-semibold">
+                      All Exams
+                    </SelectItem>
+                    {examStatsSummaries.map((summary) => (
+                      <SelectItem
+                        key={summary.examId}
+                        value={summary.examId}
+                        className="font-semibold"
+                      >
+                        {summary.examTitle}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  onClick={handleSendAllScores}
+                  disabled={sendingAllScores || statsLoading || exams.length === 0}
+                  className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-10 px-6 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
+                >
+                  {sendingAllScores ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4.5 h-4.5 text-gray-400" />
+                      <span>Send All Scores</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {statsLoading ? (
+              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-10">
+                <div className="flex items-center justify-center gap-3 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Loading stats...
+                </div>
+              </Card>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-green-500/10">
+                    <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                      Class Average
+                    </p>
                     <div className="flex items-baseline gap-1">
                       {classAverage !== null ? (
                         <>
-                          <p className="text-3xl font-bold text-[#1e293b]">{classAverage}</p>
-                          <span className="text-base font-bold text-gray-300">%</span>
+                          <p className="text-[34px] font-bold text-[#1e293b]">{classAverage}</p>
+                          <span className="text-xl font-bold text-gray-300">%</span>
                         </>
                       ) : (
-                        <p className="text-3xl font-bold text-gray-300">—</p>
+                        <p className="text-[34px] font-bold text-gray-300">—</p>
                       )}
                     </div>
-                  </div>
-                </div>
-                <div className="h-1 bg-gradient-to-r from-green-400 to-green-600" />
-              </Card>
+                  </Card>
 
-              <Card className="border border-gray-100 shadow-sm rounded-2xl bg-white overflow-hidden">
-                <div className="flex items-center gap-4 p-5">
-                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Users className="w-5 h-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Pass Rate</p>
-                    <div className="flex items-baseline gap-1">
-                      {passRate !== null ? (
-                        <>
-                          <p className="text-3xl font-bold text-[#1e293b]">{passRate}</p>
-                          <span className="text-base font-bold text-gray-300">%</span>
-                        </>
-                      ) : (
-                        <p className="text-3xl font-bold text-gray-300">—</p>
-                      )}
+                  <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-emerald-500/10">
+                    <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                      Passed Count
+                    </p>
+                    <p className="text-[34px] font-bold text-emerald-700">{totalPassCount}</p>
+                  </Card>
+
+                  <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-red-500/10">
+                    <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                      Failed Count
+                    </p>
+                    <p className="text-[34px] font-bold text-red-600">{totalFailCount}</p>
+                  </Card>
+
+                  <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-blue-500/10">
+                    <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                      Total Scans
+                    </p>
+                    <p className="text-[34px] font-bold text-[#1e293b]">{totalScans}</p>
+                  </Card>
+                </div>
+
+                <Card className="border border-gray-100 shadow-sm rounded-[2rem] overflow-hidden bg-white">
+                  <div className="p-8">
+                    <h3 className="text-lg font-bold text-[#1e293b] mb-6">
+                      Exam Performance Breakdown
+                    </h3>
+                    <div className="rounded-2xl border border-gray-50 overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-[#f8fafc] border-none">
+                            <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider pl-8">
+                              Exam Title
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 text-center h-14 uppercase tracking-wider">
+                              Papers Scanned
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-6">
+                              Class Average
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-6">
+                              Passed
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-8">
+                              Failed
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {displayedExamSummaries.length > 0 ? (
+                            displayedExamSummaries.map((summary) => (
+                              <TableRow
+                                key={summary.examId}
+                                className="border-b border-gray-50 h-[72px] hover:bg-gray-50/50 transition-colors group"
+                              >
+                                <TableCell className="pl-8">
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors">
+                                      <FileText className="w-4.5 h-4.5 text-gray-400 group-hover:text-green-500 transition-colors" />
+                                    </div>
+                                    <div>
+                                      <p className="text-[15px] font-bold text-[#1e293b] leading-tight">
+                                        {summary.examTitle}
+                                      </p>
+                                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                        {summary.subject}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <span className="inline-flex items-center justify-center w-10 h-6 bg-gray-50 text-gray-700 rounded-full text-[13px] font-bold border border-gray-100">
+                                    {summary.scannedCount}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right pr-6">
+                                  <span className="text-[16px] font-bold text-[#10B981]">
+                                    {summary.averagePercentage}%
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right pr-6">
+                                  <span className="text-[15px] font-bold text-emerald-700">
+                                    {summary.passCount}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right pr-8">
+                                  <span className="text-[15px] font-bold text-red-600">
+                                    {summary.failCount}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={5} className="h-40 text-center">
+                                <div className="flex flex-col items-center justify-center text-gray-400">
+                                  <BarChart3 className="w-8 h-8 opacity-20 mb-3" />
+                                  <p className="text-sm font-bold opacity-40">
+                                    No records to display yet
+                                  </p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
-                </div>
-                <div className="h-1 bg-gradient-to-r from-blue-400 to-blue-500" />
-              </Card>
-            </div>
+                </Card>
 
-            {/* Exam Breakdown Table */}
-            <Card className="border border-gray-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-gray-100">
-                <div>
-                  <h3 className="text-sm font-bold text-[#1e293b]">Exam Performance Breakdown</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Detailed results for each exam assigned to this class</p>
-                </div>
-                <Button variant="outline" className="text-xs font-semibold text-gray-600 hover:bg-gray-50 rounded-xl h-9 px-4 border border-gray-200 flex items-center gap-2 transition-all whitespace-nowrap">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  Send All Scores
-                </Button>
-              </div>
+                <Card className="border border-gray-100 shadow-sm rounded-[2rem] overflow-hidden bg-white">
+                  <div className="p-8">
+                    <h3 className="text-lg font-bold text-[#1e293b] mb-6">
+                      Per-Student Score Breakdown
+                    </h3>
+                    <div className="rounded-2xl border border-gray-50 overflow-hidden overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-[#f8fafc] border-none">
+                            <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider sticky left-0 bg-[#f8fafc] z-10 min-w-[230px]">
+                              Student
+                            </TableHead>
+                            {displayedExamSummaries.map((summary) => (
+                              <TableHead
+                                key={summary.examId}
+                                className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider min-w-[210px]"
+                              >
+                                {summary.examTitle}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {studentStatsRows.length > 0 ? (
+                            studentStatsRows.map((row) => (
+                              <TableRow
+                                key={row.studentId}
+                                className="border-b border-gray-50 hover:bg-gray-50/40"
+                              >
+                                <TableCell className="sticky left-0 bg-white z-10 border-r border-gray-50">
+                                  <div>
+                                    <p className="font-semibold text-gray-900">
+                                      {row.studentName}
+                                    </p>
+                                    <p className="text-xs font-mono text-gray-500">
+                                      {row.studentId}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                {displayedExamIds.map((examId) => {
+                                  const score = row.exams[examId];
+                                  if (!score) {
+                                    return (
+                                      <TableCell key={examId} className="text-gray-400">
+                                        <span className="text-xs font-semibold">Not Taken</span>
+                                      </TableCell>
+                                    );
+                                  }
 
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50/60 border-none">
-                    <TableHead className="text-[11px] font-bold text-gray-400 h-10 uppercase tracking-wider pl-6">Exam Title</TableHead>
-                    <TableHead className="text-[11px] font-bold text-gray-400 text-center h-10 uppercase tracking-wider">Papers Scanned</TableHead>
-                    <TableHead className="text-[11px] font-bold text-gray-400 text-right h-10 uppercase tracking-wider pr-6">Avg Score</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {exams.length > 0 ? exams.map(exam => (
-                    <TableRow key={exam.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors group">
-                      <TableCell className="pl-6 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors flex-shrink-0">
-                            <FileText className="w-4 h-4 text-gray-400 group-hover:text-green-500 transition-colors" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-[#1e293b] leading-tight">{exam.title}</p>
-                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{exam.subject}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center py-3">
-                        <span className="inline-flex items-center justify-center min-w-[2rem] h-6 px-2 bg-gray-100 text-gray-700 rounded-full text-xs font-bold">
-                          {exam.scannedCount || 0}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right pr-6 py-3">
-                        <span className="text-base font-bold text-green-600">
-                          {exam.averageScore || "0"}<span className="text-xs font-semibold text-gray-300 ml-0.5">%</span>
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  )) : (
-                        <TableRow>
-                          <TableCell colSpan={3} className="h-40 text-center">
-                            <div className="flex flex-col items-center justify-center text-gray-400">
-                              <BarChart3 className="w-8 h-8 opacity-20 mb-3" />
-                              <p className="text-sm font-bold opacity-40">
-                                No records to display yet
-                              </p>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-            </Card>
+                                  return (
+                                    <TableCell key={examId}>
+                                      <div className="flex flex-col gap-1">
+                                        <div className="text-sm font-bold text-gray-800">
+                                          {score.score}/{score.totalQuestions}
+                                          <span className="ml-2 text-xs font-semibold text-gray-500">
+                                            ({score.percentage}%)
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                              score.status === "Passed"
+                                                ? "bg-emerald-100 text-emerald-700"
+                                                : "bg-red-100 text-red-700"
+                                            }`}
+                                          >
+                                            {score.status}
+                                          </span>
+                                          <span className="text-[11px] font-semibold text-gray-500">
+                                            Grade {score.grade}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  );
+                                })}
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={Math.max(2, displayedExamSummaries.length + 1)}
+                                className="h-28 text-center text-sm text-gray-400"
+                              >
+                                No student score records available yet.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </Card>
+              </>
+            )}
           </div>
         )}
       </div>

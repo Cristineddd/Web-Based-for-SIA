@@ -10,6 +10,10 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  writeBatch,
+  type DocumentData,
+  type Query,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -41,6 +45,18 @@ export interface Class {
 
 const CLASSES_COLLECTION = "classes";
 
+const FIRESTORE_BATCH_LIMIT = 450;
+
+function isPermissionDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const firestoreError = error as { code?: string; message?: string };
+  const message = (firestoreError.message || "").toLowerCase();
+  return (
+    firestoreError.code === "permission-denied" ||
+    message.includes("missing or insufficient permissions")
+  );
+}
+
 function stripUndefinedDeep(value: any): any {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -59,6 +75,33 @@ function stripUndefinedDeep(value: any): any {
     return out;
   }
   return value;
+}
+
+async function deleteDocsInBatches(
+  docs: QueryDocumentSnapshot<DocumentData>[],
+): Promise<void> {
+  for (let i = 0; i < docs.length; i += FIRESTORE_BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + FIRESTORE_BATCH_LIMIT).forEach((docSnap) => {
+      batch.delete(docSnap.ref);
+    });
+    await batch.commit();
+  }
+}
+
+async function deleteDocsByQuery(q: Query<DocumentData>): Promise<number> {
+  try {
+    const snap = await getDocs(q);
+    if (snap.empty) return 0;
+    await deleteDocsInBatches(snap.docs);
+    return snap.size;
+  } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      console.warn("[deleteClass] Skipping restricted collection cleanup:", error);
+      return 0;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -313,6 +356,69 @@ export async function updateClass(
 export async function deleteClass(classId: string): Promise<void> {
   try {
     const classRef = doc(db, CLASSES_COLLECTION, classId);
+    const classSnap = await getDoc(classRef);
+
+    if (!classSnap.exists()) {
+      return;
+    }
+
+    const classData = classSnap.data() as { class_name?: string };
+    const className = classData.class_name?.trim() || "";
+
+    const examDocsById = new Map<string, QueryDocumentSnapshot<DocumentData>>();
+    const examsByClassIdSnap = await getDocs(
+      query(collection(db, "exams"), where("classId", "==", classId)),
+    );
+    examsByClassIdSnap.docs.forEach((docSnap) => {
+      examDocsById.set(docSnap.id, docSnap);
+    });
+
+    if (className) {
+      const examsByClassNameSnap = await getDocs(
+        query(collection(db, "exams"), where("className", "==", className)),
+      );
+      examsByClassNameSnap.docs.forEach((docSnap) => {
+        const examData = docSnap.data() as { classId?: string };
+        const examClassId = examData.classId?.trim();
+        // Guard against cross-class deletes when classes share names.
+        if (examClassId && examClassId !== classId) return;
+        examDocsById.set(docSnap.id, docSnap);
+      });
+    }
+
+    const examIds = Array.from(examDocsById.keys());
+    for (const examId of examIds) {
+      await deleteDocsByQuery(
+        query(collection(db, "templates"), where("examId", "==", examId)),
+      );
+      await deleteDocsByQuery(
+        query(collection(db, "scannedResults"), where("examId", "==", examId)),
+      );
+      await deleteDocsByQuery(
+        query(collection(db, "studentGrades"), where("exam_id", "==", examId)),
+      );
+      await deleteDocsByQuery(
+        query(collection(db, "studentGrades"), where("examId", "==", examId)),
+      );
+    }
+
+    // Remove student-grade rows directly linked by class fields (legacy/new variants).
+    await deleteDocsByQuery(
+      query(collection(db, "studentGrades"), where("class_id", "==", classId)),
+    );
+    await deleteDocsByQuery(
+      query(collection(db, "studentGrades"), where("classId", "==", classId)),
+    );
+
+    // Remove flattened student records used by import and validation flows.
+    await deleteDocsByQuery(
+      query(collection(db, "students"), where("class_id", "==", classId)),
+    );
+
+    if (examDocsById.size > 0) {
+      await deleteDocsInBatches(Array.from(examDocsById.values()));
+    }
+
     await deleteDoc(classRef);
   } catch (error) {
     console.error("Error deleting class:", error);

@@ -198,3 +198,374 @@ export function studentScoreText(data: StudentScoreEmailData): string {
     .filter(Boolean)
     .join('\n');
 }
+
+// ─── Faculty Delivery Report Email ───────────────────────────────────────────
+
+export interface FacultyDeliveryStudentStatus {
+  studentName: string;
+  studentId: string;
+  status: 'Sent' | 'Failed';
+  error?: string;
+}
+
+export interface FacultyDeliveryEmailData {
+  instructorName: string;
+  examTitle: string;
+  className: string;
+  total: number;
+  sent: number;
+  failed: number;
+  date: string;
+  subject?: string;
+  students: FacultyDeliveryStudentStatus[];
+}
+
+function deliveryStatusBadge(sent: number, failed: number) {
+  if (failed === 0) {
+    return { text: 'DELIVERY COMPLETE', color: '#15803d' };
+  }
+  if (sent === 0) {
+    return { text: 'DELIVERY FAILED', color: '#dc2626' };
+  }
+  return { text: 'PARTIAL DELIVERY', color: '#b45309' };
+}
+
+export function facultyDeliveryEmail(data: FacultyDeliveryEmailData): string {
+  const { text: statusText, color: statusColor } = deliveryStatusBadge(
+    data.sent,
+    data.failed,
+  );
+
+  const maxRows = 100;
+  const visibleStudents = data.students.slice(0, maxRows);
+  const hiddenCount = Math.max(0, data.students.length - maxRows);
+
+  const studentRowsHtml = visibleStudents
+    .map((student) => {
+      const isSent = student.status === 'Sent';
+      const statusBg = isSent ? '#dcfce7' : '#fee2e2';
+      const statusFg = isSent ? '#166534' : '#b91c1c';
+      const errorNote = student.error
+        ? `<div style="margin-top:2px;color:#9ca3af;font-size:11px;">${esc(student.error)}</div>`
+        : '';
+
+      return `
+        <tr>
+          <td style="padding:10px 12px;border-top:1px solid #e5e7eb;">
+            <div style="font-size:13px;color:${GC_TEXT_DARK_HEX};font-weight:600;">${esc(student.studentName)}</div>
+            <div style="font-size:11px;color:${GC_TEXT_MUTED_HEX};font-family:monospace;">${esc(student.studentId)}</div>
+            ${errorNote}
+          </td>
+          <td align="right" style="padding:10px 12px;border-top:1px solid #e5e7eb;">
+            <span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;background:${statusBg};color:${statusFg};">
+              ${esc(student.status)}
+            </span>
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  const body = `
+    <p style="margin:0 0 6px;">Dear <strong>${esc(data.instructorName)}</strong>,</p>
+    <p style="margin:0 0 20px;color:${GC_TEXT_MUTED_HEX};">
+      Here is the delivery report for <strong>${esc(data.examTitle)}</strong>
+      in <strong>${esc(data.className)}</strong>.
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+      style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+      <tr><td style="padding:20px 24px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr><td style="padding-bottom:16px;border-bottom:1px solid #e5e7eb;" colspan="2">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+              <td>
+                <span style="font-size:36px;font-weight:700;color:${GC_PRIMARY_HEX};">${data.sent}</span>
+                <span style="font-size:18px;color:${GC_TEXT_MUTED_HEX};">/ ${data.total}</span>
+              </td>
+              <td align="right">
+                <span style="display:inline-block;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;color:#fff;background:${statusColor};">
+                  ${statusText}
+                </span>
+              </td>
+            </tr></table>
+          </td></tr>
+          <tr>
+            <td style="padding-top:14px;" width="50%">
+              <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Sent</span>
+              <span style="display:block;font-size:20px;font-weight:700;color:#166534;">${data.sent}</span>
+            </td>
+            <td style="padding-top:14px;" width="50%">
+              <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Failed</span>
+              <span style="display:block;font-size:20px;font-weight:700;color:#b91c1c;">${data.failed}</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding-top:10px;" width="50%">
+              <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Date</span>
+              <span style="display:block;font-size:14px;color:${GC_TEXT_DARK_HEX};">${esc(data.date)}</span>
+            </td>
+            <td style="padding-top:10px;" width="50%">
+              ${
+                data.subject
+                  ? `
+                <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Subject</span>
+                <span style="display:block;font-size:14px;color:${GC_TEXT_DARK_HEX};">${esc(data.subject)}</span>
+              `
+                  : ''
+              }
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+      style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <tr>
+        <td style="padding:12px 12px;background:#f8fafc;border-bottom:1px solid #e5e7eb;font-size:12px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">
+          Student Recipients
+        </td>
+      </tr>
+      ${studentRowsHtml || `
+      <tr>
+        <td style="padding:12px;font-size:13px;color:${GC_TEXT_MUTED_HEX};">No students were included in this send request.</td>
+      </tr>`}
+    </table>
+    ${
+      hiddenCount > 0
+        ? `<p style="margin:10px 0 0;font-size:12px;color:${GC_TEXT_MUTED_HEX};">+ ${hiddenCount} more student(s) not shown in this email.</p>`
+        : ''
+    }
+
+    <p style="margin:16px 0 0;font-size:13px;color:${GC_TEXT_MUTED_HEX};">
+      — ${esc(data.instructorName)}, Instructor
+    </p>
+  `;
+
+  return baseLayout(body);
+}
+
+export function facultyDeliveryText(data: FacultyDeliveryEmailData): string {
+  const maxRows = 100;
+  const visibleStudents = data.students.slice(0, maxRows);
+  const hiddenCount = Math.max(0, data.students.length - maxRows);
+
+  return [
+    GC_SYSTEM_NAME,
+    '',
+    `Dear ${data.instructorName},`,
+    '',
+    `Delivery report for "${data.examTitle}" (${data.className})`,
+    `Date: ${data.date}`,
+    data.subject ? `Subject: ${data.subject}` : '',
+    '',
+    `Sent: ${data.sent}`,
+    `Failed: ${data.failed}`,
+    `Total: ${data.total}`,
+    '',
+    'Students:',
+    ...visibleStudents.map((student) =>
+      `- ${student.studentName} (${student.studentId}) — ${student.status}${student.error ? ` [${student.error}]` : ''}`,
+    ),
+    hiddenCount > 0 ? `... and ${hiddenCount} more student(s)` : '',
+    '',
+    '---',
+    `${GC_FULL_NAME} | ${GC_ADDRESS}`,
+    'This is an automated message. Please do not reply.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+// ─── Class Score Summary Email ───────────────────────────────────────────────
+
+export interface ClassScoreRecord {
+  examId: string;
+  examTitle: string;
+  subject: string;
+  score: number | null;
+  totalQuestions: number;
+  percentage: number | null;
+  grade: string;
+  status: 'Passed' | 'Failed' | 'Not Taken';
+  date: string;
+}
+
+export interface ClassScoreSummaryEmailData {
+  studentName: string;
+  studentId: string;
+  className: string;
+  course?: string;
+  passingThreshold: number;
+  examRecords: ClassScoreRecord[];
+  instructorName?: string;
+}
+
+export function classScoreSummaryEmail(data: ClassScoreSummaryEmailData): string {
+  const attempted = data.examRecords.filter((record) => record.percentage !== null);
+  const passedCount = attempted.filter((record) => record.status === 'Passed').length;
+  const failedCount = attempted.filter((record) => record.status === 'Failed').length;
+  const notTakenCount = data.examRecords.length - attempted.length;
+  const average =
+    attempted.length > 0
+      ? Math.round(
+          attempted.reduce(
+            (sum, record) => sum + Number(record.percentage ?? 0),
+            0,
+          ) / attempted.length,
+        )
+      : null;
+
+  const examRows = data.examRecords
+    .map((record) => {
+      const statusBg =
+        record.status === 'Passed'
+          ? '#dcfce7'
+          : record.status === 'Failed'
+            ? '#fee2e2'
+            : '#f3f4f6';
+      const statusFg =
+        record.status === 'Passed'
+          ? '#166534'
+          : record.status === 'Failed'
+            ? '#b91c1c'
+            : '#4b5563';
+
+      const scoreDisplay =
+        record.score === null
+          ? 'Not Taken'
+          : `${record.score}/${record.totalQuestions} (${record.percentage}%)`;
+
+      const gradeDisplay = record.score === null ? '—' : record.grade;
+
+      return `
+        <tr>
+          <td style="padding:10px 12px;border-top:1px solid #e5e7eb;">
+            <div style="font-size:13px;color:${GC_TEXT_DARK_HEX};font-weight:600;">${esc(record.examTitle)}</div>
+            <div style="font-size:11px;color:${GC_TEXT_MUTED_HEX};">${esc(record.subject)}</div>
+          </td>
+          <td style="padding:10px 12px;border-top:1px solid #e5e7eb;font-size:12px;color:${GC_TEXT_DARK_HEX};">
+            ${esc(scoreDisplay)}
+          </td>
+          <td style="padding:10px 12px;border-top:1px solid #e5e7eb;font-size:12px;color:${gradeColor(record.grade)};font-weight:700;">
+            ${esc(gradeDisplay)}
+          </td>
+          <td align="right" style="padding:10px 12px;border-top:1px solid #e5e7eb;">
+            <span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;background:${statusBg};color:${statusFg};">
+              ${esc(record.status)}
+            </span>
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  const body = `
+    <p style="margin:0 0 6px;">Dear <strong>${esc(data.studentName)}</strong>,</p>
+    <p style="margin:0 0 20px;color:${GC_TEXT_MUTED_HEX};">
+      Here is your complete score record for <strong>${esc(data.className)}</strong>.
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+      style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+      <tr><td style="padding:20px 24px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td style="padding-bottom:12px;" width="50%">
+              <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Student ID</span>
+              <span style="display:block;font-size:14px;color:${GC_TEXT_DARK_HEX};font-family:monospace;">${esc(data.studentId)}</span>
+            </td>
+            <td style="padding-bottom:12px;" width="50%">
+              <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Passing Threshold</span>
+              <span style="display:block;font-size:14px;color:${GC_TEXT_DARK_HEX};">${data.passingThreshold}%</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding-top:6px;" width="50%">
+              <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Average (Taken Exams)</span>
+              <span style="display:block;font-size:20px;font-weight:700;color:${GC_PRIMARY_HEX};">${average === null ? '—' : `${average}%`}</span>
+            </td>
+            <td style="padding-top:6px;" width="50%">
+              <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Exam Summary</span>
+              <span style="display:block;font-size:13px;color:${GC_TEXT_DARK_HEX};">${passedCount} Passed • ${failedCount} Failed • ${notTakenCount} Not Taken</span>
+            </td>
+          </tr>
+          ${
+            data.course
+              ? `<tr>
+            <td style="padding-top:8px;" colspan="2">
+              <span style="display:block;font-size:11px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;">Course</span>
+              <span style="display:block;font-size:13px;color:${GC_TEXT_DARK_HEX};">${esc(data.course)}</span>
+            </td>
+          </tr>`
+              : ''
+          }
+        </table>
+      </td></tr>
+    </table>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+      style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <tr>
+        <td style="padding:12px;background:#f8fafc;border-bottom:1px solid #e5e7eb;font-size:12px;color:${GC_TEXT_MUTED_HEX};text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">
+          Exam Score Breakdown
+        </td>
+      </tr>
+      ${examRows || `
+      <tr>
+        <td style="padding:12px;font-size:13px;color:${GC_TEXT_MUTED_HEX};">No exam records available.</td>
+      </tr>`}
+    </table>
+
+    ${
+      data.instructorName
+        ? `<p style="margin:16px 0 0;font-size:13px;color:${GC_TEXT_MUTED_HEX};">— ${esc(data.instructorName)}, Instructor</p>`
+        : ''
+    }
+  `;
+
+  return baseLayout(body);
+}
+
+export function classScoreSummaryText(data: ClassScoreSummaryEmailData): string {
+  const attempted = data.examRecords.filter((record) => record.percentage !== null);
+  const average =
+    attempted.length > 0
+      ? Math.round(
+          attempted.reduce(
+            (sum, record) => sum + Number(record.percentage ?? 0),
+            0,
+          ) / attempted.length,
+        )
+      : null;
+
+  return [
+    GC_SYSTEM_NAME,
+    '',
+    `Dear ${data.studentName},`,
+    '',
+    `Here is your complete score record for ${data.className}.`,
+    `Student ID: ${data.studentId}`,
+    `Passing threshold: ${data.passingThreshold}%`,
+    `Average (taken exams): ${average === null ? 'N/A' : `${average}%`}`,
+    data.course ? `Course: ${data.course}` : '',
+    '',
+    'Exam Breakdown:',
+    ...data.examRecords.map((record) => {
+      const scoreDisplay =
+        record.score === null
+          ? 'Not Taken'
+          : `${record.score}/${record.totalQuestions} (${record.percentage}%)`;
+      const gradeDisplay = record.score === null ? '-' : record.grade;
+      return `- ${record.examTitle} [${record.subject}] — ${scoreDisplay}, Grade: ${gradeDisplay}, Status: ${record.status}`;
+    }),
+    data.instructorName ? `Instructor: ${data.instructorName}` : '',
+    '',
+    '---',
+    `${GC_FULL_NAME} | ${GC_ADDRESS}`,
+    'This is an automated message. Please do not reply.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
