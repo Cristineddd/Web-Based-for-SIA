@@ -180,7 +180,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   const [stats, setStats] = useState({
     examCount: 0,
   });
-  const [activeTab, setActiveTab] = useState<"students" | "exams" | "stats">("students");
+  const [activeTab, setActiveTab] = useState<"students" | "exams" | "stats">(
+    "students",
+  );
   const [exams, setExams] = useState<Exam[]>([]);
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [newStudent, setNewStudent] = useState({
@@ -247,11 +249,11 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         ]);
 
         if (data) {
-            setClassData(data);
-            setExams(fetchedExams);
-            setStats({
-              examCount: fetchedExams.length,
-            });
+          setClassData(data);
+          setExams(fetchedExams);
+          setStats({
+            examCount: fetchedExams.length,
+          });
         }
       } catch (error) {
         console.error("Error fetching class:", error);
@@ -267,16 +269,16 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
   useEffect(() => {
     if (activeTab === "exams" && classId) {
-        const fetchAllExams = async () => {
-            try {
-                const data = await getExams(user?.id);
-                // Filter out exams already in this class
-                setAllExams(data.filter(e => e.classId !== classId));
-            } catch (err) {
-                console.error(err);
-            }
-        };
-        fetchAllExams();
+      const fetchAllExams = async () => {
+        try {
+          const data = await getExams(user?.id);
+          // Filter out exams already in this class
+          setAllExams(data.filter((e) => e.classId !== classId));
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      fetchAllExams();
     }
   }, [activeTab, classId, user?.id]);
 
@@ -391,10 +393,16 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       const newExam = await createExam(examData, user.id, user.instructorId);
 
       if (user.email) {
-        AuditLogger.logActivity(user.id, user.email, "exam_created", `Created exam: ${formData.name}`, {
-          entityId: newExam.id,
-          entityType: "exam",
-        }).catch(console.error);
+        AuditLogger.logActivity(
+          user.id,
+          user.email,
+          "exam_created",
+          `Created exam: ${formData.name}`,
+          {
+            entityId: newExam.id,
+            entityType: "exam",
+          },
+        ).catch(console.error);
       }
 
       setExams((prev) => [newExam, ...prev]);
@@ -976,29 +984,28 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
   const handleTagExam = async (examId: string) => {
     if (!classData || !examId) return;
-    
-    const selectedExam = allExams.find(e => e.id === examId);
+
+    const selectedExam = allExams.find((e) => e.id === examId);
     if (!selectedExam) return;
 
     try {
+      await updateExam(examId, {
+        classId: classData.id,
+        className: classData.class_name,
+      });
 
-        await updateExam(examId, {
-            classId: classData.id,
-            className: classData.class_name
-        });
-        
-        toast.success(`Tagged "${selectedExam.title}" to this class`);
-        
-        // Refresh exams
-        const updatedExams = await getExamsByClassId(classData.id);
-        setExams(updatedExams);
-        setStats(prev => ({ ...prev, examCount: updatedExams.length }));
-        
-        // Update allExams (remove the tagged one)
-        setAllExams(prev => prev.filter(e => e.id !== examId));
+      toast.success(`Tagged "${selectedExam.title}" to this class`);
+
+      // Refresh exams
+      const updatedExams = await getExamsByClassId(classData.id);
+      setExams(updatedExams);
+      setStats((prev) => ({ ...prev, examCount: updatedExams.length }));
+
+      // Update allExams (remove the tagged one)
+      setAllExams((prev) => prev.filter((e) => e.id !== examId));
     } catch (err) {
-        console.error(err);
-        toast.error("Failed to tag exam");
+      console.error(err);
+      toast.error("Failed to tag exam");
     }
   };
 
@@ -1323,9 +1330,13 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     : [];
 
   const tabItems = [
-    { id: "students", label: `Students (${classData?.students?.length || 0})`, icon: Users },
+    {
+      id: "students",
+      label: `Students (${classData?.students?.length || 0})`,
+      icon: Users,
+    },
     { id: "exams", label: `Exams (${stats.examCount})`, icon: FileText },
-    { id: "stats", label: "Stats", icon: BarChart3 }
+    { id: "stats", label: "Stats", icon: BarChart3 },
   ] as const;
 
   if (loading) {
@@ -1547,7 +1558,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                     : "text-gray-400 hover:text-gray-600 font-medium"
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? "text-green-600" : "text-gray-300"}`} />
+                <Icon
+                  className={`w-4 h-4 ${isActive ? "text-green-600" : "text-gray-300"}`}
+                />
                 <span className="text-sm">{tab.label}</span>
                 {isActive && (
                   <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-green-500 rounded-full" />
@@ -1657,7 +1670,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       >
                         <div className="flex items-center gap-1">
                           Student ID
-                          {sortBy === "student_id" && <ArrowUpDown className="w-3 h-3" />}
+                          {sortBy === "student_id" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
                         </div>
                       </th>
                       <th
@@ -1666,7 +1681,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       >
                         <div className="flex items-center gap-1">
                           First Name
-                          {sortBy === "first_name" && <ArrowUpDown className="w-3 h-3" />}
+                          {sortBy === "first_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
                         </div>
                       </th>
                       <th
@@ -1675,7 +1692,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       >
                         <div className="flex items-center gap-1">
                           Last Name
-                          {sortBy === "last_name" && <ArrowUpDown className="w-3 h-3" />}
+                          {sortBy === "last_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
                         </div>
                       </th>
                       <th
@@ -1684,7 +1703,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       >
                         <div className="flex items-center gap-1">
                           Middle Name
-                          {sortBy === "middle_name" && <ArrowUpDown className="w-3 h-3" />}
+                          {sortBy === "middle_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
                         </div>
                       </th>
                       <th className="w-12"></th>
@@ -1793,10 +1814,16 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                                 const raw = e.target.value;
                                 const numeric = raw.replace(/[^0-9]/g, "");
                                 const val = numeric.slice(0, 9);
-                                setNewStudent({ ...newStudent, student_id: val });
+                                setNewStudent({
+                                  ...newStudent,
+                                  student_id: val,
+                                });
                                 setFieldErrors((prev) => ({
                                   ...prev,
-                                  student_id: validateStudentId(val, classData?.students ?? []),
+                                  student_id: validateStudentId(
+                                    val,
+                                    classData?.students ?? [],
+                                  ),
                                 }));
                               }}
                               placeholder="Student ID"
@@ -1823,14 +1850,22 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                               value={newStudent.first_name}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                setNewStudent({ ...newStudent, first_name: val });
+                                setNewStudent({
+                                  ...newStudent,
+                                  first_name: val,
+                                });
                                 setFieldErrors((prev) => ({
                                   ...prev,
-                                  first_name: validateName(val, "first_name", classData?.students ?? [], {
-                                    first_name: val,
-                                    last_name: newStudent.last_name,
-                                    middle_name: newStudent.middle_name,
-                                  }),
+                                  first_name: validateName(
+                                    val,
+                                    "first_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: val,
+                                      last_name: newStudent.last_name,
+                                      middle_name: newStudent.middle_name,
+                                    },
+                                  ),
                                 }));
                               }}
                               placeholder="First Name"
@@ -1856,14 +1891,22 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                               value={newStudent.last_name}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                setNewStudent({ ...newStudent, last_name: val });
+                                setNewStudent({
+                                  ...newStudent,
+                                  last_name: val,
+                                });
                                 setFieldErrors((prev) => ({
                                   ...prev,
-                                  last_name: validateName(val, "last_name", classData?.students ?? [], {
-                                    first_name: newStudent.first_name,
-                                    last_name: val,
-                                    middle_name: newStudent.middle_name,
-                                  }),
+                                  last_name: validateName(
+                                    val,
+                                    "last_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: newStudent.first_name,
+                                      last_name: val,
+                                      middle_name: newStudent.middle_name,
+                                    },
+                                  ),
                                 }));
                               }}
                               placeholder="Last Name"
@@ -1889,14 +1932,22 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                               value={newStudent.middle_name}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                setNewStudent({ ...newStudent, middle_name: val });
+                                setNewStudent({
+                                  ...newStudent,
+                                  middle_name: val,
+                                });
                                 setFieldErrors((prev) => ({
                                   ...prev,
-                                  middle_name: validateName(val, "middle_name", classData?.students ?? [], {
-                                    first_name: newStudent.first_name,
-                                    last_name: newStudent.last_name,
-                                    middle_name: val,
-                                  }),
+                                  middle_name: validateName(
+                                    val,
+                                    "middle_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: newStudent.first_name,
+                                      last_name: newStudent.last_name,
+                                      middle_name: val,
+                                    },
+                                  ),
                                 }));
                               }}
                               placeholder="Middle Name"
@@ -1960,7 +2011,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         {activeTab === "exams" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h3 className="text-xl font-bold text-[#0f172a]">Exams for this Class</h3>
+              <h3 className="text-xl font-bold text-[#0f172a]">
+                Exams for this Class
+              </h3>
               <div className="flex items-center gap-3">
                 <Select onValueChange={handleTagExam}>
                   <SelectTrigger className="w-[200px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600 focus:ring-0 focus:border-gray-200">
@@ -1999,7 +2052,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-8 h-8 text-gray-300" />
                 </div>
-                <p className="text-gray-500 font-medium">No exams tagged to this class yet.</p>
+                <p className="text-gray-500 font-medium">
+                  No exams tagged to this class yet.
+                </p>
                 <p className="text-xs text-gray-400 mt-1">
                   Start by tagging an existing exam or creating a new one.
                 </p>
@@ -2032,7 +2087,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
                         <div className="mt-4 flex flex-col gap-2">
                           <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-500 transition-colors">
-                            <span className="text-sm font-bold opacity-30">#</span>
+                            <span className="text-sm font-bold opacity-30">
+                              #
+                            </span>
                             <span className="text-xs font-mono font-bold tracking-tight text-gray-600">
                               {exam.examCode || "NO-CODE"}
                             </span>
@@ -2040,11 +2097,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                           <div className="flex items-center gap-2 text-gray-400">
                             <Calendar className="w-3.5 h-3.5 opacity-60" />
                             <span className="text-[11px] font-bold">
-                              {new Date(exam.created_at).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
+                              {new Date(exam.created_at).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                },
+                              )}
                             </span>
                           </div>
                         </div>
@@ -2375,17 +2435,17 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       </div>
 
       {showCreateExam && (
-        <CreateExamModal 
-          isOpen={showCreateExam} 
+        <CreateExamModal
+          isOpen={showCreateExam}
           onClose={() => setShowCreateExam(false)}
           onCreateExam={handleCreateExam}
-          existingExamTitles={exams.map(e => e.title)}
+          existingExamTitles={exams.map((e) => e.title)}
           fromTemplate={{
             name: "",
             totalQuestions: 50,
             choicesPerItem: 4,
             description: "",
-            folder: classData?.course_subject || ""
+            folder: classData?.course_subject || "",
           }}
           classId={classId || ""}
           className={classData?.class_name || ""}
@@ -2599,7 +2659,8 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               Confirm Student Removal
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-500">
-              Are you sure you want to remove this student from the class? This action cannot be undone.
+              Are you sure you want to remove this student from the class? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
@@ -2627,7 +2688,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }

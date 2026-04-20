@@ -74,6 +74,7 @@ interface ExamWithStatus extends Exam {
 
 export default function Exams() {
   const { user } = useAuth();
+  const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const router = useRouter();
   const searchParams = useSearchParams();
   const [exams, setExams] = useState<ExamWithStatus[]>([]);
@@ -363,7 +364,9 @@ export default function Exams() {
         institutionName: editForm.institutionName,
         logoUrl: editForm.logoUrl,
         classId: editForm.classId || null,
-        className: editForm.classId ? classById[editForm.classId]?.class_name : null,
+        className: editForm.classId
+          ? classById[editForm.classId]?.class_name
+          : null,
       };
 
       await updateExam(editingExam.id, updated);
@@ -483,11 +486,9 @@ export default function Exams() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-            Exams
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Create and manage your exams and answer keys.
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Exams</h1>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Create and manage your exams and answer keys
           </p>
         </div>
         <Button
@@ -584,7 +585,7 @@ export default function Exams() {
                     <p className="text-sm text-gray-500 font-medium line-clamp-1">
                       {course}
                     </p>
-                    
+
                     <div className="mt-4 flex flex-col gap-2">
                       <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-500 transition-colors">
                         <span className="text-sm font-bold opacity-30">#</span>
@@ -595,9 +596,14 @@ export default function Exams() {
                       <div className="flex items-center gap-2 text-gray-400">
                         <Calendar className="w-3.5 h-3.5 opacity-60" />
                         <span className="text-[11px] font-bold">
-                          {new Date(exam.created_at).toLocaleDateString('en-US', { 
-                            month: 'short', day: 'numeric', year: 'numeric' 
-                          })}
+                          {new Date(exam.created_at).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            },
+                          )}
                         </span>
                       </div>
                     </div>
@@ -864,14 +870,18 @@ export default function Exams() {
       <AlertDialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold text-gray-900">Archive Exam</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl font-bold text-gray-900">
+              Archive Exam
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-gray-600 leading-relaxed">
               Are you sure you want to archive this exam? It will be moved to
               the Archive page and you can restore it later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-3">
-            <AlertDialogCancel className="h-11 px-6 border-gray-200 text-gray-700 font-medium hover:bg-gray-50">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="h-11 px-6 border-gray-200 text-gray-700 font-medium hover:bg-gray-50">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleArchive}
               className="h-11 px-6 bg-green-600 text-white font-medium hover:bg-green-700"

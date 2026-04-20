@@ -29,12 +29,7 @@ import { AnswerKeyService } from "@/services/answerKeyService";
 import { ScanningService } from "@/services/scanningService";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { toast } from "sonner";
 import { BackButton } from "@/components/ui/BackButton";
 import ReviewPapersPage from "@/components/pages/ReviewPapers";
@@ -173,10 +168,15 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
   // Auto-load preview whenever the template tab is opened and a template exists
   useEffect(() => {
-    if (activeTab === 'template' && hasTemplate && !templatePdfUrl && !loadingPreview) {
+    if (
+      activeTab === "template" &&
+      hasTemplate &&
+      !templatePdfUrl &&
+      !loadingPreview
+    ) {
       handleLoadPreview();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, hasTemplate]);
 
   if (loading) {
@@ -340,9 +340,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   const handlePrintTemplate = async () => {
     const tplData = await buildTemplateData();
     if (!tplData) return;
-    const url = templatePdfUrl ?? await getTemplatePDFBlobUrl(tplData);
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
+    const url = templatePdfUrl ?? (await getTemplatePDFBlobUrl(tplData));
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
     iframe.src = url;
     document.body.appendChild(iframe);
     iframe.onload = () => {
@@ -353,49 +353,67 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
 
   const handleDownloadTemplate = () => {
     if (!exam) return;
-    const data: [string, string][] = [['Question', 'Answer']];
-    for (let i = 1; i <= exam.num_items; i++) data.push([String(i), '']);
+    const data: [string, string][] = [["Question", "Answer"]];
+    for (let i = 1; i <= exam.num_items; i++) data.push([String(i), ""]);
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 12 }, { wch: 12 }];
+    ws["!cols"] = [{ wch: 12 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Answer Key');
-    XLSX.writeFile(wb, `answer_key_template_${exam.title.replace(/\s+/g, '_')}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Answer Key");
+    XLSX.writeFile(
+      wb,
+      `answer_key_template_${exam.title.replace(/\s+/g, "_")}.xlsx`,
+    );
   };
 
   const handleImportKey = (file: File) => {
     if (!exam) return;
-    const valid = ['A', 'B', 'C', 'D', 'E'];
+    const valid = ["A", "B", "C", "D", "E"];
 
     const processRows = (rows: [unknown, unknown][]) => {
       const imported: Record<number, string> = {};
       let parsed = 0;
       for (const [colA, colB] of rows) {
-        const qNum = parseInt(String(colA ?? '').trim(), 10);
-        const ans = String(colB ?? '').trim().toUpperCase();
-        if (!isNaN(qNum) && qNum >= 1 && qNum <= exam.num_items && valid.includes(ans)) {
+        const qNum = parseInt(String(colA ?? "").trim(), 10);
+        const ans = String(colB ?? "")
+          .trim()
+          .toUpperCase();
+        if (
+          !isNaN(qNum) &&
+          qNum >= 1 &&
+          qNum <= exam.num_items &&
+          valid.includes(ans)
+        ) {
           imported[qNum] = ans;
           parsed++;
         }
       }
       if (parsed === 0) {
-        toast.error('No valid rows found. Expected columns: Question, Answer (e.g. 1, A)');
+        toast.error(
+          "No valid rows found. Expected columns: Question, Answer (e.g. 1, A)",
+        );
         return;
       }
       setAnswerKey((prev) => ({ ...prev, ...imported }));
-      toast.success(`Imported ${parsed} answer${parsed !== 1 ? 's' : ''} from file`);
+      toast.success(
+        `Imported ${parsed} answer${parsed !== 1 ? "s" : ""} from file`,
+      );
     };
 
-    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
 
     if (isExcel) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
+        const workbook = XLSX.read(data, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<[unknown, unknown]>(sheet, { header: 1 }) as [unknown, unknown][];
+        const rows = XLSX.utils.sheet_to_json<[unknown, unknown]>(sheet, {
+          header: 1,
+        }) as [unknown, unknown][];
         // Skip header row if first cell is not a number
-        const dataRows = isNaN(parseInt(String(rows[0]?.[0] ?? ''), 10)) ? rows.slice(1) : rows;
+        const dataRows = isNaN(parseInt(String(rows[0]?.[0] ?? ""), 10))
+          ? rows.slice(1)
+          : rows;
         processRows(dataRows);
       };
       reader.readAsArrayBuffer(file);
@@ -405,10 +423,12 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         const text = e.target?.result as string;
         const lines = text.split(/\r?\n/).filter((l) => l.trim());
         const rows: [unknown, unknown][] = lines.map((line) => {
-          const [a, b] = line.split(',');
+          const [a, b] = line.split(",");
           return [a, b];
         });
-        const dataRows = isNaN(parseInt(String(rows[0]?.[0] ?? '').trim(), 10)) ? rows.slice(1) : rows;
+        const dataRows = isNaN(parseInt(String(rows[0]?.[0] ?? "").trim(), 10))
+          ? rows.slice(1)
+          : rows;
         processRows(dataRows);
       };
       reader.readAsText(file);
@@ -489,13 +509,13 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-end gap-2 flex-shrink-0">
             {exam.status !== "final" && (
               <button
                 onClick={() => setShowFinalizeConfirm(true)}
                 className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 transition-all shadow-sm shadow-green-500/10"
               >
-                <CheckCircle className="w-4 h-4" />
+                <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Finalize</span>
               </button>
             )}
@@ -503,9 +523,9 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
             {canEditExam(exam) && (
               <button
                 onClick={() => setIsEditing(true)}
-                className="flex items-center gap-2 px-6 py-2.5 border border-gray-200 bg-white text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 border border-gray-200 bg-white text-gray-600 rounded-xl font-bold text-xs sm:text-sm hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm whitespace-nowrap w-full sm:w-auto"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Edit</span>
               </button>
             )}
@@ -597,7 +617,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) handleImportKey(file);
-                      e.target.value = '';
+                      e.target.value = "";
                     }}
                   />
                   <button
@@ -674,10 +694,11 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   </div>
                   <div>
                     <p className="font-bold text-gray-900 text-sm">
-                      {hasTemplate ? 'Template Ready' : 'No Template Yet'}
+                      {hasTemplate ? "Template Ready" : "No Template Yet"}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {exam?.num_items} questions · {exam?.choices_per_item} choices
+                      {exam?.num_items} questions · {exam?.choices_per_item}{" "}
+                      choices
                     </p>
                   </div>
                   {hasTemplate && (
@@ -693,8 +714,12 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                       onClick={handleCreateTemplate}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-green-600 text-white hover:bg-green-700 shadow-sm transition-all disabled:opacity-60"
                     >
-                      {creatingTemplate ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus className="w-4 h-4" />}
-                      {creatingTemplate ? 'Generating…' : 'Create Template'}
+                      {creatingTemplate ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <FilePlus className="w-4 h-4" />
+                      )}
+                      {creatingTemplate ? "Generating…" : "Create Template"}
                     </button>
                   )}
                   {hasTemplate && (
@@ -707,7 +732,10 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                         Print
                       </button>
                       <button
-                        onClick={async () => { const d = await buildTemplateData(); if (d) generateTemplatePDF(d); }}
+                        onClick={async () => {
+                          const d = await buildTemplateData();
+                          if (d) generateTemplatePDF(d);
+                        }}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm border-2 border-gray-200 text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-all"
                       >
                         <Download className="w-4 h-4" />
@@ -724,20 +752,25 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   {loadingPreview && (
                     <div className="flex items-center justify-center py-20">
                       <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-                      <span className="ml-3 text-gray-500 text-sm">Generating preview…</span>
+                      <span className="ml-3 text-gray-500 text-sm">
+                        Generating preview…
+                      </span>
                     </div>
                   )}
                   {!loadingPreview && !templatePdfUrl && (
                     <div className="flex flex-col items-center justify-center py-20 text-center px-6">
                       <FileText className="w-12 h-12 text-gray-200 mb-3" />
-                      <p className="text-gray-500 text-sm">Click <strong>Refresh Preview</strong> to load the template preview.</p>
+                      <p className="text-gray-500 text-sm">
+                        Click <strong>Refresh Preview</strong> to load the
+                        template preview.
+                      </p>
                     </div>
                   )}
                   {!loadingPreview && templatePdfUrl && (
                     <iframe
                       src={templatePdfUrl}
                       className="w-full border-0"
-                      style={{ height: '75vh', minHeight: '500px' }}
+                      style={{ height: "75vh", minHeight: "500px" }}
                       title="Template Preview"
                     />
                   )}
