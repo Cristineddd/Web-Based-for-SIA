@@ -722,22 +722,6 @@ export default function Exams() {
                 <p className="text-[10px] text-gray-400">Unique identifier used for answer sheet scanning and identification.</p>
               </div>
 
-              {/* Course Code */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  Course Code <span className="text-gray-300 font-normal normal-case">(optional)</span>
-                </label>
-                <Input
-                  type="text"
-                  value={editForm.courseCode}
-                  onChange={(e) => setEditForm({ ...editForm, courseCode: e.target.value })}
-                  className="w-full text-sm bg-white border-gray-200 rounded-xl h-10 focus-visible:ring-green-500/20 focus-visible:border-green-500"
-                  placeholder="e.g. CS101, MATH201"
-                  maxLength={20}
-                />
-                <p className="text-[10px] text-gray-400">Printed on the answer sheet header below the exam code.</p>
-              </div>
-
               {/* Exam Name */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -758,7 +742,7 @@ export default function Exams() {
                   Number of Items <span className="text-red-400">*</span>
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[20, 50, 100].map((num) => (
+                  {[20, 50, 100, 150, 200].map((num) => (
                     <button
                       key={num}
                       onClick={() => setEditForm({ ...editForm, num_items: num })}
@@ -799,31 +783,6 @@ export default function Exams() {
                 </div>
               </div>
 
-              {/* Exam Type */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  Exam Type
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "Board Exam", value: "board" },
-                    { label: "Diagnostic Test", value: "diagnostic" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })}
-                      className={`py-2.5 rounded-xl font-bold text-sm border-2 transition-all ${
-                        editForm.examType === opt.value
-                          ? "bg-green-600 text-white border-green-600"
-                          : "border-gray-200 text-gray-500 hover:border-green-400 hover:text-green-600 hover:bg-green-50"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Tagged Class */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -834,7 +793,6 @@ export default function Exams() {
                   onChange={(e) => setEditForm({ ...editForm, classId: e.target.value })}
                   className="w-full h-10 px-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm text-gray-700 transition-all"
                 >
-                  <option value="">No Class (Unallocated)</option>
                   {Object.values(classById).map((cls) => (
                     <option key={cls.id} value={cls.id}>
                       {cls.class_name} ({cls.course_subject})

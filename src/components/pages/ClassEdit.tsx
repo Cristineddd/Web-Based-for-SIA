@@ -2568,19 +2568,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">
-                  Course Code <span className="text-muted-foreground text-xs font-normal">(optional)</span>
-                </label>
-                <Input
-                  type="text"
-                  value={editForm.courseCode}
-                  onChange={(e) => setEditForm({ ...editForm, courseCode: e.target.value })}
-                  className="w-full"
-                  placeholder="e.g. CS101, MATH201"
-                  maxLength={20}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">
                   Exam Name <span className="text-destructive">*</span>
                 </label>
                 <Input
@@ -2612,20 +2599,6 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       key={opt.value}
                       onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
                       className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${editForm.choices_per_item === opt.value ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:border-primary"}`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-foreground">Exam Type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[{ label: "Board Exam", value: "board" }, { label: "Diagnostic Test", value: "diagnostic" }].map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setEditForm({ ...editForm, examType: opt.value as "board" | "diagnostic" })}
-                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${editForm.examType === opt.value ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:border-primary"}`}
                     >
                       {opt.label}
                     </button>
