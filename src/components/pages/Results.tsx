@@ -698,13 +698,15 @@ export default function Results() {
         return;
       }
 
+      const normalizedExamDate = normalizeDate(exam.created_at);
+
       const metadata: ExportMetadata = {
         instructorName: user?.displayName || undefined,
         subject: exam.subject || undefined,
         section: cls.room || undefined,
         numItems: exam.num_items || undefined,
         choicesPerItem: exam.choices_per_item || undefined,
-        examDate: exam.created_at || undefined,
+        examDate: normalizedExamDate === "N/A" ? undefined : normalizedExamDate,
         examCode: exam.examCode || undefined,
       };
 

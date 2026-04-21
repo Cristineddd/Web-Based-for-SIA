@@ -308,7 +308,7 @@ function drawCoverPage(
     doc.text(`${label}:`, MARGIN_LEFT + 8, y);
     doc.setFont(GC_FONT_PRIMARY, 'normal');
     doc.setTextColor(0);
-    doc.text(value, valueIndent, y);
+    doc.text(String(value ?? ''), valueIndent, y);
     y += rowH;
   });
 
