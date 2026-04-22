@@ -116,6 +116,15 @@ export default function StudentSearchCombobox({
     }
   }, [highlightIdx]);
 
+  const handleSelect = useCallback(
+    (student: SearchableStudent) => {
+      onChange(student.studentName);
+      setIsOpen(false);
+      onSelect?.(student);
+    },
+    [onChange, onSelect],
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (!isOpen || suggestions.length === 0) return;
@@ -140,30 +149,11 @@ export default function StudentSearchCombobox({
           break;
       }
     },
-    [isOpen, suggestions, highlightIdx],
+    [isOpen, suggestions, highlightIdx, handleSelect],
   );
 
-  const handleSelect = (student: SearchableStudent) => {
-    onChange(student.studentName);
-    setIsOpen(false);
-    onSelect?.(student);
-  };
-
-  /** Highlight the matched portion of text */
-  const highlightMatch = (text: string, query: string) => {
-    if (!query.trim()) return text;
-    const idx = text.toLowerCase().indexOf(query.toLowerCase());
-    if (idx === -1) return text;
-    return (
-      <>
-        {text.slice(0, idx)}
-        <mark className="bg-amber-200/70 text-inherit rounded-sm px-0.5">
-          {text.slice(idx, idx + query.length)}
-        </mark>
-        {text.slice(idx + query.length)}
-      </>
-    );
-  };
+  // Keep dropdown text plain (no colored match highlighting).
+  const highlightMatch = (text: string, _query: string) => text;
 
   return (
     <div ref={wrapperRef} className={`relative ${className}`}>
@@ -186,7 +176,7 @@ export default function StudentSearchCombobox({
             if (value.trim() && suggestions.length > 0) setIsOpen(true);
           }}
           onKeyDown={handleKeyDown}
-          className="pl-9 pr-20"
+          className="pl-9 pr-20 bg-white"
           autoComplete="off"
         />
 
@@ -205,7 +195,7 @@ export default function StudentSearchCombobox({
                 setIsOpen(false);
                 inputRef.current?.focus();
               }}
-              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="p-0.5 rounded hover:bg-gray-100 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Clear search"
             >
               <X className="h-3.5 w-3.5" />
@@ -218,7 +208,7 @@ export default function StudentSearchCombobox({
       {isOpen && suggestions.length > 0 && (
         <div
           ref={listRef}
-          className="absolute z-50 mt-1 w-full bg-popover border rounded-lg shadow-lg overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+          className="absolute z-50 mt-1 w-full bg-white text-foreground border rounded-lg shadow-lg overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
           role="listbox"
         >
           <div className="px-2.5 py-1.5 border-b bg-muted/40">
@@ -234,8 +224,8 @@ export default function StudentSearchCombobox({
                 type="button"
                 className={`w-full text-left px-3 py-2 flex items-center gap-3 text-sm transition-colors cursor-pointer ${
                   idx === highlightIdx
-                    ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-muted/60'
+                    ? 'bg-gray-100 text-foreground'
+                    : 'hover:bg-gray-50'
                 }`}
                 onMouseEnter={() => setHighlightIdx(idx)}
                 onClick={() => handleSelect(s)}

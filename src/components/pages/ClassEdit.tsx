@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -51,6 +52,9 @@ import { toast } from "sonner";
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
 import { AuditLogger } from "@/services/auditLogger";
 import { BackButton } from "@/components/ui/BackButton";
+import StudentSearchCombobox, {
+  type SearchableStudent,
+} from "@/components/ui/StudentSearchCombobox";
 import {
   Table,
   TableBody,
@@ -80,6 +84,7 @@ import {
 import { db } from "@/lib/firebase";
 import * as XLSX from "xlsx";
 import type { ScannedResult } from "@/types/scanning";
+import { ScanningService } from "@/services/scanningService";
 
 // Extended Student interface for editing with additional fields
 interface Student extends BaseStudent {
@@ -226,8 +231,19 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
-  const [sendingAllScores, setSendingAllScores] = useState(false);
+  const [statsSendMode, setStatsSendMode] = useState<
+    "all" | "selected-all-exams" | "selected-exam" | null
+  >(null);
   const [statsExamFilter, setStatsExamFilter] = useState<string>("all");
+  const [statsStudentSearch, setStatsStudentSearch] = useState("");
+  const [statsSearchSelectedStudentId, setStatsSearchSelectedStudentId] =
+    useState<string | null>(null);
+  const [pendingStatsJumpStudentId, setPendingStatsJumpStudentId] = useState<
+    string | null
+  >(null);
+  const [selectedStatsStudentIds, setSelectedStatsStudentIds] = useState<
+    Set<string>
+  >(new Set());
   const [studentStatsRows, setStudentStatsRows] = useState<StudentStatsRow[]>(
     [],
   );
@@ -1032,24 +1048,26 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         });
 
         const summaryMap = new Map<string, ExamStatsSummary>();
+        const rosterByNormalizedId = new Map(
+          (classData.students || []).map((student) => [
+            student.student_id.trim().toLowerCase(),
+            student,
+          ]),
+        );
 
         await Promise.all(
           exams.map(async (exam) => {
-            const scansQuery = query(
-              collection(db, "scannedResults"),
-              where("examId", "==", exam.id),
+            const scannedResult = await ScanningService.getScannedResultsByExamId(
+              exam.id,
             );
-            const scansSnap = await getDocs(scansQuery);
+            if (!scannedResult.success || !scannedResult.data) {
+              throw new Error(
+                scannedResult.error || `Failed to load scans for ${exam.title}`,
+              );
+            }
+
             const deduped = dedupeLatestByStudent(
-              scansSnap.docs
-                .map(
-                  (docSnap) =>
-                    ({
-                      id: docSnap.id,
-                      ...docSnap.data(),
-                    }) as ScannedResult,
-                )
-                .filter((row) => !row.isNullId),
+              scannedResult.data.filter((row) => !row.isNullId),
             );
 
             let passCount = 0;
@@ -1057,6 +1075,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
             let totalPercentage = 0;
 
             deduped.forEach((row) => {
+              const normalizedStudentId = row.studentId.trim().toLowerCase();
+              const rosterStudent = rosterByNormalizedId.get(normalizedStudentId);
+              const canonicalStudentId =
+                rosterStudent?.student_id || row.studentId.trim();
               const percentage =
                 row.totalQuestions > 0
                   ? Math.round((row.score / row.totalQuestions) * 100)
@@ -1070,10 +1092,13 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               totalPercentage += percentage;
 
               const existing =
-                studentMap.get(row.studentId) ||
+                studentMap.get(canonicalStudentId) ||
                 ({
-                  studentId: row.studentId,
-                  studentName: row.studentId,
+                  studentId: canonicalStudentId,
+                  studentName: rosterStudent
+                    ? `${rosterStudent.last_name}, ${rosterStudent.first_name}`
+                    : canonicalStudentId,
+                  email: rosterStudent?.email,
                   exams: {},
                 } as StudentStatsRow);
 
@@ -1088,7 +1113,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                 status,
                 date: normalizeScannedDate(row.scannedAt),
               };
-              studentMap.set(row.studentId, existing);
+              studentMap.set(canonicalStudentId, existing);
             });
 
             summaryMap.set(exam.id, {
@@ -1207,29 +1232,135 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     [displayedExamSummaries],
   );
 
-  const handleSendAllScores = async () => {
-    if (!classData) return;
-    if ((classData.students || []).length === 0) {
-      toast.info("No students in this class");
-      return;
-    }
-    if (exams.length === 0) {
-      toast.info("No exams available to send");
-      return;
-    }
+  const statsSearchableStudents = useMemo<SearchableStudent[]>(
+    () =>
+      studentStatsRows.map((row) => ({
+        studentId: row.studentId,
+        studentName: row.studentName,
+        email: row.email,
+      })),
+    [studentStatsRows],
+  );
 
-    setSendingAllScores(true);
-    try {
+  const filteredStatsStudentRows = useMemo(() => {
+    if (statsSearchSelectedStudentId) {
+      return studentStatsRows.filter(
+        (row) => row.studentId === statsSearchSelectedStudentId,
+      );
+    }
+    const query = statsStudentSearch.trim().toLowerCase();
+    if (!query) return studentStatsRows;
+    return studentStatsRows.filter(
+      (row) =>
+        row.studentName.toLowerCase().includes(query) ||
+        row.studentId.toLowerCase().includes(query),
+    );
+  }, [studentStatsRows, statsStudentSearch, statsSearchSelectedStudentId]);
+
+  useEffect(() => {
+    if (!statsSearchSelectedStudentId) return;
+    const stillExists = studentStatsRows.some(
+      (row) => row.studentId === statsSearchSelectedStudentId,
+    );
+    if (!stillExists) {
+      setStatsSearchSelectedStudentId(null);
+      setStatsStudentSearch("");
+      setPendingStatsJumpStudentId(null);
+    }
+  }, [studentStatsRows, statsSearchSelectedStudentId]);
+
+  useEffect(() => {
+    if (!pendingStatsJumpStudentId) return;
+    const rowEl = document.getElementById(
+      `stats-student-row-${pendingStatsJumpStudentId}`,
+    );
+    if (!rowEl) return;
+
+    rowEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    rowEl.classList.add("bg-emerald-50");
+    window.setTimeout(() => {
+      rowEl.classList.remove("bg-emerald-50");
+    }, 1200);
+    setPendingStatsJumpStudentId(null);
+  }, [pendingStatsJumpStudentId, filteredStatsStudentRows]);
+
+  useEffect(() => {
+    setSelectedStatsStudentIds((prev) => {
+      const validIds = new Set(studentStatsRows.map((row) => row.studentId));
+      const next = new Set(
+        Array.from(prev).filter((studentId) => validIds.has(studentId)),
+      );
+      if (next.size === prev.size) return prev;
+      return next;
+    });
+  }, [studentStatsRows]);
+
+  const selectedFilteredStatsCount = useMemo(
+    () =>
+      filteredStatsStudentRows.filter((row) =>
+        selectedStatsStudentIds.has(row.studentId),
+      ).length,
+    [filteredStatsStudentRows, selectedStatsStudentIds],
+  );
+
+  const statsHeaderCheckboxState: boolean | "indeterminate" = useMemo(() => {
+    if (filteredStatsStudentRows.length === 0) return false;
+    if (selectedFilteredStatsCount === 0) return false;
+    if (selectedFilteredStatsCount === filteredStatsStudentRows.length) {
+      return true;
+    }
+    return "indeterminate";
+  }, [filteredStatsStudentRows.length, selectedFilteredStatsCount]);
+
+  const toggleStatsStudentSelection = useCallback(
+    (studentId: string, checked: boolean) => {
+      setSelectedStatsStudentIds((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(studentId);
+        else next.delete(studentId);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const toggleSelectAllStatsStudents = useCallback(
+    (checked: boolean) => {
+      setSelectedStatsStudentIds((prev) => {
+        const next = new Set(prev);
+        filteredStatsStudentRows.forEach((row) => {
+          if (checked) next.add(row.studentId);
+          else next.delete(row.studentId);
+        });
+        return next;
+      });
+    },
+    [filteredStatsStudentRows],
+  );
+
+  const buildClassScoreStudentsPayload = useCallback(
+    (targetStudentIds: string[]) => {
+      if (!classData) return [];
+
       const statsByStudentId = new Map(
         studentStatsRows.map((row) => [row.studentId, row]),
       );
+      const rosterByStudentId = new Map(
+        (classData.students || []).map((student) => [student.student_id, student]),
+      );
 
-      const students = (classData.students || []).map((student) => {
-        const middleName = (student as Student).middle_name?.trim();
-        const fullName = middleName
-          ? `${student.last_name}, ${student.first_name} ${middleName}`
-          : `${student.last_name}, ${student.first_name}`;
-        const statsRow = statsByStudentId.get(student.student_id);
+      return targetStudentIds.map((studentId) => {
+        const roster = rosterByStudentId.get(studentId);
+        const statsRow = statsByStudentId.get(studentId);
+        const middleName = roster
+          ? (roster as Student).middle_name?.trim()
+          : undefined;
+        const fallbackName = statsRow?.studentName || studentId;
+        const fullName = roster
+          ? middleName
+            ? `${roster.last_name}, ${roster.first_name} ${middleName}`
+            : `${roster.last_name}, ${roster.first_name}`
+          : fallbackName;
 
         const examRecords = exams.map((exam) => {
           const existing = statsRow?.exams[exam.id];
@@ -1260,12 +1391,35 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         });
 
         return {
-          studentId: student.student_id,
+          studentId,
           studentName: fullName,
-          email: student.email || `${student.student_id}@gordoncollege.edu.ph`,
+          email:
+            roster?.email ||
+            statsRow?.email ||
+            `${studentId}@gordoncollege.edu.ph`,
           examRecords,
         };
       });
+    },
+    [classData, exams, studentStatsRows],
+  );
+
+  const handleSendAllScores = async () => {
+    if (!classData) return;
+    if ((classData.students || []).length === 0) {
+      toast.info("No students in this class");
+      return;
+    }
+    if (exams.length === 0) {
+      toast.info("No exams available to send");
+      return;
+    }
+
+    setStatsSendMode("all");
+    try {
+      const students = buildClassScoreStudentsPayload(
+        (classData.students || []).map((student) => student.student_id),
+      );
 
       const response = await fetch("/api/send-class-scores", {
         method: "POST",
@@ -1298,7 +1452,164 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       console.error("Error sending class score summaries:", error);
       toast.error("Failed to send all scores");
     } finally {
-      setSendingAllScores(false);
+      setStatsSendMode(null);
+    }
+  };
+
+  const handleSendSelectedAllExamScores = async () => {
+    if (!classData) return;
+    const targetStudentIds = Array.from(selectedStatsStudentIds);
+    if (targetStudentIds.length === 0) {
+      toast.info("Select at least one student first");
+      return;
+    }
+
+    setStatsSendMode("selected-all-exams");
+    try {
+      const students = buildClassScoreStudentsPayload(targetStudentIds);
+
+      const response = await fetch("/api/send-class-scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          className: classData.class_name,
+          course: classData.course_subject,
+          passingThreshold: PASSING_THRESHOLD,
+          instructorName: user?.displayName || undefined,
+          instructorEmail: user?.email || undefined,
+          students,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to send selected score summaries");
+      }
+
+      const sent = Number(data.sent || 0);
+      const failed = Number(data.failed || 0);
+      const total = Number(data.total || students.length);
+      if (failed > 0) {
+        toast.error(
+          `Sent ${sent}/${total} selected full score summaries. ${failed} failed.`,
+        );
+      } else {
+        toast.success(`Sent ${sent}/${total} selected full score summaries.`);
+      }
+    } catch (error) {
+      console.error("Error sending selected full score summaries:", error);
+      toast.error("Failed to send selected all-exam scores");
+    } finally {
+      setStatsSendMode(null);
+    }
+  };
+
+  const handleSendSelectedExamScores = async () => {
+    if (!classData) return;
+    if (statsExamFilter === "all") {
+      toast.info("Pick a specific exam filter first");
+      return;
+    }
+
+    const targetStudentIds = Array.from(selectedStatsStudentIds);
+    if (targetStudentIds.length === 0) {
+      toast.info("Select at least one student first");
+      return;
+    }
+
+    const selectedExam = exams.find((exam) => exam.id === statsExamFilter);
+    if (!selectedExam) {
+      toast.error("Selected exam not found");
+      return;
+    }
+
+    const rowByStudentId = new Map(
+      studentStatsRows.map((row) => [row.studentId, row]),
+    );
+    const rosterByStudentId = new Map(
+      (classData.students || []).map((student) => [student.student_id, student]),
+    );
+
+    const skippedStudents: string[] = [];
+    const students = targetStudentIds
+      .map((studentId) => {
+        const row = rowByStudentId.get(studentId);
+        const score = row?.exams[selectedExam.id];
+        if (!score || score.score === null || score.percentage === null) {
+          skippedStudents.push(studentId);
+          return null;
+        }
+
+        const roster = rosterByStudentId.get(studentId);
+        const middleName = roster
+          ? (roster as Student).middle_name?.trim()
+          : undefined;
+        const fullName = roster
+          ? middleName
+            ? `${roster.last_name}, ${roster.first_name} ${middleName}`
+            : `${roster.last_name}, ${roster.first_name}`
+          : row?.studentName || studentId;
+
+        return {
+          studentId,
+          studentName: fullName,
+          email:
+            roster?.email ||
+            row?.email ||
+            `${studentId}@gordoncollege.edu.ph`,
+          score: score.score,
+          totalQuestions: score.totalQuestions,
+          percentage: score.percentage,
+          grade: score.grade,
+          date: score.date,
+        };
+      })
+      .filter((student): student is NonNullable<typeof student> => student !== null);
+
+    if (students.length === 0) {
+      toast.info("No selected students have scores for the chosen exam");
+      return;
+    }
+
+    setStatsSendMode("selected-exam");
+    try {
+      const response = await fetch("/api/send-results", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          className: classData.class_name,
+          examTitle: selectedExam.title,
+          subject: selectedExam.subject || classData.course_subject,
+          passingThreshold: PASSING_THRESHOLD,
+          instructorName: user?.displayName || undefined,
+          instructorEmail: user?.email || undefined,
+          students,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to send selected exam scores");
+      }
+
+      const sent = Number(data.sent || 0);
+      const failed = Number(data.failed || 0);
+      const total = Number(data.total || students.length);
+      const skipped = skippedStudents.length;
+      if (failed > 0) {
+        toast.error(
+          `Sent ${sent}/${total} selected exam scores. ${failed} failed${skipped ? `, ${skipped} skipped` : ""}.`,
+        );
+      } else {
+        toast.success(
+          `Sent ${sent}/${total} selected exam scores${skipped ? ` (${skipped} skipped)` : ""}.`,
+        );
+      }
+    } catch (error) {
+      console.error("Error sending selected exam scores:", error);
+      toast.error("Failed to send selected exam scores");
+    } finally {
+      setStatsSendMode(null);
     }
   };
 
@@ -2019,7 +2330,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                   <SelectTrigger className="w-[200px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600 focus:ring-0 focus:border-gray-200">
                     <SelectValue placeholder="Tag Existing Exam..." />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                  <SelectContent className="rounded-xl border-gray-100 shadow-xl bg-white">
                     {allExams.length === 0 ? (
                       <div className="p-4 text-center text-xs text-gray-400">
                         No exams available to tag
@@ -2159,6 +2470,24 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <div className="w-[260px]">
+                  <StudentSearchCombobox
+                    students={statsSearchableStudents}
+                    value={statsStudentSearch}
+                    onChange={(value) => {
+                      setStatsStudentSearch(value);
+                      setStatsSearchSelectedStudentId(null);
+                      setPendingStatsJumpStudentId(null);
+                    }}
+                    onSelect={(student) => {
+                      setStatsSearchSelectedStudentId(student.studentId);
+                      setStatsStudentSearch(student.studentName);
+                      setPendingStatsJumpStudentId(student.studentId);
+                    }}
+                    placeholder="Search student name or ID"
+                    className="w-full"
+                  />
+                </div>
                 <Select value={statsExamFilter} onValueChange={setStatsExamFilter}>
                   <SelectTrigger className="w-[220px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600">
                     <SelectValue placeholder="Filter by exam" />
@@ -2180,11 +2509,56 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                 </Select>
                 <Button
                   variant="outline"
-                  onClick={handleSendAllScores}
-                  disabled={sendingAllScores || statsLoading || exams.length === 0}
+                  onClick={handleSendSelectedExamScores}
+                  disabled={
+                    statsSendMode !== null ||
+                    statsLoading ||
+                    selectedStatsStudentIds.size === 0 ||
+                    statsExamFilter === "all"
+                  }
                   className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-10 px-6 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
                 >
-                  {sendingAllScores ? (
+                  {statsSendMode === "selected-exam" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4.5 h-4.5 text-gray-400" />
+                      <span>Send Selected Exam</span>
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSendSelectedAllExamScores}
+                  disabled={
+                    statsSendMode !== null ||
+                    statsLoading ||
+                    selectedStatsStudentIds.size === 0
+                  }
+                  className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-10 px-6 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
+                >
+                  {statsSendMode === "selected-all-exams" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4.5 h-4.5 text-gray-400" />
+                      <span>Send Selected All Exams</span>
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSendAllScores}
+                  disabled={statsSendMode !== null || statsLoading || exams.length === 0}
+                  className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-10 px-6 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
+                >
+                  {statsSendMode === "all" ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                       <span>Sending...</span>
@@ -2196,6 +2570,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                     </>
                   )}
                 </Button>
+                <div className="text-xs font-semibold text-gray-500 px-2">
+                  Selected: {selectedStatsStudentIds.size}
+                </div>
               </div>
             </div>
 
@@ -2344,6 +2721,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-[#f8fafc] border-none">
+                            <TableHead className="w-[52px] text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider">
+                              <Checkbox
+                                checked={statsHeaderCheckboxState}
+                                onCheckedChange={(checked) =>
+                                  toggleSelectAllStatsStudents(checked === true)
+                                }
+                                aria-label="Select all filtered students in stats"
+                              />
+                            </TableHead>
                             <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider sticky left-0 bg-[#f8fafc] z-10 min-w-[230px]">
                               Student
                             </TableHead>
@@ -2358,12 +2744,25 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {studentStatsRows.length > 0 ? (
-                            studentStatsRows.map((row) => (
+                          {filteredStatsStudentRows.length > 0 ? (
+                            filteredStatsStudentRows.map((row) => (
                               <TableRow
                                 key={row.studentId}
-                                className="border-b border-gray-50 hover:bg-gray-50/40"
+                                id={`stats-student-row-${row.studentId}`}
+                                className="border-b border-gray-50 hover:bg-gray-50/40 transition-colors"
                               >
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedStatsStudentIds.has(row.studentId)}
+                                    onCheckedChange={(checked) =>
+                                      toggleStatsStudentSelection(
+                                        row.studentId,
+                                        checked === true,
+                                      )
+                                    }
+                                    aria-label={`Select ${row.studentName}`}
+                                  />
+                                </TableCell>
                                 <TableCell className="sticky left-0 bg-white z-10 border-r border-gray-50">
                                   <div>
                                     <p className="font-semibold text-gray-900">
@@ -2416,10 +2815,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                           ) : (
                             <TableRow>
                               <TableCell
-                                colSpan={Math.max(2, displayedExamSummaries.length + 1)}
+                                colSpan={Math.max(3, displayedExamSummaries.length + 2)}
                                 className="h-28 text-center text-sm text-gray-400"
                               >
-                                No student score records available yet.
+                                {statsStudentSearch.trim()
+                                  ? "No students match your search."
+                                  : "No student score records available yet."}
                               </TableCell>
                             </TableRow>
                           )}
