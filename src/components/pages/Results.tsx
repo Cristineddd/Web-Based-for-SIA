@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -133,6 +134,10 @@ export default function Results() {
   const [rowsCache, setRowsCache] = useState<Record<string, HubStudentRow[]>>({});
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
   const [sendingExamKey, setSendingExamKey] = useState<string | null>(null);
+  const [sendingStudentClassId, setSendingStudentClassId] = useState<string | null>(null);
+  const [selectedStudentIdsByExam, setSelectedStudentIdsByExam] = useState<
+    Record<string, string[]>
+  >({});
   const [bulkSend, setBulkSend] = useState<BulkSendState>({
     running: false,
     total: 0,
@@ -346,6 +351,84 @@ export default function Results() {
       );
     },
     [classSelectedStudentId, classStudentSearch],
+  );
+
+  useEffect(() => {
+    const validIdsByExam = new Map<string, Set<string>>();
+    Object.entries(rowsCache).forEach(([cacheKey, rows]) => {
+      validIdsByExam.set(cacheKey, new Set(rows.map((row) => row.studentId)));
+    });
+
+    setSelectedStudentIdsByExam((prev) => {
+      let changed = false;
+      const next: Record<string, string[]> = {};
+
+      Object.entries(prev).forEach(([cacheKey, selectedIds]) => {
+        const validIds = validIdsByExam.get(cacheKey);
+        if (!validIds) {
+          changed = true;
+          return;
+        }
+
+        const filteredIds = selectedIds.filter((studentId) => validIds.has(studentId));
+        if (filteredIds.length > 0) {
+          next[cacheKey] = filteredIds;
+        }
+
+        if (filteredIds.length !== selectedIds.length) {
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [rowsCache]);
+
+  const setExamStudentSelection = useCallback(
+    (cacheKey: string, studentId: string, shouldSelect: boolean) => {
+      setSelectedStudentIdsByExam((prev) => {
+        const current = new Set(prev[cacheKey] || []);
+        if (shouldSelect) {
+          current.add(studentId);
+        } else {
+          current.delete(studentId);
+        }
+
+        const next = { ...prev };
+        if (current.size === 0) {
+          delete next[cacheKey];
+        } else {
+          next[cacheKey] = Array.from(current);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const setExamBulkSelection = useCallback(
+    (cacheKey: string, rows: HubStudentRow[], shouldSelect: boolean) => {
+      const rowIds = rows.map((row) => row.studentId);
+      if (rowIds.length === 0) return;
+
+      setSelectedStudentIdsByExam((prev) => {
+        const current = new Set(prev[cacheKey] || []);
+        if (shouldSelect) {
+          rowIds.forEach((studentId) => current.add(studentId));
+        } else {
+          rowIds.forEach((studentId) => current.delete(studentId));
+        }
+
+        const next = { ...prev };
+        if (current.size === 0) {
+          delete next[cacheKey];
+        } else {
+          next[cacheKey] = Array.from(current);
+        }
+        return next;
+      });
+    },
+    [],
   );
 
   const buildExamRows = useCallback(
@@ -574,8 +657,12 @@ export default function Results() {
   }, []);
 
   const sendExamResults = useCallback(
-    async (cls: Class, exam: Exam): Promise<{ sent: number; failed: number; total: number }> => {
-      const rows = await fetchExamRows(cls, exam);
+    async (
+      cls: Class,
+      exam: Exam,
+      sourceRows?: HubStudentRow[],
+    ): Promise<{ sent: number; failed: number; total: number }> => {
+      const rows = sourceRows ?? (await fetchExamRows(cls, exam));
       if (rows.length === 0) {
         return { sent: 0, failed: 0, total: 0 };
       }
@@ -638,6 +725,98 @@ export default function Results() {
       }
     },
     [sendExamResults],
+  );
+
+  const handleSendSelectedExam = useCallback(
+    async (cls: Class, exam: Exam, availableRows: HubStudentRow[]) => {
+      const cacheKey = keyFor(cls.id, exam.id);
+      const selectedIds = new Set(selectedStudentIdsByExam[cacheKey] || []);
+      const selectedRows = availableRows.filter((row) => selectedIds.has(row.studentId));
+
+      if (selectedRows.length === 0) {
+        toast.info("Select at least one student to send results.");
+        return;
+      }
+
+      setSendingExamKey(cacheKey);
+      try {
+        const result = await sendExamResults(cls, exam, selectedRows);
+        toast.success(
+          `Sent ${result.sent}/${result.total} selected emails for ${cls.class_name} - ${exam.title}`,
+        );
+        setSelectedStudentIdsByExam((prev) => {
+          const next = { ...prev };
+          delete next[cacheKey];
+          return next;
+        });
+      } catch (error) {
+        console.error(error);
+        toast.error(`Failed to send selected emails for ${exam.title}`);
+      } finally {
+        setSendingExamKey(null);
+      }
+    },
+    [selectedStudentIdsByExam, sendExamResults],
+  );
+
+  const handleSendStudentAllExams = useCallback(
+    async (view: ClassView) => {
+      const studentId = classSelectedStudentId[view.cls.id];
+      if (!studentId) {
+        toast.info("Select a student first to send all exam scores.");
+        return;
+      }
+
+      if (view.exams.length === 0) {
+        toast.info("No exams available for this class.");
+        return;
+      }
+
+      const selectedStudent = (view.cls.students || []).find(
+        (student) => student.student_id === studentId,
+      );
+      const studentLabel = selectedStudent
+        ? `${selectedStudent.last_name}, ${selectedStudent.first_name}`
+        : studentId;
+
+      setSendingStudentClassId(view.cls.id);
+      let sent = 0;
+      let failed = 0;
+      let skipped = 0;
+      let sentExamCount = 0;
+
+      try {
+        for (const exam of view.exams) {
+          const examRows = await fetchExamRows(view.cls, exam);
+          const targetRows = examRows.filter((row) => row.studentId === studentId);
+
+          if (targetRows.length === 0) {
+            skipped += 1;
+            continue;
+          }
+
+          const result = await sendExamResults(view.cls, exam, targetRows);
+          sent += result.sent;
+          failed += result.failed;
+          sentExamCount += 1;
+        }
+
+        if (sentExamCount === 0) {
+          toast.info(`No available exam results found for ${studentLabel}.`);
+          return;
+        }
+
+        toast.success(
+          `Student score send complete for ${studentLabel}: ${sent} sent, ${failed} failed, ${skipped} exams without records.`,
+        );
+      } catch (error) {
+        console.error("Failed sending student exam scores:", error);
+        toast.error(`Failed to send all exam scores for ${studentLabel}`);
+      } finally {
+        setSendingStudentClassId(null);
+      }
+    },
+    [classSelectedStudentId, fetchExamRows, sendExamResults],
   );
 
   const handleBulkSend = useCallback(async () => {
@@ -884,6 +1063,9 @@ export default function Results() {
         <div className="space-y-3">
           {filteredClassViews.map((view) => {
             const isExpanded = expandedClassIds.has(view.cls.id);
+            const selectedStudentForClass = (view.cls.students || []).find(
+              (student) => student.student_id === classSelectedStudentId[view.cls.id],
+            );
 
             return (
               <div
@@ -948,6 +1130,35 @@ export default function Results() {
                         placeholder="Search ID or name"
                         className="w-full"
                       />
+                      <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <p className="text-xs text-green-700">
+                          {selectedStudentForClass
+                            ? `Selected: ${selectedStudentForClass.last_name}, ${selectedStudentForClass.first_name}`
+                            : "Select a student to send all their exam scores in this class."}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSendStudentAllExams(view)}
+                          disabled={
+                            !classSelectedStudentId[view.cls.id] ||
+                            sendingStudentClassId === view.cls.id
+                          }
+                          className="border-green-200 text-green-700"
+                        >
+                          {sendingStudentClassId === view.cls.id ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Sending Student Scores...
+                            </>
+                          ) : (
+                            <>
+                              <Mail className="w-4 h-4 mr-2" />
+                              Send Student All Exams
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                     {view.exams.length === 0 ? (
                       <p className="text-sm text-gray-400">No exams associated with this class.</p>
@@ -963,6 +1174,15 @@ export default function Results() {
                             const rows = rowsCache[cacheKey] || [];
                             const displayRows = filterRowsByStudent(rows, view.cls.id);
                             const isRowsLoading = !!loadingRows[cacheKey];
+                            const selectedIds = selectedStudentIdsByExam[cacheKey] || [];
+                            const selectedIdSet = new Set(selectedIds);
+                            const selectedDisplayCount = displayRows.filter((row) =>
+                              selectedIdSet.has(row.studentId),
+                            ).length;
+                            const allDisplayRowsSelected =
+                              displayRows.length > 0 && selectedDisplayCount === displayRows.length;
+                            const displayRowsPartiallySelected =
+                              selectedDisplayCount > 0 && selectedDisplayCount < displayRows.length;
                             const avg =
                               displayRows.length > 0
                                 ? Math.round(
@@ -1007,9 +1227,23 @@ export default function Results() {
                                         ) : (
                                           <>
                                             <Mail className="w-4 h-4 mr-2" />
-                                            Send Results
+                                            Send All Results
                                           </>
                                         )}
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          handleSendSelectedExam(view.cls, exam, displayRows)
+                                        }
+                                        disabled={
+                                          sendingExamKey === cacheKey || selectedDisplayCount === 0
+                                        }
+                                        className="border-blue-200 text-blue-700"
+                                      >
+                                        <Mail className="w-4 h-4 mr-2" />
+                                        Send Selected ({selectedDisplayCount})
                                       </Button>
                                       <Button
                                         variant="outline"
@@ -1058,6 +1292,25 @@ export default function Results() {
                                       <table className="min-w-full text-sm">
                                         <thead className="bg-green-50 text-left">
                                           <tr>
+                                            <th className="px-3 py-2 w-10">
+                                              <Checkbox
+                                                checked={
+                                                  allDisplayRowsSelected
+                                                    ? true
+                                                    : displayRowsPartiallySelected
+                                                      ? "indeterminate"
+                                                      : false
+                                                }
+                                                onCheckedChange={(checked) =>
+                                                  setExamBulkSelection(
+                                                    cacheKey,
+                                                    displayRows,
+                                                    checked === true,
+                                                  )
+                                                }
+                                                aria-label="Select all students in exam"
+                                              />
+                                            </th>
                                             <th className="px-3 py-2 font-semibold">Student ID</th>
                                             <th className="px-3 py-2 font-semibold">Name</th>
                                             <th className="px-3 py-2 font-semibold">Score</th>
@@ -1067,12 +1320,25 @@ export default function Results() {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {displayRows.slice(0, 8).map((row) => (
+                                          {displayRows.map((row) => (
                                             <tr
                                               key={row.studentId}
                                               id={`results-row-${cacheKey}-${row.studentId}`}
                                               className="border-t transition-colors"
                                             >
+                                              <td className="px-3 py-2">
+                                                <Checkbox
+                                                  checked={selectedIdSet.has(row.studentId)}
+                                                  onCheckedChange={(checked) =>
+                                                    setExamStudentSelection(
+                                                      cacheKey,
+                                                      row.studentId,
+                                                      checked === true,
+                                                    )
+                                                  }
+                                                  aria-label={`Select ${row.studentName}`}
+                                                />
+                                              </td>
                                               <td className="px-3 py-2 font-mono text-xs">
                                                 {row.studentId}
                                               </td>
@@ -1097,12 +1363,6 @@ export default function Results() {
                                           ))}
                                         </tbody>
                                       </table>
-                                      {displayRows.length > 8 && (
-                                        <div className="px-3 py-2 border-t text-xs text-gray-500 bg-gray-50">
-                                          Showing 8 of {displayRows.length} rows. Use Export Grades
-                                          to download full report.
-                                        </div>
-                                      )}
                                     </div>
                                   ) : (
                                     <div className="rounded-lg border border-dashed bg-gray-50 px-4 py-5 text-sm text-gray-500">
