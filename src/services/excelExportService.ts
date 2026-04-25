@@ -12,7 +12,11 @@
  */
 
 import * as XLSX from 'xlsx';
-import { getExcelBrandingRows, ExcelExportMetadata } from '@/lib/gcBranding';
+import {
+  getExcelBrandingRows,
+  ExcelExportMetadata,
+  loadGCLogoBase64,
+} from '@/lib/gcBranding';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -138,6 +142,106 @@ function addDataValidation(
   });
 }
 
+const EXCEL_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
+  if (data instanceof ArrayBuffer) return data;
+  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+}
+
+function downloadArrayBufferExcel(
+  data: ArrayBuffer | Uint8Array,
+  filename: string,
+): void {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const blob = new Blob([bytes], { type: EXCEL_MIME_TYPE });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+async function buildWorkbookArrayBufferWithLogo(
+  wb: XLSX.WorkBook,
+): Promise<ArrayBuffer> {
+  const baseBuffer = XLSX.write(wb, {
+    bookType: 'xlsx',
+    type: 'array',
+  }) as ArrayBuffer;
+
+  const logoBase64 = await loadGCLogoBase64();
+  if (!logoBase64) return baseBuffer;
+
+  try {
+    const ExcelJS = await import('exceljs');
+    const logoWorkbook = new ExcelJS.Workbook();
+    await logoWorkbook.xlsx.load(baseBuffer);
+
+    const logoImageId = logoWorkbook.addImage({
+      base64: logoBase64,
+      extension: 'png',
+    });
+
+    logoWorkbook.worksheets.forEach((worksheet) => {
+      const logoWidthPx = 84;
+      const logoHeightPx = 84;
+      const usedColumnCount = Math.max(
+        1,
+        worksheet.actualColumnCount || 0,
+        worksheet.columnCount || 0,
+      );
+      const getColumnWidthPx = (columnIndex: number): number => {
+        const column = worksheet.getColumn(columnIndex);
+        const widthUnits = typeof column?.width === 'number' ? column.width : 8.43;
+        return Math.max(20, Math.floor(widthUnits * 7 + 5));
+      };
+
+      // Align the image right edge to the table's last used column edge.
+      let remainingWidthPx = logoWidthPx;
+      let rightAlignedColumn = 0;
+      for (let columnIndex = usedColumnCount; columnIndex >= 1; columnIndex--) {
+        const columnWidthPx = getColumnWidthPx(columnIndex);
+        if (remainingWidthPx <= columnWidthPx) {
+          rightAlignedColumn =
+            (columnIndex - 1) + (columnWidthPx - remainingWidthPx) / columnWidthPx;
+          break;
+        }
+        remainingWidthPx -= columnWidthPx;
+      }
+
+      worksheet.addImage(logoImageId, {
+        tl: { col: rightAlignedColumn, row: 0 },
+        ext: { width: logoWidthPx, height: logoHeightPx },
+        editAs: 'oneCell',
+      });
+    });
+
+    const withLogoBuffer = await logoWorkbook.xlsx.writeBuffer();
+    return toArrayBuffer(withLogoBuffer as ArrayBuffer | Uint8Array);
+  } catch (error) {
+    console.warn('[Excel Export] Could not embed GC logo in workbook:', error);
+    return baseBuffer;
+  }
+}
+
+async function exportWorkbookWithLogo(
+  wb: XLSX.WorkBook,
+  filename: string,
+): Promise<void> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    XLSX.writeFile(wb, filename);
+    return;
+  }
+
+  const buffer = await buildWorkbookArrayBufferWithLogo(wb);
+  downloadArrayBufferExcel(buffer, filename);
+}
+
 // ─── Exports ────────────────────────────────────────────────────────────────
 
 /**
@@ -241,7 +345,7 @@ export function exportExamScoresToExcel(
 
   // ── Write ───────────────────────────────────────────────────────────────
   const safeTitle = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
-  XLSX.writeFile(wb, `${safeTitle}_scores.xlsx`);
+  void exportWorkbookWithLogo(wb, `${safeTitle}_scores.xlsx`);
 }
 
 /**
@@ -351,19 +455,19 @@ export function exportClassResultsToExcel(
 
   // ── Write ───────────────────────────────────────────────────────────────
   const safeName = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
-  XLSX.writeFile(wb, `${safeName}_results.xlsx`);
+  void exportWorkbookWithLogo(wb, `${safeName}_results.xlsx`);
 }
 
 /**
  * Generate a class results Excel workbook and return as an ArrayBuffer (for batch/zip export).
  * Same content as exportClassResultsToExcel but does NOT trigger a browser download.
  */
-export function exportClassResultsToExcelBuffer(
+export async function exportClassResultsToExcelBuffer(
   className: string,
   studentResults: ExamScoreExportRow[],
   passingThreshold: number,
   metadata?: ExcelExportMetadata,
-): ArrayBuffer {
+): Promise<ArrayBuffer> {
   const wb = XLSX.utils.book_new();
 
   const headers = ['#', 'Student ID', 'Student Name', 'Score', 'Total', 'Percentage', 'Grade', 'Date'];
@@ -431,7 +535,7 @@ export function exportClassResultsToExcelBuffer(
   freezeHeaderRow(wsStats, bufBrandingCount + 1);
   XLSX.utils.book_append_sheet(wb, wsStats, 'Statistics Summary');
 
-  return XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  return buildWorkbookArrayBufferWithLogo(wb);
 }
 
 /**
@@ -469,7 +573,7 @@ export function exportClassSummaryToExcel(
   }
 
   XLSX.utils.book_append_sheet(wb, ws, 'Class Summary');
-  XLSX.writeFile(wb, 'class_summary.xlsx');
+  void exportWorkbookWithLogo(wb, 'class_summary.xlsx');
 }
 
 /**
@@ -498,7 +602,7 @@ export function exportStudentRosterToExcel(students: StudentExportRow[]): void {
 
   XLSX.utils.book_append_sheet(wb, ws, 'Students');
 
-  XLSX.writeFile(wb, 'student_roster.xlsx');
+  void exportWorkbookWithLogo(wb, 'student_roster.xlsx');
 }
 
 /**
@@ -554,5 +658,5 @@ export function exportExamReportToExcel(
 
   const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
   const safeExam = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
-  XLSX.writeFile(wb, `${safeClass}_${safeExam}_exam_report.xlsx`);
+  void exportWorkbookWithLogo(wb, `${safeClass}_${safeExam}_exam_report.xlsx`);
 }

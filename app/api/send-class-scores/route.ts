@@ -38,6 +38,14 @@ interface SendClassScoresBody {
   instructorEmail?: string;
 }
 
+function hasAttemptedExamRecord(record: ClassScoreRecord): boolean {
+  return (
+    record.status !== 'Not Taken' &&
+    record.score !== null &&
+    record.percentage !== null
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!isEmailConfigured()) {
@@ -67,7 +75,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const messages: EmailMessage[] = body.students.map((student) => {
+    const eligibleStudents = body.students.filter((student) =>
+      (student.examRecords || []).some(hasAttemptedExamRecord),
+    );
+
+    if (eligibleStudents.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No students with exam records provided.' },
+        { status: 400 },
+      );
+    }
+
+    const messages: EmailMessage[] = eligibleStudents.map((student) => {
       const emailData: ClassScoreSummaryEmailData = {
         studentName: student.studentName,
         studentId: student.studentId,
@@ -91,7 +110,7 @@ export async function POST(request: NextRequest) {
     const failedCount = results.filter((result) => !result.success).length;
 
     if (body.instructorEmail && body.instructorName) {
-      const deliveryStudents: FacultyDeliveryStudentStatus[] = body.students.map(
+      const deliveryStudents: FacultyDeliveryStudentStatus[] = eligibleStudents.map(
         (student, index) => {
           const result = results[index];
           return {
@@ -118,7 +137,7 @@ export async function POST(request: NextRequest) {
           className: body.className,
           subject: body.course,
           date: reportDate,
-          total: body.students.length,
+          total: eligibleStudents.length,
           sent: sentCount,
           failed: failedCount,
           students: deliveryStudents,
@@ -129,7 +148,7 @@ export async function POST(request: NextRequest) {
           className: body.className,
           subject: body.course,
           date: reportDate,
-          total: body.students.length,
+          total: eligibleStudents.length,
           sent: sentCount,
           failed: failedCount,
           students: deliveryStudents,
@@ -141,7 +160,8 @@ export async function POST(request: NextRequest) {
       success: true,
       sent: sentCount,
       failed: failedCount,
-      total: body.students.length,
+      total: eligibleStudents.length,
+      skipped: Math.max(0, body.students.length - eligibleStudents.length),
       results: results.map((result) => ({
         to: result.to,
         success: result.success,

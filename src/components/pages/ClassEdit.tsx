@@ -167,6 +167,16 @@ function dedupeLatestByStudent(results: ScannedResult[]): ScannedResult[] {
   return deduped;
 }
 
+function hasAttemptedScore(
+  exam: Pick<StudentExamBreakdown, "score" | "percentage" | "status">,
+): boolean {
+  return (
+    exam.status !== "Not Taken" &&
+    exam.score !== null &&
+    exam.percentage !== null
+  );
+}
+
 interface ClassEditProps {
   classId?: string;
 }
@@ -1332,8 +1342,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   );
 
   const buildClassScoreStudentsPayload = useCallback(
-    (targetStudentIds: string[]) => {
+    (
+      targetStudentIds: string[],
+      options?: { requireAttemptedExam?: boolean },
+    ) => {
       if (!classData) return [];
+      const requireAttemptedExam = options?.requireAttemptedExam ?? false;
 
       const statsByStudentId = new Map(
         studentStatsRows.map((row) => [row.studentId, row]),
@@ -1342,7 +1356,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         (classData.students || []).map((student) => [student.student_id, student]),
       );
 
-      return targetStudentIds.map((studentId) => {
+      const payload = targetStudentIds.map((studentId) => {
         const roster = rosterByStudentId.get(studentId);
         const statsRow = statsByStudentId.get(studentId);
         const middleName = roster
@@ -1393,6 +1407,11 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           examRecords,
         };
       });
+
+      if (!requireAttemptedExam) return payload;
+      return payload.filter((student) =>
+        student.examRecords.some(hasAttemptedScore),
+      );
     },
     [classData, exams, studentStatsRows],
   );
@@ -1408,12 +1427,17 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       return;
     }
 
+    const students = buildClassScoreStudentsPayload(
+      (classData.students || []).map((student) => student.student_id),
+      { requireAttemptedExam: true },
+    );
+    if (students.length === 0) {
+      toast.info("No students with exam records to send");
+      return;
+    }
+
     setStatsSendMode("all");
     try {
-      const students = buildClassScoreStudentsPayload(
-        (classData.students || []).map((student) => student.student_id),
-      );
-
       const response = await fetch("/api/send-class-scores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

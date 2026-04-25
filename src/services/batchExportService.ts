@@ -267,7 +267,7 @@ export async function batchExportExams(options: BatchExportOptions): Promise<voi
         date: r.date,
         email: r.email,
       }));
-      const xlsBuf = exportClassResultsToExcelBuffer(
+      const xlsBuf = await exportClassResultsToExcelBuffer(
         className,
         excelRows,
         passingThreshold,
