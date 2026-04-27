@@ -74,7 +74,6 @@ interface ExamWithStatus extends Exam {
 
 export default function Exams() {
   const { user } = useAuth();
-  const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const router = useRouter();
   const searchParams = useSearchParams();
   const [exams, setExams] = useState<ExamWithStatus[]>([]);

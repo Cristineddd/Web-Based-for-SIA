@@ -387,19 +387,24 @@ export function CreateExamModal({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    Subject
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.folder}
-                    onChange={(e) =>
-                      handleInputChange("folder", e.target.value)
-                    }
-                    placeholder="e.g. Biology"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-[14px] focus:outline-none transition-all placeholder:text-gray-300 font-medium text-gray-500 cursor-not-allowed opacity-60"
-                    readOnly
-                  />
+<label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+  Course
+</label>
+<Select
+  value={formData.folder}
+  onValueChange={(val) => handleInputChange("folder", val)}
+>
+  <SelectTrigger className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all">
+    <SelectValue placeholder="Choose Course..." />
+  </SelectTrigger>
+  <SelectContent className="bg-white">
+    {[...new Set(classes.map((c) => c.course_subject).filter(Boolean))].map((subject) => (
+      <SelectItem key={subject} value={subject}>
+        {subject}
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
                 </div>
               )}
 
@@ -433,24 +438,24 @@ export function CreateExamModal({
                   Answer Choices
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: "A-D", value: 4 },
-                    { label: "A-E", value: 5 },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => handleInputChange("choicesPerItem", opt.value)}
-                      className={`py-1.5 px-2 rounded-xl border-2 transition-all text-center ${
-                        formData.choicesPerItem === opt.value
-                          ? "bg-green-50 text-green-600 border-green-500"
-                          : "border-gray-100 text-gray-400 hover:border-green-200 hover:bg-green-50/50"
-                      }`}
-                    >
-                      <div className="font-bold text-[13px]">{opt.label}</div>
-                      <div className="text-xs mt-0.5 opacity-80">{opt.sub}</div>
-                    </button>
-                  ))}
+                 {[
+  { label: "A-D", value: 4, sub: "4 Choices" },
+  { label: "A-E", value: 5, sub: "5 Choices" },
+].map((opt) => (
+  <button
+    key={opt.value}
+    type="button"
+    onClick={() => handleInputChange("choicesPerItem", opt.value)}
+    className={`py-1.5 px-2 rounded-xl border-2 transition-all text-center ${
+      formData.choicesPerItem === opt.value
+        ? "bg-green-50 text-green-600 border-green-500"
+        : "border-gray-100 text-gray-400 hover:border-green-200 hover:bg-green-50/50"
+    }`}
+  >
+    <div className="font-bold text-[13px]">{opt.label}</div>
+    <div className="text-xs mt-0.5 opacity-80">{opt.sub}</div>
+  </button>
+))}
                 </div>
               </div>
             </>

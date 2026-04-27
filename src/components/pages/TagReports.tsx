@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Plus, Trash2, Tag, FileText, AlertCircle } from 'lucide-react';
 import { getExamById, Exam } from '@/services/examService';

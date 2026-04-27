@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { X, Plus, Loader2 } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { createClass, type Class } from '@/services/classService';
 import { useAuth } from '@/contexts/AuthContext';
