@@ -62,51 +62,10 @@ export function Footer() {
               A streamlined, paper-based exam checking solution for efficient
               exam management and automatic grading.
             </p>
-            {/* Social Links */}
-            <div className="flex gap-3 pt-1">
-              {socialLinks.map((social) => {
-                const Icon = social.icon;
-                return (
-                  <a
-                    key={social.name}
-                    href={social.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={social.label}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 hover:bg-green-50 hover:text-[#166534] transition-colors"
-                    aria-label={social.label}
-                  >
-                    <Icon className="w-4 h-4" />
-                  </a>
-                );
-              })}
-            </div>
           </div>
 
           {/* Links */}
           <div className="flex flex-wrap gap-10">
-            <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Navigation
-              </h4>
-              <div className="flex flex-col gap-2">
-                {[
-                  { href: "/dashboard", label: "Dashboard" },
-                  { href: "/classes", label: "Classes" },
-                  { href: "/exams", label: "Exams" },
-                  { href: "/results", label: "Results" },
-                ].map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="text-sm text-gray-500 hover:text-[#166534] transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-
             <div className="space-y-3">
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 Legal
@@ -124,23 +83,21 @@ export function Footer() {
                 >
                   Terms of Service
                 </Link>
-                <Link
-                  href="/support?tab=contact"
-                  className="text-sm text-gray-500 hover:text-[#166534] transition-colors"
-                >
-                  Contact Us
-                </Link>
               </div>
             </div>
           </div>
         </div>
 
         {/* Divider */}
-        <div className="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-400">
-            &copy; {currentYear} GC SMART CHECK. All rights reserved.
-          </p>
-          <p className="text-xs text-gray-300">v1.0.0 · Gordon College</p>
+        <div className="border-t border-gray-100 pt-6 text-center flex flex-col sm:flex-row items-center justify-center ">
+          <div className="flex flex-col">
+            <p className="text-xs text-gray-500">
+              &copy; {currentYear} GC SMART CHECK. All rights reserved.
+            </p>
+            <p className="pt-5 text-xs text-gray-500">
+              gc.smartcheck@gmail.com
+            </p>
+          </div>
         </div>
       </div>
     </footer>
