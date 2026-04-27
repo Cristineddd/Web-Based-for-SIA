@@ -13,6 +13,7 @@
 
 import * as XLSX from 'xlsx';
 import {
+  GC_SYSTEM_NAME,
   getExcelBrandingRows,
   ExcelExportMetadata,
   loadGCLogoBase64,
@@ -100,7 +101,6 @@ function stylizeHeaderRow(ws: XLSX.WorkSheet, headerCount: number, rowIndex: num
 function freezeHeaderRow(ws: XLSX.WorkSheet, frozenRows: number = 1): void {
   ws['!freeze'] = { xSplit: 0, ySplit: frozenRows };
   // Some consumers use '!views' instead
-   
   (ws as any)['!views'] = [{ state: 'frozen', ySplit: frozenRows }];
 }
 
@@ -145,6 +145,21 @@ function addDataValidation(
 const EXCEL_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
+interface ExcelLogoPlacement {
+  col: number;
+  row: number;
+  width: number;
+  height: number;
+  editAs?: 'oneCell' | 'absolute';
+}
+
+interface WorkbookExportOptions {
+  logoPlacementBySheetName?: Record<string, ExcelLogoPlacement>;
+  borderedSheetNames?: string[];
+  centeredTitleBySheetName?: string[];
+  titleCellBySheetName?: Record<string, string>;
+}
+
 function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
   if (data instanceof ArrayBuffer) return data;
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
@@ -168,6 +183,7 @@ function downloadArrayBufferExcel(
 
 async function buildWorkbookArrayBufferWithLogo(
   wb: XLSX.WorkBook,
+  options?: WorkbookExportOptions,
 ): Promise<ArrayBuffer> {
   const baseBuffer = XLSX.write(wb, {
     bookType: 'xlsx',
@@ -188,6 +204,38 @@ async function buildWorkbookArrayBufferWithLogo(
     });
 
     logoWorkbook.worksheets.forEach((worksheet) => {
+      if (options?.centeredTitleBySheetName?.includes(worksheet.name)) {
+        const titleCellAddress = options?.titleCellBySheetName?.[worksheet.name] ?? 'A1';
+        const titleCell = worksheet.getCell(titleCellAddress);
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        titleCell.font = { name: 'Calibri', size: 16 };
+      }
+
+      if (options?.borderedSheetNames?.includes(worksheet.name)) {
+        const usedRowCount = Math.max(1, worksheet.actualRowCount || worksheet.rowCount || 0);
+        const usedColumnCount = Math.max(1, worksheet.actualColumnCount || worksheet.columnCount || 0);
+        for (let rowIndex = 1; rowIndex <= usedRowCount; rowIndex++) {
+          for (let columnIndex = 1; columnIndex <= usedColumnCount; columnIndex++) {
+            worksheet.getCell(rowIndex, columnIndex).border = {
+              top: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+              left: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+              bottom: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+              right: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+            };
+          }
+        }
+      }
+
+      const customPlacement = options?.logoPlacementBySheetName?.[worksheet.name];
+      if (customPlacement) {
+        worksheet.addImage(logoImageId, {
+          tl: { col: customPlacement.col, row: customPlacement.row },
+          ext: { width: customPlacement.width, height: customPlacement.height },
+          editAs: customPlacement.editAs ?? 'oneCell',
+        });
+        return;
+      }
+
       const logoWidthPx = 84;
       const logoHeightPx = 84;
       const usedColumnCount = Math.max(
@@ -232,14 +280,72 @@ async function buildWorkbookArrayBufferWithLogo(
 async function exportWorkbookWithLogo(
   wb: XLSX.WorkBook,
   filename: string,
+  options?: WorkbookExportOptions,
 ): Promise<void> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     XLSX.writeFile(wb, filename);
     return;
   }
 
-  const buffer = await buildWorkbookArrayBufferWithLogo(wb);
+  const buffer = await buildWorkbookArrayBufferWithLogo(wb, options);
   downloadArrayBufferExcel(buffer, filename);
+}
+
+function formatExcelHeaderDate(value: Date): string {
+  return value.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function textOrNA(value?: string | number): string {
+  if (value === undefined || value === null || value === '') return 'N/A';
+  return String(value);
+}
+
+function buildExamReportLayoutRows(metadata?: ExcelExportMetadata): unknown[][] {
+  const hasNumItems = typeof metadata?.numItems === 'number';
+  const hasChoicesPerItem = typeof metadata?.choicesPerItem === 'number';
+  const itemsAndChoicesText =
+    hasNumItems && hasChoicesPerItem
+      ? `No. of Items: ${metadata.numItems}  |  Choices per Item: ${metadata.choicesPerItem}`
+      : hasNumItems
+        ? `No. of Items: ${metadata.numItems}`
+        : hasChoicesPerItem
+          ? `Choices per Item: ${metadata.choicesPerItem}`
+          : 'No. of Items: N/A  |  Choices per Item: N/A';
+
+  return [
+    [GC_SYSTEM_NAME, '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    [
+      `Instructor: ${textOrNA(metadata?.instructorName)}`,
+      '',
+      '',
+      '',
+      '',
+      '',
+      `Generated: ${formatExcelHeaderDate(new Date())}`,
+      '',
+    ],
+    [
+      `Subject: ${textOrNA(metadata?.subject)}`,
+      '',
+      '',
+      '',
+      '',
+      '',
+      `Exam Date: ${textOrNA(metadata?.examDate)}`,
+      '',
+    ],
+    [itemsAndChoicesText, '', '', '', '', '', `Section: ${textOrNA(metadata?.section)}`, ''],
+    [`Exam Code: ${textOrNA(metadata?.examCode)}`, '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+  ];
 }
 
 // ─── Exports ────────────────────────────────────────────────────────────────
@@ -641,8 +747,41 @@ export function exportExamReportToExcel(
     r.className,
   ]);
 
-  const { ws, headerRowIndex } = buildBrandedSheet(headers, data, metadata);
-  autoFitColumns(ws, data, headers);
+  const reportHeaderRows = buildExamReportLayoutRows(metadata);
+  const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
+  const headerRowIndex = reportHeaderRows.length;
+  ws['!merges'] = [
+    XLSX.utils.decode_range('A1:H2'),
+    XLSX.utils.decode_range('A3:B3'),
+    XLSX.utils.decode_range('D3:E3'),
+    XLSX.utils.decode_range('G3:H3'),
+    XLSX.utils.decode_range('A4:B4'),
+    XLSX.utils.decode_range('G4:H4'),
+    XLSX.utils.decode_range('A5:C5'),
+    XLSX.utils.decode_range('G5:H5'),
+  ];
+  ws['!cols'] = [
+    { wch: 8 },
+    { wch: 16 },
+    { wch: 30 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 10 },
+  ];
+  ws['!rows'] = [
+    { hpt: 28 },
+    { hpt: 24 },
+    { hpt: 22 },
+    { hpt: 22 },
+    { hpt: 22 },
+    { hpt: 18 },
+    { hpt: 18 },
+    { hpt: 18 },
+    { hpt: 18 },
+    { hpt: 18 },
+  ];
   stylizeHeaderRow(ws, headers.length, headerRowIndex);
   freezeHeaderRow(ws, headerRowIndex + 1);
 
@@ -658,5 +797,17 @@ export function exportExamReportToExcel(
 
   const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
   const safeExam = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
-  void exportWorkbookWithLogo(wb, `${safeClass}_${safeExam}_exam_report.xlsx`);
+  void exportWorkbookWithLogo(wb, `${safeClass}_${safeExam}_exam_report.xlsx`, {
+    logoPlacementBySheetName: {
+      'Exam Report': {
+  col: 0.5,
+  row: 0.1,
+  width: 60,
+  height: 60,
+  editAs: 'absolute',
+}
+    },
+    centeredTitleBySheetName: ['Exam Report'],
+    borderedSheetNames: ['Exam Report'],
+  });
 }
