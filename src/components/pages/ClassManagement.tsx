@@ -36,6 +36,10 @@ import {
   type Class,
 } from "@/services/classService";
 import { AuditLogger } from "@/services/auditLogger";
+import {
+  getExamsByClassId,
+  archiveExam,
+} from "@/services/examService";
 
 export default function ClassManagement() {
   const { user } = useAuth();
@@ -178,9 +182,60 @@ export default function ClassManagement() {
 
   const handleArchive = async (classId: string) => {
     try {
+      const classToArchive = classes.find((c) => c.id === classId);
+      const examsToArchive = await getExamsByClassId(classId);
+
+      // Show warning toast about exams being archived
+      if (examsToArchive.length > 0) {
+        toast.warning(
+          `Archiving ${examsToArchive.length} linked exam${examsToArchive.length !== 1 ? "s" : ""} along with this class...`,
+          {
+            position: "top-right",
+            duration: 4000,
+          }
+        );
+      }
+
+      // Archive all exams connected to this class
+      for (const exam of examsToArchive) {
+        await archiveExam(exam.id);
+        
+        // Log exam archiving
+        if (user?.email) {
+          AuditLogger.logActivity(
+            user.id,
+            user.email,
+            "admin_action",
+            `Archived exam: ${exam.title} (from class archive)`,
+            {
+              entityId: exam.id,
+              entityName: exam.title,
+              entityType: "exam",
+            },
+          ).catch(console.error);
+        }
+      }
+      
+      // Archive the class
       await updateClass(classId, { isArchived: true });
+
+      // Log class archiving
+      if (user && classToArchive) {
+        AuditLogger.logActivity(
+          user.id,
+          user.email || "unknown",
+          "admin_action",
+          `Archived class: ${classToArchive.class_name}`,
+          {
+            entityId: classId,
+            entityName: classToArchive.class_name,
+            entityType: "class",
+          },
+        ).catch(console.error);
+      }
+
       setClasses((prev) => prev.filter((c) => c.id !== classId));
-      toast.success("Class archived successfully");
+      toast.success("Class and its exams archived successfully");
     } catch (error) {
       console.error("Error archiving class:", error);
       toast.error("Failed to archive class");
