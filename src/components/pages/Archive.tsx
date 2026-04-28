@@ -52,12 +52,14 @@ type ArchivedItem = {
   subjectLabel: string;
   detail1: string; 
   year?: string;
+  classId?: string; // For exams, the ID of the parent class
 };
 
 export default function Archive() {
   const { user } = useAuth();
   const [items, setItems] = useState<ArchivedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archivedClassIds, setArchivedClassIds] = useState<Set<string>>(new Set());
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteType, setDeleteType] = useState<
@@ -100,9 +102,13 @@ export default function Archive() {
             code: e.subject,
             subjectLabel: e.subject || "No Subject",
             detail1: `${e.num_items} Items`,
+            classId: e.classId, // Store the parent class ID
           })),
         ];
 
+        // Create a set of archived class IDs for quick lookup
+        const archivedClassIdSet = new Set(archivedClasses.map((c) => c.id));
+        setArchivedClassIds(archivedClassIdSet);
         setItems(combinedItems);
         setReports(reportLogs.entries);
       } catch (error) {
@@ -139,9 +145,20 @@ export default function Archive() {
   const handleRestore = async () => {
     if (!restoreId || !restoreType) return;
     try {
-      if (restoreType === "class")
+      // If restoring an exam, check if its parent class is still archived
+      if (restoreType === "exam") {
+        const exam = items.find((i) => i.id === restoreId);
+        if (exam && exam.classId && archivedClassIds.has(exam.classId)) {
+          toast.error(
+            "Cannot restore exam: its parent class is still archived. Please restore the class first.",
+            { position: "top-right", duration: 4000 }
+          );
+          return;
+        }
+        await updateExam(restoreId, { isArchived: false });
+      } else if (restoreType === "class") {
         await updateClass(restoreId, { isArchived: false });
-      else await updateExam(restoreId, { isArchived: false });
+      }
 
       setItems(items.filter((i) => i.id !== restoreId));
       toast.success("Restored successfully", { position: "top-right" });

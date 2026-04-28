@@ -62,6 +62,10 @@ import {
   FolderArchive,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+  getExamsByClassId,
+  archiveExam,
+} from "@/services/examService";
 
 export default function StudentClasses() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -405,9 +409,43 @@ export default function StudentClasses() {
 
     try {
       const classToArchive = classes.find((c) => c.id === archiveId);
+      const examsToArchive = await getExamsByClassId(archiveId);
+
+      // Show warning toast about exams being archived
+      if (examsToArchive.length > 0) {
+        toast.warning(
+          `Archiving ${examsToArchive.length} linked exam${examsToArchive.length !== 1 ? "s" : ""} along with this class...`,
+          {
+            position: "top-right",
+            duration: 4000,
+          }
+        );
+      }
+
+      // Archive all exams connected to this class
+      for (const exam of examsToArchive) {
+        await archiveExam(exam.id);
+        
+        // Log exam archiving
+        if (user?.email) {
+          AuditLogger.logActivity(
+            user.id,
+            user.email,
+            "admin_action",
+            `Archived exam: ${exam.title} (from class archive)`,
+            {
+              entityId: exam.id,
+              entityName: exam.title,
+              entityType: "exam",
+            },
+          ).catch(console.error);
+        }
+      }
+      
+      // Archive the class
       await updateClass(archiveId, { isArchived: true });
 
-      // Log archiving
+      // Log class archiving
       if (user && classToArchive) {
         AuditLogger.logActivity(
           user.id,
@@ -424,7 +462,7 @@ export default function StudentClasses() {
 
       setClasses(classes.filter((c) => c.id !== archiveId));
       setDeleteId(null);
-      toast.success("Class archived successfully");
+      toast.success("Class and its exams archived successfully");
     } catch (error) {
       console.error("Error archiving class:", error);
       toast.error("Failed to archive class");
