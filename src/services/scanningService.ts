@@ -549,6 +549,18 @@ export class ScanningService {
         return bTs - aTs;
       });
       const data = sorted[0].data();
+      
+      console.log(`[ScanningService] Found ${snap.docs.length} results for student ${studentId}, using most recent`);
+      console.log(`[ScanningService] Result ID: ${sorted[0].id}`);
+      console.log(`[ScanningService] Answers array length: ${data.answers?.length || 0}`);
+      console.log(`[ScanningService] Answers is array: ${Array.isArray(data.answers)}`);
+      if (data.answers && Array.isArray(data.answers)) {
+        console.log(`[ScanningService] Sample Q62 (index 61): "${data.answers[61]}" type=${typeof data.answers[61]}`);
+        console.log(`[ScanningService] Sample Q64 (index 63): "${data.answers[63]}" type=${typeof data.answers[63]}`);
+        console.log(`[ScanningService] First 10 answers:`, data.answers.slice(0, 10));
+        console.log(`[ScanningService] Q60-Q70:`, data.answers.slice(60, 70));
+      }
+      
       return {
         ...data,
         scannedAt:

@@ -731,6 +731,33 @@ function drawFullSheet(
   // Shading guide — placed to the right of the ID section, aligned with ID top
   const guideX = idBorderX + idBorderW + 4;
   const guideW = rx - guideX;
+  
+  // Page indicator (for 200-item exams) - positioned above the shading guide
+  if (template.numQuestions === 200) {
+    const pageIndicatorBubbleSize = 3.5;
+    const pageIndicatorSpacing = 6;
+    
+    // Position above shading guide
+    const indicatorX = guideX;
+    const indicatorY = idTopY + 1;
+    
+    doc.setFontSize(5);
+    doc.setFont("helvetica", "normal");
+    
+    // 1st page indicator
+    doc.text("1st page", indicatorX, indicatorY);
+    const page1BubbleX = indicatorX + 12;
+    drawBubble(doc, page1BubbleX, indicatorY - 1, pageIndicatorBubbleSize, questionOffset === 0);
+    drawBubble(doc, page1BubbleX + pageIndicatorSpacing, indicatorY - 1, pageIndicatorBubbleSize, false);
+    
+    // 2nd page indicator - position to the right of 1st page
+    const page2X = page1BubbleX + pageIndicatorSpacing + 5;
+    doc.text("2nd page", page2X, indicatorY);
+    const page2BubbleX = page2X + 12;
+    drawBubble(doc, page2BubbleX, indicatorY - 1, pageIndicatorBubbleSize, false);
+    drawBubble(doc, page2BubbleX + pageIndicatorSpacing, indicatorY - 1, pageIndicatorBubbleSize, questionOffset === 100);
+  }
+  
   drawShadingGuide(doc, guideX, idTopY + 8, guideW, 3.0);
 
   currentY = idBottomY + 3;

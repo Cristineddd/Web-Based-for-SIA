@@ -7,7 +7,6 @@ import {
   X,
   Loader2,
   AlertCircle,
-  AlertTriangle,
   CheckCircle,
   Save,
   User,
@@ -100,18 +99,22 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           // Check for a pre-uploaded image IMMEDIATELY after exam loads,
           // before any other async calls that could throw and skip this check.
           const pendingUpload = consumePendingImage();
-          const pendingPage = consumePendingPage();
+          consumePendingPage(); // Clear pendingPage if set (no longer used - auto-detection handles this)
           if (pendingUpload) {
             setCapturedImage(pendingUpload);
-            if (examData.num_items > 150 && pendingPage) {
-              setScanPage(pendingPage);
-            }
+            // Auto-detection will identify the page from page indicator bubbles
             setMode('processing');
             // Still load answer key and class data in background for grading
             try {
               const akResult = await AnswerKeyService.getAnswerKeyByExamId(examId);
               if (akResult.success && akResult.data) {
                 setAnswerKey(akResult.data.answers);
+                console.log(`[AnswerKey] Loaded ${akResult.data.answers.length} items for ${examData.num_items}-item exam`);
+                // Warn if answer key length doesn't match exam configuration
+                if (akResult.data.answers.length !== examData.num_items) {
+                  console.warn(`[AnswerKey] Mismatch: Answer key has ${akResult.data.answers.length} items but exam is configured for ${examData.num_items} items`);
+                  toast.warning(`Answer key has ${akResult.data.answers.length} items but exam is configured for ${examData.num_items} items. Please update the answer key.`);
+                }
               }
               if ((examData as any).classId) {
                 const cls = await getClassById((examData as any).classId);
@@ -134,6 +137,14 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           const akResult = await AnswerKeyService.getAnswerKeyByExamId(examId);
           if (akResult.success && akResult.data) {
             setAnswerKey(akResult.data.answers);
+            console.log(`[AnswerKey] Loaded ${akResult.data.answers.length} items for ${examData.num_items}-item exam`);
+            // Warn if answer key length doesn't match exam configuration
+            if (akResult.data.answers.length !== examData.num_items) {
+              console.warn(`[AnswerKey] Mismatch: Answer key has ${akResult.data.answers.length} items but exam is configured for ${examData.num_items} items`);
+              toast.warning(`Answer key has ${akResult.data.answers.length} items but exam is configured for ${examData.num_items} items. Please update the answer key.`);
+            }
+          } else {
+            console.warn('[AnswerKey] No answer key found for this exam');
           }
           
           // Load class data if exam has classId
@@ -171,12 +182,12 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     loadExamData();
   }, [examId]);
 
-  // Auto-start camera when exam data is loaded
+  // Auto-start camera when exam data is loaded or mode changes to camera
   useEffect(() => {
     if (!loading && exam && !stream && mode === 'camera') {
       startCamera();
     }
-  }, [loading, exam]);
+  }, [loading, exam, mode, stream]);
 
   // Cleanup camera and auto-scan on unmount
   useEffect(() => {
@@ -718,28 +729,40 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       { x: paperLeft + gw * mxL, y: paperTop + gh * myB, key: 'bl' as const },
       { x: paperLeft + gw * mxR, y: paperTop + gh * myB, key: 'br' as const },
     ];
-    const mSz  = Math.round(Math.min(gw, gh) * 0.040);
+    const mSz  = Math.round(Math.min(gw, gh) * 0.055);
     const mArm = Math.round(mSz * 0.85);
     const inactiveColor = 'rgba(255,255,255,0.75)';
+    // Margin: shift squares away from paper border by ~0.5x the marker size
+    const mMargin = Math.max(1, Math.round(mSz * 0.5));
+    const dirMap: Record<string, [number, number]> = {
+      tl: [1, 1],
+      tr: [-1, 1],
+      bl: [1, -1],
+      br: [-1, -1],
+    };
+
     for (const m of markerCenters) {
       const markerActive = cornerHits[m.key];
       const activeColor = markerActive ? '#22c55e' : inactiveColor;
       const hSz = mSz / 2;
-      // Shadow
+      const [dx, dy] = dirMap[m.key];
+      const ox = dx * mMargin;
+      const oy = dy * mMargin;
+      // Shadow (shifted inward from border)
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx.strokeRect(m.x - hSz - 1, m.y - hSz - 1, mSz + 2, mSz + 2);
-      // Square
+      ctx.strokeRect(m.x - hSz + ox - 1, m.y - hSz + oy - 1, mSz + 2, mSz + 2);
+      // Square (shifted)
       ctx.lineWidth = 2;
       ctx.strokeStyle = activeColor;
-      ctx.strokeRect(m.x - hSz, m.y - hSz, mSz, mSz);
-      // Crosshair — only on individually matched markers
+      ctx.strokeRect(m.x - hSz + ox, m.y - hSz + oy, mSz, mSz);
+      // Crosshair — only on individually matched markers (use shifted center)
       if (markerActive) {
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = activeColor;
         ctx.beginPath();
-        ctx.moveTo(m.x - mArm, m.y); ctx.lineTo(m.x + mArm, m.y);
-        ctx.moveTo(m.x, m.y - mArm); ctx.lineTo(m.x, m.y + mArm);
+        ctx.moveTo(m.x - mArm + ox, m.y + oy); ctx.lineTo(m.x + mArm + ox, m.y + oy);
+        ctx.moveTo(m.x + ox, m.y - mArm + oy); ctx.lineTo(m.x + ox, m.y + mArm + oy);
         ctx.stroke();
       }
     }
@@ -1123,7 +1146,21 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       // Pass 100 (not 200) to detectBubbles so marker detection uses the correct
       // templateType and the returned answers array is exactly 100 items.
       const effectiveDetectItems = exam.num_items > 150 ? 100 : exam.num_items;
-      const { studentId, answers, multipleAnswers, idDoubleShades, rawIdDigits: detectedRawIdDigits, debugMarkers, markersFound, markerConfidence, bubbleHits } = await detectBubbles(imageData, effectiveDetectItems, exam.choices_per_item);
+      const { studentId, answers, multipleAnswers, idDoubleShades, rawIdDigits: detectedRawIdDigits, debugMarkers, markersFound, markerConfidence, detectedPage, bubbleHits } = await detectBubbles(imageData, effectiveDetectItems, exam.choices_per_item);
+      
+      // For 200-item exams, use auto-detected page if available
+      if (exam.num_items > 150 && detectedPage !== null) {
+        if (detectedPage !== scanPage) {
+          console.log(`[OMR] Auto-detected page ${detectedPage} (manual selection was ${scanPage})`);
+          setScanPage(detectedPage as 1 | 2);
+          toast.success(`Auto-detected: Page ${detectedPage}`, { duration: 2000 });
+        }
+        // Update local variable for immediate use in this processing cycle
+        // (setScanPage is async, so we use detectedPage directly)
+      }
+      
+      const effectivePage = exam.num_items > 150 && detectedPage !== null ? detectedPage : scanPage;
+      console.log(`[Detect] Scanned ${answers.length} answers (${answers.filter(a => a).length} filled) for ${effectiveDetectItems}-item sheet, page ${effectivePage}`);
       
       // Check for alignment issues based on marker detection quality
       // Only show alignment error when markers were genuinely not found at all.
@@ -1208,7 +1245,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           // This makes each section boundary explicit and helps visualize block drift.
           const overlayItems = exam.num_items > 150 ? 100 : exam.num_items;
           const overlayLayout = getTemplateLayout(overlayItems);
-          const pageOffset = exam.num_items > 150 && scanPage === 2 ? 100 : 0;
+          const pageOffset = exam.num_items > 150 && effectivePage === 2 ? 100 : 0;
           const blockLineW = Math.max(2, Math.round(Math.min(iw, ih) * 0.003));
           const blockColors = [
             'rgba(239, 68, 68, 0.14)',
@@ -1342,7 +1379,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           if (showBubbleCircles) {
             // For page 2 of a 200-item exam, qIndex is 0-99 but represents Q101-200,
             // so offset the answerKey lookup by 100.
-            const answerKeyOffset = exam.num_items > 150 && scanPage === 2 ? 100 : 0;
+            const answerKeyOffset = exam.num_items > 150 && effectivePage === 2 ? 100 : 0;
             const lineW = baseLineW;
             const overlayChoiceLabels = 'ABCDEFGH'.slice(0, exam.choices_per_item).split('');
             const frameWOverlay = debugMarkers.topRight.x - debugMarkers.topLeft.x;
@@ -1354,7 +1391,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               const isCorrect = answerKey[akIdx] && hit.choice.toUpperCase() === answerKey[akIdx].toUpperCase();
 
               if (isMultiple) {
-                oCtx.strokeStyle = '#f97316'; // orange-500 (multiple-shade)
+                oCtx.strokeStyle = '#ef4444'; // red-500 (multiple-shade)
               } else if (isCorrect) {
                 oCtx.strokeStyle = '#22c55e'; // green-500
               } else {
@@ -1432,6 +1469,50 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                 oCtx.stroke();
               }
             }
+
+            // Page indicator bubbles overlay (for 200-item exams)
+            if (exam.num_items > 150) {
+              const pageIndicatorBubbleR = Math.max(4, Math.round(Math.min(iw, ih) * 0.008));
+              const fw = 198, fh = 285;
+              const page1BubbleX = 73.2 / fw;
+              const page2BubbleX = 96.2 / fw;
+              const bubbleSpacing = 6 / fw;
+              const indicatorY = 20 / fh; // 20mm from top-left marker center
+              
+              oCtx.lineWidth = lineW;
+              
+              // Draw circles for 1st page bubbles
+              const page1Bubble1 = mapToPixel(debugMarkers, page1BubbleX, indicatorY);
+              const page1Bubble2 = mapToPixel(debugMarkers, page1BubbleX + bubbleSpacing, indicatorY);
+              
+              // First bubble of 1st page - green if detected as page 1, yellow if no detection
+              oCtx.strokeStyle = detectedPage === 1 ? '#22c55e' : detectedPage === null ? '#fbbf24' : '#9ca3af';
+              oCtx.beginPath();
+              oCtx.ellipse(page1Bubble1.px, page1Bubble1.py, pageIndicatorBubbleR, pageIndicatorBubbleR, 0, 0, Math.PI * 2);
+              oCtx.stroke();
+              
+              // Second bubble of 1st page - gray
+              oCtx.strokeStyle = '#9ca3af';
+              oCtx.beginPath();
+              oCtx.ellipse(page1Bubble2.px, page1Bubble2.py, pageIndicatorBubbleR, pageIndicatorBubbleR, 0, 0, Math.PI * 2);
+              oCtx.stroke();
+              
+              // Draw circles for 2nd page bubbles
+              const page2Bubble1 = mapToPixel(debugMarkers, page2BubbleX, indicatorY);
+              const page2Bubble2 = mapToPixel(debugMarkers, page2BubbleX + bubbleSpacing, indicatorY);
+              
+              // First bubble of 2nd page - gray
+              oCtx.strokeStyle = '#9ca3af';
+              oCtx.beginPath();
+              oCtx.ellipse(page2Bubble1.px, page2Bubble1.py, pageIndicatorBubbleR, pageIndicatorBubbleR, 0, 0, Math.PI * 2);
+              oCtx.stroke();
+              
+              // Second bubble of 2nd page - green if detected as page 2, yellow if no detection
+              oCtx.strokeStyle = detectedPage === 2 ? '#22c55e' : detectedPage === null ? '#fbbf24' : '#9ca3af';
+              oCtx.beginPath();
+              oCtx.ellipse(page2Bubble2.px, page2Bubble2.py, pageIndicatorBubbleR, pageIndicatorBubbleR, 0, 0, Math.PI * 2);
+              oCtx.stroke();
+            }
           }
 
           // Keep the full overlay in the preview so corner markers stay visible.
@@ -1442,7 +1523,12 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
       setDetectedStudentId(studentId);
       setDetectedAnswers(answers);
-      setMultipleAnswerQuestions(multipleAnswers);
+      // For page 2 of 200-item exams, offset the question numbers by 100
+      // since detectBubbles returns Q1-100 but they represent Q101-200
+      const offsetMultipleAnswers = exam.num_items > 150 && effectivePage === 2
+        ? multipleAnswers.map(q => q + 100)
+        : multipleAnswers;
+      setMultipleAnswerQuestions(offsetMultipleAnswers);
       setIdDoubleShadeColumns(idDoubleShades);
       setRawIdDigits(detectedRawIdDigits || []); // Store raw digit array for UI display
 
@@ -1488,11 +1574,14 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       setStudentIdError(idError);
       
       // Calculate score
+      // For 200-item exams, page 2 answers need to be compared against answer key items 101-200
+      const answerKeyOffset = exam.num_items > 150 && effectivePage === 2 ? 100 : 0;
       let score = 0;
-      const totalQuestions = Math.min(answers.length, answerKey.length);
+      const totalQuestions = Math.min(answers.length, answerKey.length - answerKeyOffset);
       
       for (let i = 0; i < totalQuestions; i++) {
-        if (answers[i] && answerKey[i] && answers[i].toUpperCase() === answerKey[i].toUpperCase()) {
+        const akIdx = i + answerKeyOffset;
+        if (answers[i] && answerKey[akIdx] && answers[i].toUpperCase() === answerKey[akIdx].toUpperCase()) {
           score++;
         }
       }
@@ -1512,12 +1601,81 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
 
       // ── 200-item two-pass handling ──
       if (exam.num_items > 150) {
-        if (scanPage === 1) {
-          // Store page-1 data and show page-1 results.
-          // User can save immediately and then switch to Page 2 for other students.
+        if (effectivePage === 1) {
+          // Store page-1 data
           setPage1Answers(answers);
           setPage1StudentId(studentId);
-          setScanResult(result);
+          
+          // Try to fetch page 2 if it exists for this student
+          let p2Answers: string[] = [];
+          if (studentId && !/^0+$/.test(studentId)) {
+            const existing = await ScanningService.getLatestResultByStudentAndExam(examId, studentId);
+            if (existing && existing.answers && existing.answers.length >= 200) {
+              // Extract page 2 answers (items 101-200, indices 100-199)
+              let second100 = existing.answers.slice(100, 200);
+              second100 = second100.map(a => (a === null || a === undefined) ? '' : String(a));
+              const filledCount = second100.filter(a => a && a.trim() !== '').length;
+              if (filledCount > 0) {
+                p2Answers = second100;
+                console.log(`[Page1] Found saved Page 2 with ${filledCount}/100 answers`);
+                
+                // Check if page 1 also exists (indicating both pages already saved)
+                let first100 = existing.answers.slice(0, 100);
+                first100 = first100.map(a => (a === null || a === undefined) ? '' : String(a));
+                const page1FilledCount = first100.filter(a => a && a.trim() !== '').length;
+                
+                if (page1FilledCount > 0 && filledCount > 0) {
+                  // Both pages already saved - this is a duplicate
+                  const existingScore = existing.score || 0;
+                  const existingTotal = existing.totalQuestions || 200;
+                  const existingPercentage = Math.round((existingScore / existingTotal) * 100);
+                  toast.error(`Duplicate submission blocked: Student "${studentId}" already has a complete grade for this exam (Score: ${existingScore}/${existingTotal}, ${existingPercentage}%).`);
+                  setScanResult(null);
+                  setMode('camera');
+                  return;
+                }
+                
+                toast.success(`Page 2 answers loaded from saved results (${filledCount}/100 questions answered).`);
+              }
+            }
+          }
+          
+          // Build 200-item combined array
+          const page1Padded = [...answers];
+          while (page1Padded.length < 100) {
+            page1Padded.push('');
+          }
+          
+          const page2Padded = p2Answers.length > 0 ? [...p2Answers] : new Array(100).fill('');
+          while (page2Padded.length < 100) {
+            page2Padded.push('');
+          }
+          
+          const combined = [...page1Padded, ...page2Padded];
+          
+          // Calculate combined score
+          let combinedScore = 0;
+          const combinedTotal = answerKey.length;
+          for (let i = 0; i < Math.min(combined.length, answerKey.length); i++) {
+            if (combined[i] && answerKey[i] && combined[i].toUpperCase() === answerKey[i].toUpperCase()) {
+              combinedScore++;
+            }
+          }
+          
+          const combinedPct = combinedTotal > 0 ? Math.round((combinedScore / combinedTotal) * 100) : 0;
+          const combinedResult: ScanResult = {
+            studentId,
+            answers: combined,
+            score: combinedScore,
+            totalQuestions: combinedTotal,
+            percentage: combinedPct,
+            letterGrade: calculateLetterGrade(combinedPct),
+            timestamp: new Date().toISOString()
+          };
+          
+          setDetectedAnswers(combined);
+          setDetectedStudentId(studentId);
+          setScanResult(combinedResult);
           setMode('results');
           return;
         } else {
@@ -1529,20 +1687,65 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           if (p1Answers.length === 0 && studentId && !/^0+$/.test(studentId)) {
             toast.info('Fetching saved Page 1 answers for this student…');
             const existing = await ScanningService.getLatestResultByStudentAndExam(examId, studentId);
-            if (existing && existing.answers.length > 0) {
+            if (existing && existing.answers && existing.answers.length > 0) {
+              console.log(`[Page2] Fetched saved result with ${existing.answers.length} total answers`);
+              console.log(`[Page2] Result ID: ${existing.id}`);
+              console.log(`[Page2] Raw answers type:`, typeof existing.answers, Array.isArray(existing.answers));
+              
+              // Log specific indices we're interested in
+              console.log(`[Page2] Raw Q62 (index 61):`, existing.answers[61], typeof existing.answers[61]);
+              console.log(`[Page2] Raw Q64 (index 63):`, existing.answers[63], typeof existing.answers[63]);
+              
               // The saved record may be:
               //  (a) a true page-1 partial: 100 items, all non-empty → use as-is
               //  (b) a page-2-only save: 200 items, first 100 are empty strings → ignore page 1 portion
-              const first100 = existing.answers.slice(0, 100);
-              const hasPage1Data = first100.some(a => a && a.trim() !== '');
+              let first100 = existing.answers.slice(0, 100);
+              console.log(`[Page2] After slice(0,100), length: ${first100.length}`);
+              console.log(`[Page2] After slice Q62 (index 61):`, first100[61], typeof first100[61]);
+              console.log(`[Page2] After slice Q64 (index 63):`, first100[63], typeof first100[63]);
+              
+              // Normalize all values to strings (convert null/undefined to empty string)
+              first100 = first100.map(a => (a === null || a === undefined) ? '' : String(a));
+              const filledCount = first100.filter(a => a && a.trim() !== '').length;
+              console.log(`[Page2] First 100 items: ${filledCount} filled answers`);
+              console.log(`[Page2] Sample Q61-Q65:`, first100.slice(60, 65));
+              console.log(`[Page2] Normalized Q62 (index 61): "${first100[61]}" length=${first100[61].length}`);
+              console.log(`[Page2] Normalized Q64 (index 63): "${first100[63]}" length=${first100[63].length}`);
+              
+              // Check if page 2 also exists (indicating both pages already saved)
+              if (existing.answers.length >= 200) {
+                let second100 = existing.answers.slice(100, 200);
+                second100 = second100.map(a => (a === null || a === undefined) ? '' : String(a));
+                const page2FilledCount = second100.filter(a => a && a.trim() !== '').length;
+                
+                if (filledCount > 0 && page2FilledCount > 0) {
+                  // Both pages already saved - this is a duplicate
+                  const existingScore = existing.score || 0;
+                  const existingTotal = existing.totalQuestions || 200;
+                  const existingPercentage = Math.round((existingScore / existingTotal) * 100);
+                  toast.error(`Duplicate submission blocked: Student "${studentId}" already has a complete grade for this exam (Score: ${existingScore}/${existingTotal}, ${existingPercentage}%).`);
+                  setScanResult(null);
+                  setMode('camera');
+                  return;
+                }
+              }
+              
+              // Ensure we always have exactly 100 items (pad with empty strings if needed)
+              while (first100.length < 100) {
+                first100.push('');
+              }
+              
+              const hasPage1Data = filledCount > 0;
               if (hasPage1Data) {
                 p1Answers = first100;
                 p1StudentId = existing.studentId;
-                toast.success('Page 1 answers loaded from saved results.');
+                console.log(`[Page2] Using ${filledCount}/100 Page 1 answers from saved results`);
+                toast.success(`Page 1 answers loaded from saved results (${filledCount}/100 questions answered).`);
               } else {
                 toast.warning('No saved Page 1 found for this student. Saving Page 2 answers only (Q101–200).');
               }
             } else {
+              console.log('[Page2] No existing result found for this student');
               toast.warning('No saved Page 1 found for this student. Saving Page 2 answers only (Q101–200).');
             }
           }
@@ -1550,21 +1753,39 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
           // Always build a 200-item answers array so indices align with the answer key:
           //   positions 0-99   = page 1 answers (empty strings when page 1 not available)
           //   positions 100-199 = page 2 answers
+          
+          // Ensure page 2 answers are padded to 100 items
+          const page2Answers = [...answers];
+          while (page2Answers.length < 100) {
+            page2Answers.push('');
+          }
+          
           const combined = p1Answers.length > 0
-            ? [...p1Answers, ...answers]
-            : [...new Array(100).fill(''), ...answers];
+            ? [...p1Answers, ...page2Answers]
+            : [...new Array(100).fill(''), ...page2Answers];
+          
+          // Ensure combined is exactly 200 items
+          while (combined.length < 200) {
+            combined.push('');
+          }
+          
+          console.log(`[Combine] Page 1: ${p1Answers.length} items (${p1Answers.filter(a => a).length} filled), Page 2: ${answers.length} items (${answers.filter(a => a).length} filled), Combined: ${combined.length} items, Answer Key: ${answerKey.length} items`);
+          console.log(`[Combine] Sample combined Q61-Q65 (indices 60-64):`, combined.slice(60, 65));
+          console.log(`[Combine] Sample combined Q62=${combined[61]}, Q64=${combined[63]}`);
+          
           const combinedStudentId = p1StudentId || studentId;
           let combinedScore = 0;
-          // Only count questions where we actually have an answer (skip empty page-1 slots)
-          let combinedTotal = 0;
+          // Count ALL questions in the answer key, not just answered ones
+          // For 200-item exams, the total should always be 200
+          const combinedTotal = answerKey.length;
           for (let i = 0; i < Math.min(combined.length, answerKey.length); i++) {
-            if (combined[i]) {
-              combinedTotal++;
-              if (answerKey[i] && combined[i].toUpperCase() === answerKey[i].toUpperCase()) {
-                combinedScore++;
-              }
+            // Consider both answered and unanswered questions
+            // An empty answer is simply wrong (0 points), not excluded from total
+            if (combined[i] && answerKey[i] && combined[i].toUpperCase() === answerKey[i].toUpperCase()) {
+              combinedScore++;
             }
           }
+          console.log(`[Score] Combined score: ${combinedScore}/${combinedTotal} (${combined.filter((a, i) => a && answerKey[i]).length} answered)`);
           const combinedPct = combinedTotal > 0 ? Math.round((combinedScore / combinedTotal) * 100) : 0;
           const combinedResult: ScanResult = {
             studentId: combinedStudentId,
@@ -2184,6 +2405,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     rawIdDigits: number[]; // Array of detected digits per column (-1 = unshaded)
     markersFound: boolean;
     markerConfidence: number;
+    detectedPage: number | null; // Auto-detected page number (1 or 2) for 200-item exams, null for others
     debugMarkers?: {
       topLeft: { x: number; y: number };
       topRight: { x: number; y: number };
@@ -2264,6 +2486,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       grayscale, width, height, effectiveMarkers, layout, numQuestions, choicesPerQuestion
     );
 
+    // 6. Auto-detect page number for 200-item exams from page indicator checkboxes
+    // For 200-item exams, each page has 100 questions, so always check for page indicators
+    // on 100-item templates (could be standalone 100-item or one page of 200-item)
+    const detectedPage = templateType === 100 ? detectPageIndicatorFromImage(grayscale, width, height, effectiveMarkers, layout) : null;
+
     return { 
       studentId, 
       answers, 
@@ -2272,6 +2499,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       rawIdDigits, // Include raw digit array for UI display
       markersFound: markers.found,
       markerConfidence: noMarkersAtAll ? 0 : markers.confidence,
+      detectedPage, // Auto-detected page (1 or 2) for 200-item, null otherwise
       debugMarkers: effectiveMarkers,
       bubbleHits,
     };
@@ -2521,6 +2749,90 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     return { studentId: cleanId, doubleShadeColumns, rawIdDigits: idDigits };
   };
 
+  // ─── DETECT PAGE INDICATOR (for 200-item exams) ───
+  // Reads the page indicator checkboxes to determine which page (1 or 2) is being scanned.
+  // Returns 1 for "1st page" marked, 2 for "2nd page" marked, or null if unclear.
+  const detectPageIndicatorFromImage = (
+    grayscale: Uint8Array,
+    width: number,
+    height: number,
+    markers: {
+      topLeft: { x: number; y: number };
+      topRight: { x: number; y: number };
+      bottomLeft: { x: number; y: number };
+      bottomRight: { x: number; y: number };
+    },
+    layout: TemplateLayout
+  ): number | null => {
+    const frameW = markers.topRight.x - markers.topLeft.x;
+    const frameH = markers.bottomLeft.y - markers.topLeft.y;
+    const bubbleRX = (layout.bubbleDiameterNX * frameW) / 2;
+    const bubbleRY = (layout.bubbleDiameterNY * frameH) / 2;
+
+    // Page indicator layout - positioned above shading guide, horizontally arranged
+    // indicatorX = guideX ≈ 67.2mm from left
+    // page1BubbleX = indicatorX + 12 ≈ 79.2mm from left, from TL (6mm): 73.2mm
+    // page2BubbleX ≈ page1BubbleX + 6 + 5 + 12 = 102.2mm from left, from TL: 96.2mm
+    // indicatorY adjusted to 20mm from TL marker
+    // fw = 198, fh = 285
+    const fw = 198, fh = 285;
+    const page1BubbleX = 73.2 / fw; // 1st page first bubble (~0.37)
+    const page2BubbleX = 96.2 / fw; // 2nd page second bubble (~0.486)
+    const bubbleSpacing = 6 / fw; // Spacing between bubbles in same row
+    
+    const indicatorY = 20 / fh; // Y position from top-left marker center (~0.07)
+    
+    // Check "1st page" bubbles - two bubbles horizontally
+    // For Page 1: first bubble filled, second empty
+    const page1Bubble1NX = page1BubbleX;
+    const page1Bubble2NX = page1BubbleX + bubbleSpacing;
+    const page1Bubble1 = mapToPixel(markers, page1Bubble1NX, indicatorY);
+    const page1Bubble2 = mapToPixel(markers, page1Bubble2NX, indicatorY);
+    
+    const page1Fill1 = sampleBubbleAt(grayscale, width, height, page1Bubble1.px, page1Bubble1.py, bubbleRX, bubbleRY);
+    const page1Fill2 = sampleBubbleAt(grayscale, width, height, page1Bubble2.px, page1Bubble2.py, bubbleRX, bubbleRY);
+    
+    // Check "2nd page" bubbles - two bubbles horizontally
+    // For Page 2: first bubble empty, second filled
+    const page2Bubble1NX = page2BubbleX;
+    const page2Bubble2NX = page2BubbleX + bubbleSpacing;
+    const page2Bubble1 = mapToPixel(markers, page2Bubble1NX, indicatorY);
+    const page2Bubble2 = mapToPixel(markers, page2Bubble2NX, indicatorY);
+    
+    const page2Fill1 = sampleBubbleAt(grayscale, width, height, page2Bubble1.px, page2Bubble1.py, bubbleRX, bubbleRY);
+    const page2Fill2 = sampleBubbleAt(grayscale, width, height, page2Bubble2.px, page2Bubble2.py, bubbleRX, bubbleRY);
+    
+    console.log('[PageIndicator] 1st page bubbles: bubble1=' + page1Fill1.toFixed(0) + ' bubble2=' + page1Fill2.toFixed(0));
+    console.log('[PageIndicator] 2nd page bubbles: bubble1=' + page2Fill1.toFixed(0) + ' bubble2=' + page2Fill2.toFixed(0));
+    
+    // Determine which page based on RELATIVE darkness between bubble pairs
+    // The pre-filled bubble should be noticeably darker than its neighbor
+    // Don't use absolute threshold - just compare which bubble is darker in each pair
+    const minDifference = 10; // Minimum brightness difference to consider it "filled"
+    
+    // Page 1: first bubble of "1st page" should be darker than second bubble
+    const page1Diff = page1Fill2 - page1Fill1;
+    const page1Indicator = page1Diff > minDifference;
+    
+    // Page 2: second bubble of "2nd page" should be darker than first bubble  
+    const page2Diff = page2Fill1 - page2Fill2;
+    const page2Indicator = page2Diff > minDifference;
+    
+    console.log('[PageIndicator] Page1: bubble1=' + page1Fill1 + ' bubble2=' + page1Fill2 + ' diff=' + page1Diff + ' detected=' + page1Indicator);
+    console.log('[PageIndicator] Page2: bubble1=' + page2Fill1 + ' bubble2=' + page2Fill2 + ' diff=' + page2Diff + ' detected=' + page2Indicator);
+    
+    if (page1Indicator && !page2Indicator) {
+      console.log('[PageIndicator] Detected: Page 1');
+      return 1;
+    } else if (!page1Indicator && page2Indicator) {
+      console.log('[PageIndicator] Detected: Page 2');
+      return 2;
+    } else {
+      console.log('[PageIndicator] Unclear page detection (both or neither marked) - using manual selection');
+      return null;
+    }
+  };
+
   // ─── DETECT ANSWERS ───
   // sampleBubbleAt returns RAW BRIGHTNESS (0-255): lower = darker = filled.
   // For each question, the darkest choice wins if it's sufficiently darker than the rest.
@@ -2640,6 +2952,11 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         }
       }
     }
+    
+    // Log summary of detection results
+    const filledCount = answers.filter(a => a && a.trim() !== '').length;
+    console.log(`[ANS] Detection complete: ${filledCount}/${numQuestions} questions answered, ${multipleAnswers.length} multiple answers detected`);
+    
     return { answers, multipleAnswers, bubbleHits };
   };
 
@@ -2695,8 +3012,9 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
     setSaving(true);
     try {
       const isNullId = !detectedStudentId || detectedStudentId === '0000000000';
-      // For 200-item page 2 (combined result), force override the existing page 1 partial save
-      const isPage2Combined = exam.num_items > 150 && scanPage === 2;
+      // For 200-item exams, always force override when saving combined results
+      // This handles both: page 2 scanned first (override with page 1+2), or page 1 scanned first (override with page 1+2)
+      const is200ItemCombined = exam.num_items > 150 && detectedAnswers.length === 200;
 
       const result = await ScanningService.saveScannedResult(
         examId,
@@ -2706,7 +3024,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         user.id,
         isNullId,
         exam.choicePoints,
-        isPage2Combined // forceOverride — replaces the page 1 partial record
+        is200ItemCombined // forceOverride — replaces any partial records with the combined result
       );
       
       if (result.success) {
@@ -2881,47 +3199,12 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
       {/* Mode: Camera */}
       {mode === 'camera' && (
         <Card className="overflow-hidden">
-          {/* 200-item: page selector */}
+          {/* 200-item: auto-detection info */}
           {getTemplateType() === 200 && (
-            <div className="flex items-center justify-center gap-6 px-6 bg-white border-b border-gray-100">
-                <button
-                  onClick={() => {
-                    setScanPage(1);
-                    setPage1Answers([]);
-                    setPage1StudentId('');
-                  }}
-                  className={`relative flex items-center gap-2 pb-3 pt-3 text-sm font-semibold transition-all ${
-                    scanPage === 1
-                      ? 'text-[#10B981]'
-                      : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  Page 1 · Q1–100
-                  {scanPage === 1 && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#10B981] rounded-full" />
-                  )}
-                </button>
-                <button
-                  onClick={() => {
-                    if (scanPage === 1 && page1Answers.length === 0) {
-                      toast.warning('Scan Page 1 first, or switch to Page 2 to rescan it independently.');
-                    }
-                    setScanPage(2);
-                  }}
-                  className={`relative flex items-center gap-2 pb-3 pt-3 text-sm font-semibold transition-all ${
-                    scanPage === 2
-                      ? 'text-[#10B981]'
-                      : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  Page 2 · Q101–200
-                  {scanPage === 2 && page1Answers.length === 0 && (
-                    <span className="text-[11px] font-normal text-amber-500">(Page 1 not scanned)</span>
-                  )}
-                  {scanPage === 2 && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#10B981] rounded-full" />
-                  )}
-                </button>
+            <div className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-50 border-b border-emerald-100">
+              <div className="text-sm text-emerald-700">
+                <span className="font-semibold">Auto-detection enabled:</span> The scanner will automatically identify which page (1-100 or 101-200) you're scanning
+              </div>
             </div>
           )}
           <div className="relative bg-black">
@@ -2986,12 +3269,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                 const dataUrl = ev.target?.result as string;
                 stopCamera();
                 setCapturedImage(dataUrl);
-                // 200-item needs page selection before processing
-                if (exam && exam.num_items > 150) {
-                  setMode('select-page');
-                } else {
-                  setMode('processing');
-                }
+                // Auto-detection enabled - go directly to processing
+                setMode('processing');
               };
               reader.readAsDataURL(file);
               e.target.value = '';
@@ -3000,64 +3279,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
         </Card>
       )}
 
-      {/* Mode: Select Page (200-item upload only) */}
-      {mode === 'select-page' && capturedImage && (
-        <Card className="overflow-hidden">
-          <div className="bg-emerald-800 text-white px-4 py-3 text-center">
-            <p className="text-sm font-semibold">200-Item Exam — Which page did you upload?</p>
-            <p className="text-xs opacity-70 mt-0.5">Select the page that matches your uploaded image before processing.</p>
-          </div>
-          <div className="p-4 space-y-4">
-            {/* Thumbnail */}
-            <div className="flex justify-center">
-              <img
-                src={capturedImage}
-                alt="Uploaded answer sheet"
-                className="max-h-48 rounded-lg border border-gray-200 object-contain shadow"
-              />
-            </div>
-            {/* Page buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setScanPage(1);
-                  setPage1Answers([]);
-                  setPage1StudentId('');
-                  setMode('processing');
-                }}
-                className="flex-1 py-3 rounded-xl font-bold text-sm border-2 border-emerald-700 text-emerald-800 hover:bg-emerald-50 transition-all"
-              >
-                Page 1
-                <span className="block text-xs font-normal text-gray-500 mt-0.5">Questions 1–100</span>
-              </button>
-              <button
-                onClick={() => {
-                  setScanPage(2);
-                  setMode('processing');
-                }}
-                className="flex-1 py-3 rounded-xl font-bold text-sm border-2 border-emerald-700 text-emerald-800 hover:bg-emerald-50 transition-all"
-              >
-                Page 2
-                <span className="block text-xs font-normal text-gray-500 mt-0.5">Questions 101–200</span>
-              </button>
-            </div>
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setCapturedImage(null);
-                  setMode('camera');
-                  startCamera();
-                }}
-              >
-                <X className="w-4 h-4 mr-1" />
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
+      {/* Mode: Select Page - REMOVED - now using auto-detection from page indicator bubbles */}
 
       {/* Mode: Processing */}
       {mode === 'processing' && (
@@ -3095,7 +3317,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               {scanPage === 1 ? (
                 <>
                   <span className="bg-blue-200 text-blue-900 rounded px-2 py-0.5 text-xs font-bold">Page 1 of 2</span>
-                  <span>Showing Q1–100 · {scanResult.score}/{scanResult.totalQuestions} correct</span>
+                  <span>Showing Q1–100 · {scanResult.score}/{exam.num_items} correct</span>
                 </>
               ) : (
                 <>
@@ -3104,8 +3326,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                   </span>
                   <span>
                     {page1Answers.length > 0
-                      ? `Q1–200 · ${scanResult.score}/${scanResult.totalQuestions} correct`
-                      : `Q101–200 · ${scanResult.score}/${scanResult.totalQuestions} correct`}
+                      ? `Q1–200 · ${scanResult.score}/${exam.num_items} correct`
+                      : `Q101–200 · ${scanResult.score}/${exam.num_items} correct`}
                   </span>
                 </>
               )}
@@ -3330,7 +3552,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
               startCamera();
             }}>
               <X className="w-4 h-4 mr-2" />
-              Discard & Scan Again
+              Rescan
             </Button>
 
             <Button
@@ -3367,6 +3589,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             <h3 className="text-lg font-bold text-slate-800 mb-4">Answer Comparison</h3>
             
             {(() => {
+              // For 200-item exams, detectedAnswers is always the full 200-item array
+              // No offset needed - just display all items as-is
               const halfPoint = Math.ceil(detectedAnswers.length / 2);
               const firstRow = detectedAnswers.slice(0, halfPoint);
               const secondRow = detectedAnswers.slice(halfPoint);
@@ -3377,31 +3601,31 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                     <p className="text-sm font-semibold text-slate-500 mb-2">Questions 1-{halfPoint}</p>
                     <div className="grid grid-cols-5 sm:grid-cols-10 gap-3">
                       {firstRow.map((answer, i) => {
-                        const isCorrect = answerKey[i] && answer.toUpperCase() === answerKey[i].toUpperCase();
-                        const hasMultiple = multipleAnswerQuestions.includes(i + 1);
+                        const displayNum = i + 1;
+                        // Normalize answer to empty string if null/undefined
+                        const normalizedAnswer = (answer === null || answer === undefined) ? '' : String(answer);
+                        const isCorrect = answerKey[i] && normalizedAnswer && normalizedAnswer.toUpperCase() === answerKey[i].toUpperCase();
+                        const hasMultiple = multipleAnswerQuestions.includes(displayNum);
                         return (
                           <div key={i} className="text-center">
-                            <span className={`text-xs block mb-1 ${hasMultiple ? 'text-orange-600 font-bold' : 'text-slate-400'}`}>{i + 1}</span>
+                            <span className={`text-xs block mb-1 ${hasMultiple ? 'text-red-600 font-bold' : 'text-slate-400'}`}>{displayNum}</span>
                             <div className="relative">
                               <input
                                 type="text"
-                                value={answer}
+                                value={normalizedAnswer}
                                 onChange={(e) => editAnswer(i, e.target.value)}
                                 maxLength={1}
                                 className={`w-10 h-10 text-center font-bold rounded-lg border-2 transition-colors ${
                                   hasMultiple
-                                    ? 'border-orange-500 bg-orange-50 text-orange-700 ring-2 ring-orange-200'
+                                    ? 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-200'
                                     : isCorrect 
                                       ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
-                                      : answer 
+                                      : normalizedAnswer 
                                         ? 'border-rose-500 bg-rose-50 text-rose-700'
                                         : 'border-gray-200 bg-gray-50 text-gray-400'
                                 }`}
                               />
-                              {hasMultiple && (
-                                <AlertTriangle className="absolute -top-2 -right-2 w-4 h-4 text-orange-500" />
-                              )}
-                              {answerKey[i] && !isCorrect && (
+                              {answerKey[i] && !isCorrect && normalizedAnswer && (
                                 <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-yellow-600 font-semibold">
                                   {answerKey[i]}
                                 </span>
@@ -3419,31 +3643,31 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
                       <div className="grid grid-cols-5 sm:grid-cols-10 gap-3">
                         {secondRow.map((answer, i) => {
                           const actualIndex = halfPoint + i;
-                          const isCorrect = answerKey[actualIndex] && answer.toUpperCase() === answerKey[actualIndex].toUpperCase();
-                          const hasMultiple = multipleAnswerQuestions.includes(actualIndex + 1);
+                          const displayNum = actualIndex + 1;
+                          // Normalize answer to empty string if null/undefined
+                          const normalizedAnswer = (answer === null || answer === undefined) ? '' : String(answer);
+                          const isCorrect = answerKey[actualIndex] && normalizedAnswer && normalizedAnswer.toUpperCase() === answerKey[actualIndex].toUpperCase();
+                          const hasMultiple = multipleAnswerQuestions.includes(displayNum);
                           return (
                             <div key={actualIndex} className="text-center">
-                              <span className={`text-xs block mb-1 ${hasMultiple ? 'text-orange-600 font-bold' : 'text-slate-400'}`}>{actualIndex + 1}</span>
+                              <span className={`text-xs block mb-1 ${hasMultiple ? 'text-red-600 font-bold' : 'text-slate-400'}`}>{displayNum}</span>
                               <div className="relative">
                                 <input
                                   type="text"
-                                  value={answer}
+                                  value={normalizedAnswer}
                                   onChange={(e) => editAnswer(actualIndex, e.target.value)}
                                   maxLength={1}
                                   className={`w-10 h-10 text-center font-bold rounded-lg border-2 transition-colors ${
                                     hasMultiple
-                                      ? 'border-orange-500 bg-orange-50 text-orange-700 ring-2 ring-orange-200'
+                                      ? 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-200'
                                       : isCorrect 
                                         ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
-                                        : answer 
+                                        : normalizedAnswer 
                                           ? 'border-rose-500 bg-rose-50 text-rose-700'
                                           : 'border-gray-200 bg-gray-50 text-gray-400'
                                   }`}
                                 />
-                                {hasMultiple && (
-                                  <AlertTriangle className="absolute -top-2 -right-2 w-4 h-4 text-orange-500" />
-                                )}
-                                {answerKey[actualIndex] && !isCorrect && (
+                                {answerKey[actualIndex] && !isCorrect && normalizedAnswer && (
                                   <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-yellow-600 font-semibold">
                                     {answerKey[actualIndex]}
                                   </span>
@@ -3479,10 +3703,8 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             </div>
             {multipleAnswerQuestions.length > 0 && (
               <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 bg-orange-50 border-2 border-orange-500 rounded relative">
-                  <AlertTriangle className="absolute -top-1 -right-1 w-3 h-3 text-orange-500" />
-                </div>
-                <span className="text-orange-700 font-medium">Multiple answers</span>
+                <div className="w-4 h-4 bg-red-50 border-2 border-red-500 rounded" />
+                <span className="text-red-700 font-medium">Multiple answers</span>
               </div>
             )}
           </div>

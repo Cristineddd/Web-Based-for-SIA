@@ -39,7 +39,7 @@ import { AuditLogger } from "@/services/auditLogger";
 import { InstructorSettingsService } from "@/services/instructorSettingsService";
 import { TemplateService } from "@/services/templateService";
 import * as XLSX from "xlsx";
-import { setPendingImage, setPendingPage } from "@/lib/omrImageStore";
+import { setPendingImage } from "@/lib/omrImageStore";
 
 interface ExamDetailsProps {
   params: { id: string };
@@ -76,7 +76,6 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [scannedCount, setScannedCount] = useState(0);
   const [activeTab, setActiveTab] = useState("key_answer");
-  const [uploadPage, setUploadPage] = useState<1 | 2>(1);
   const [answerKey, setAnswerKey] = useState<Record<number, string>>({});
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [existingKeyId, setExistingKeyId] = useState<string | null>(null);
@@ -789,32 +788,12 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
               </div>
 
               <div className="px-6 py-6 space-y-6">
-                {/* Page selector for 200-item exams */}
+                {/* Auto-detection info for 200-item exams */}
                 {exam && exam.num_items > 150 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-gray-700">Which page are you scanning?</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setUploadPage(1)}
-                        className={`px-5 py-2 rounded-lg text-sm font-bold border-2 transition-all ${
-                          uploadPage === 1
-                            ? 'border-green-600 bg-green-600 text-white shadow-sm'
-                            : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
-                        }`}
-                      >
-                        Page 1 · Q1–100
-                      </button>
-                      <button
-                        onClick={() => setUploadPage(2)}
-                        className={`px-5 py-2 rounded-lg text-sm font-bold border-2 transition-all ${
-                          uploadPage === 2
-                            ? 'border-green-600 bg-green-600 text-white shadow-sm'
-                            : 'border-gray-200 text-gray-600 hover:border-green-400 hover:text-green-700'
-                        }`}
-                      >
-                        Page 2 · Q101–200
-                      </button>
-                    </div>
+                  <div className="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <p className="text-sm text-emerald-800">
+                      <span className="font-semibold">Auto-detection enabled:</span> The scanner will automatically identify which page (Q1-100 or Q101-200) you're scanning.
+                    </p>
                   </div>
                 )}
 
@@ -848,9 +827,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   reader.onload = (ev) => {
                     const dataUrl = ev.target?.result as string;
                     setPendingImage(dataUrl);
-                    if (exam && exam.num_items > 150) {
-                      setPendingPage(uploadPage);
-                    }
+                    // Auto-detection will identify the page automatically
                     router.push(`/exams/${params.id}/scan-papers`);
                   };
                   reader.readAsDataURL(file);
