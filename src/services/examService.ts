@@ -8,6 +8,8 @@ import {
   deleteDoc,
   query,
   where,
+  arrayUnion,
+  arrayRemove,
   serverTimestamp,
   writeBatch,
   type DocumentData,
@@ -68,6 +70,11 @@ async function deleteDocsByQuery(q: Query<DocumentData>): Promise<number> {
   }
 }
 
+export interface TaggedClass {
+  classId: string;
+  className: string;
+}
+
 export interface Exam {
   id: string;
   title: string;
@@ -79,17 +86,18 @@ export interface Exam {
   answer_keys: string[];
   generated_sheets: GeneratedSheet[];
   createdBy?: string;
-  instructorId?: string; // Instructor ID for the exam creator
+  instructorId?: string;
   updatedAt?: string;
   className?: string;
-  classId?: string; // Class ID linking exam to a class
+  classId?: string; // Legacy: first tagged class (kept for backward compat)
+  taggedClasses?: TaggedClass[]; // NEW: many-to-many class tagging
   examType?: "board" | "diagnostic";
   choicePoints?: { [choice: string]: number };
   isArchived?: boolean;
   archivedAt?: string;
-  examCode?: string; // Unique exam code for template validation (e.g., "EX-A1B2C3")
-  courseCode?: string; // Course code printed on answer sheet (e.g., "CS101")
-  status?: "draft" | "final"; // Status to control editability
+  examCode?: string;
+  courseCode?: string;
+  status?: "draft" | "final";
   institutionName?: string;
   logoUrl?: string;
   scannedCount?: number;
@@ -179,17 +187,21 @@ export async function createExam(
       created_at: formData.date,
       answer_keys: [],
       generated_sheets: [],
-      createdBy: userId, // Keep userId for backward compatibility
-      ...(instructorId && { instructorId: instructorId }), // Only include if not undefined
+      createdBy: userId,
+      ...(instructorId && { instructorId: instructorId }),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       className: formData.className || null,
       classId: formData.classId || null,
+      // Many-to-many: seed taggedClasses from initial class if provided
+      taggedClasses: formData.classId && formData.className
+        ? [{ classId: formData.classId, className: formData.className }]
+        : [],
       examType: formData.examType || "board",
       choicePoints: formData.choicePoints || {},
-      examCode: examCode, // Unique code for template validation
+      examCode: examCode,
       isArchived: false,
-      status: "draft", // New field: initial status is draft
+      status: "draft",
     };
     const docRef = await addDoc(collection(db, "exams"), examData);
 
@@ -204,13 +216,14 @@ export async function createExam(
       answer_keys: examData.answer_keys,
       generated_sheets: examData.generated_sheets,
       createdBy: userId,
-      ...(instructorId && { instructorId: instructorId }), // Include instructorId in return value
+      ...(instructorId && { instructorId: instructorId }),
       updatedAt: new Date().toISOString(),
       className: examData.className || undefined,
       classId: examData.classId || undefined,
+      taggedClasses: examData.taggedClasses,
       examType: examData.examType || "board",
       choicePoints: examData.choicePoints,
-      examCode: examCode, // Include examCode in return value
+      examCode: examCode,
     };
 
     return newExam;
@@ -355,6 +368,7 @@ export async function getExams(userId?: string): Promise<Exam[]> {
             new Date().toISOString(),
           className: data.className || undefined,
           classId: data.classId || undefined,
+          taggedClasses: data.taggedClasses || [],
           isArchived: data.isArchived,
           examCode: examCode,
         });
@@ -427,10 +441,11 @@ export async function getExamById(examId: string): Promise<Exam | null> {
         data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
       className: data.className || undefined,
       classId: data.classId || undefined,
+      taggedClasses: data.taggedClasses || [],
       examType: (data.examType as "board" | "diagnostic") || "board",
       choicePoints: data.choicePoints || {},
       isArchived: data.isArchived || false,
-      examCode: examCode, // Include exam code for template validation
+      examCode: examCode,
       status: (data.status as "draft" | "final") || "draft",
       institutionName: data.institutionName,
       logoUrl: data.logoUrl,
@@ -655,48 +670,135 @@ export async function addGeneratedSheetToExam(
 }
 
 /**
- * Get all exams for a specific class ID
+ * Get all exams tagged to a specific class (supports many-to-many)
+ * Queries both new taggedClasses array and legacy classId field
  */
 export async function getExamsByClassId(classId: string): Promise<Exam[]> {
   try {
-    const q = query(
-      collection(db, "exams"),
-      where("classId", "==", classId)
-    );
-    const querySnapshot = await getDocs(q);
-    const exams: Exam[] = [];
+    // We fetch by legacy classId AND all exams and filter taggedClasses client-side.
+    // Firestore does not support array-contains with partial object matching.
+    const [legacySnap, allTaggedSnap] = await Promise.all([
+      getDocs(query(collection(db, "exams"), where("classId", "==", classId))),
+      getDocs(query(collection(db, "exams"))),
+    ]);
 
-    querySnapshot.forEach((docSnap) => {
+    const examMap = new Map<string, Exam>();
+
+    const mapDoc = (docSnap: QueryDocumentSnapshot<DocumentData>) => {
       const data = docSnap.data();
-      // Filter out archived exams client-side to be safe with missing fields
-      if (data.isArchived !== true) {
-        exams.push({
-          id: docSnap.id,
-          title: data.title,
-          subject: data.subject,
-          num_items: data.num_items,
-          choices_per_item: data.choices_per_item,
-          created_at:
-            data.created_at ||
-            data.createdAt?.toDate?.().toISOString() ||
-            new Date().toISOString(),
-          answer_keys: data.answer_keys || [],
-          generated_sheets: data.generated_sheets || [],
-          createdBy: data.createdBy,
-          updatedAt:
-            data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
-          className: data.className || undefined,
-          classId: data.classId || undefined,
-          isArchived: data.isArchived || false,
-          examCode: data.examCode,
-        });
+      if (data.isArchived === true) return;
+      const exam: Exam = {
+        id: docSnap.id,
+        title: data.title,
+        subject: data.subject,
+        num_items: data.num_items,
+        choices_per_item: data.choices_per_item,
+        created_at:
+          data.created_at ||
+          data.createdAt?.toDate?.().toISOString() ||
+          new Date().toISOString(),
+        answer_keys: data.answer_keys || [],
+        generated_sheets: data.generated_sheets || [],
+        createdBy: data.createdBy,
+        updatedAt:
+          data.updatedAt?.toDate?.().toISOString() || new Date().toISOString(),
+        className: data.className || undefined,
+        classId: data.classId || undefined,
+        taggedClasses: data.taggedClasses || [],
+        isArchived: data.isArchived || false,
+        examCode: data.examCode,
+        status: data.status,
+      };
+      examMap.set(docSnap.id, exam);
+    };
+
+    // Add legacy classId matches
+    legacySnap.docs.forEach(mapDoc);
+
+    // Add new taggedClasses matches (filter client-side)
+    allTaggedSnap.docs.forEach((docSnap) => {
+      const data = docSnap.data();
+      const tagged: TaggedClass[] = data.taggedClasses || [];
+      if (tagged.some((t) => t.classId === classId)) {
+        mapDoc(docSnap);
       }
     });
 
-    return exams;
+    return Array.from(examMap.values()).sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   } catch (error) {
     console.error("Error fetching exams by class ID:", error);
     throw new Error("Failed to fetch exams for this class");
+  }
+}
+
+/**
+ * Tag an exam to a class (many-to-many). Does NOT remove existing tags.
+ */
+export async function tagExamToClass(
+  examId: string,
+  classId: string,
+  className: string,
+): Promise<void> {
+  try {
+    const docRef = doc(db, "exams", examId);
+    const examSnap = await getDoc(docRef);
+    if (!examSnap.exists()) throw new Error("Exam not found");
+
+    const data = examSnap.data();
+    const taggedClasses: TaggedClass[] = data.taggedClasses || [];
+
+    // Avoid duplicates
+    if (taggedClasses.some((t) => t.classId === classId)) return;
+
+    const newTag: TaggedClass = { classId, className };
+
+    // Also update legacy fields if this is the first tag
+    const isFirst = taggedClasses.length === 0 && !data.classId;
+
+    await updateDoc(docRef, {
+      taggedClasses: arrayUnion(newTag),
+      ...(isFirst && { classId, className }),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error tagging exam to class:", error);
+    throw new Error("Failed to tag exam to class");
+  }
+}
+
+/**
+ * Remove a class tag from an exam.
+ */
+export async function untagExamFromClass(
+  examId: string,
+  classId: string,
+): Promise<void> {
+  try {
+    const docRef = doc(db, "exams", examId);
+    const examSnap = await getDoc(docRef);
+    if (!examSnap.exists()) throw new Error("Exam not found");
+
+    const data = examSnap.data();
+    const taggedClasses: TaggedClass[] = data.taggedClasses || [];
+    const tagToRemove = taggedClasses.find((t) => t.classId === classId);
+    if (!tagToRemove) return;
+
+    // Determine new legacy classId/className after removal
+    const remaining = taggedClasses.filter((t) => t.classId !== classId);
+    const newLegacy = remaining.length > 0
+      ? { classId: remaining[0].classId, className: remaining[0].className }
+      : { classId: null, className: null };
+
+    await updateDoc(docRef, {
+      taggedClasses: arrayRemove(tagToRemove),
+      ...newLegacy,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error untagging exam from class:", error);
+    throw new Error("Failed to untag exam from class");
   }
 }
 

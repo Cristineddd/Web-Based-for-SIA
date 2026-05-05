@@ -214,7 +214,7 @@ export function CreateExamModal({
       toast.error("Please enter an exam name");
       return;
     }
-    if (!formData.className) {
+    if (!formData.className && !classId) {
       toast.error("Please select a class");
       return;
     }
@@ -337,7 +337,8 @@ export function CreateExamModal({
                 />
               </div>
 
-              {!formData.classId || !simpleMode ? (
+              {/* Only show "Tag Class" dropdown when NOT opened from inside a class */}
+              {!classId ? (
                 <div className="space-y-2">
                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
                     Tag Class
@@ -354,10 +355,7 @@ export function CreateExamModal({
                         if (c) {
                           handleInputChange("className", c.class_name);
                           handleInputChange("classId", c.id);
-                          handleInputChange(
-                            "folder",
-                            c.course_subject || "General",
-                          );
+                          handleInputChange("folder", c.course_subject || "General");
                         }
                       }}
                     >
@@ -366,18 +364,10 @@ export function CreateExamModal({
                       </SelectTrigger>
                       <SelectContent className="bg-white">
                         {classes.map((c) => (
-                          <SelectItem
-                            key={c.id}
-                            value={c.id}
-                            className="cursor-pointer"
-                          >
+                          <SelectItem key={c.id} value={c.id} className="cursor-pointer">
                             <div className="flex flex-col">
-                              <span className="font-medium text-gray-800">
-                                {c.class_name}
-                              </span>
-                              <span className="text-xs text-gray-400">
-                                {c.course_subject}
-                              </span>
+                              <span className="font-medium text-gray-800">{c.class_name}</span>
+                              <span className="text-xs text-gray-400">{c.course_subject}</span>
                             </div>
                           </SelectItem>
                         ))}
@@ -386,25 +376,14 @@ export function CreateExamModal({
                   )}
                 </div>
               ) : (
+                /* When opened from inside a class, show the pre-filled class as read-only info */
                 <div className="space-y-2">
-<label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
-  Course
-</label>
-<Select
-  value={formData.folder}
-  onValueChange={(val) => handleInputChange("folder", val)}
->
-  <SelectTrigger className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all">
-    <SelectValue placeholder="Choose Course..." />
-  </SelectTrigger>
-  <SelectContent className="bg-white">
-    {[...new Set(classes.map((c) => c.course_subject).filter(Boolean))].map((subject) => (
-      <SelectItem key={subject} value={subject}>
-        {subject}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    Class
+                  </label>
+                  <div className="w-full px-4 py-3 border border-gray-100 rounded-lg bg-gray-50 text-[14px] text-gray-700 font-medium">
+                    {className || formData.className}
+                  </div>
                 </div>
               )}
 
