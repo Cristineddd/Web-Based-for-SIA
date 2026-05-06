@@ -21,7 +21,7 @@ export default function Settings() {
   const { user } = useAuth();
 
   const [settings, setSettings] = useState<InstructorSettings>({
-    passingThreshold: 60,
+    passingThreshold: 75,
     institutionName: "Gordon College",
     timezone: "UTC-8:00 (Philippine Time)",
   });
