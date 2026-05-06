@@ -470,10 +470,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       XLSX.utils.book_append_sheet(wb, ws, "Roster");
-      XLSX.writeFile(
-        wb,
-        `${classData?.class_name || "class"}_${classData?.course_subject || "roster"}.xlsx`,
-      );
+      XLSX.writeFile(wb, `${classData?.class_name || "class"}_${classData?.course_subject || "roster"}.xlsx`);
       toast.success(`Exported ${students.length} student(s) successfully`);
     } catch (err) {
       console.error("Export error:", err);
@@ -542,17 +539,25 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       }
 
       // First name validation
-      if (!student.first_name || !/^[a-zA-ZñÑ\s]+$/.test(student.first_name)) {
+      if (
+        !student.first_name ||
+        !/^[a-zA-ZñÑ\s]+$/.test(student.first_name) ||
+        student.first_name.length < 4
+      ) {
         toast.error(
-          `Student ${i + 1}: First name is required and must contain only letters`,
+          `Student ${i + 1}: First name must be at least 4 characters and contain only letters`,
         );
         return;
       }
 
       // Last name validation
-      if (!student.last_name || !/^[a-zA-ZñÑ\s]+$/.test(student.last_name)) {
+      if (
+        !student.last_name ||
+        !/^[a-zA-ZñÑ\s]+$/.test(student.last_name) ||
+        student.last_name.length < 4
+      ) {
         toast.error(
-          `Student ${i + 1}: Last name is required and must contain only letters`,
+          `Student ${i + 1}: Last name must be at least 4 characters and contain only letters`,
         );
         return;
       }
@@ -560,8 +565,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       // Email validation (optional but must be valid if provided)
       if (student.email && student.email.trim()) {
         const email = student.email.trim();
-        const emailRegex =
-          /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         if (!emailRegex.test(email)) {
           toast.error(`Student ${i + 1}: Invalid email format`);
           return;
@@ -596,22 +600,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      [
-        "Student ID",
-        "First Name",
-        "Last Name",
-        "Middle Name (Optional)",
-        "Email (Optional)",
-      ],
+      ["Student ID", "First Name", "Last Name", "Middle Name (Optional)", "Email (Optional)"],
       ["201234567", "Juan", "Dela Cruz", "Santos", "juan@example.com"],
     ]);
-    ws["!cols"] = [
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 25 },
-      { wch: 30 },
-    ];
+    ws["!cols"] = [{ wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 30 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
     XLSX.writeFile(wb, "student_import_template.xlsx");
@@ -621,24 +613,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     if (!classData) return;
     const errors: string[] = [];
     editingStudentsData.forEach((s, i) => {
-      if (
-        !s.student_id ||
-        !/^\d{9}$/.test(s.student_id) ||
-        !s.student_id.startsWith("20")
-      )
+      if (!s.student_id || !/^\d{9}$/.test(s.student_id) || !s.student_id.startsWith("20"))
         errors.push(`Row ${i + 1}: Invalid Student ID "${s.student_id}"`);
-      else if (!s.first_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.first_name))
+      else if (!s.first_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.first_name) || s.first_name.length < 4)
         errors.push(`Row ${i + 1}: Invalid First Name`);
-      else if (!s.last_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.last_name))
+      else if (!s.last_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.last_name) || s.last_name.length < 4)
         errors.push(`Row ${i + 1}: Invalid Last Name`);
     });
     if (errors.length > 0) {
-      toast.error(
-        errors.slice(0, 3).join("\n") +
-          (errors.length > 3
-            ? `\n...and ${errors.length - 3} more`
-            : ""),
-      );
+      toast.error(errors.slice(0, 3).join("\n") + (errors.length > 3 ? `\n...and ${errors.length - 3} more` : ""));
       return;
     }
     const ids = editingStudentsData.map((s) => s.student_id);
@@ -661,9 +644,7 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     }
   };
 
-  const handleImportStudents = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleImportStudents = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -712,7 +693,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         }) as unknown[][];
 
         if (aoa.length < 2) {
-          toast.error("No student rows detected. Please check the template format.");
+          toast.error(
+            "No student rows detected. Please check the template format.",
+          );
           return;
         }
 
@@ -749,7 +732,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           // Fallback: assume A=StudentID, B=FirstName, C=LastName, D=MiddleName, E=Email
           parsed = aoa
             .slice(1)
-            .filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
+            .filter((row) =>
+              row.some((cell) => String(cell ?? "").trim() !== ""),
+            )
             .map((row) => {
               const student_id = String(row[0] ?? "").trim();
               const first_name = String(row[1] ?? "").trim();
@@ -767,14 +752,17 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         } else {
           parsed = aoa
             .slice(1)
-            .filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""))
+            .filter((row) =>
+              row.some((cell) => String(cell ?? "").trim() !== ""),
+            )
             .map((row) => {
               const student_id = String(row[colStudentId] ?? "").trim();
               const first_name = String(row[colFirst] ?? "").trim();
               const last_name = String(row[colLast] ?? "").trim();
               const middle_name =
                 colMiddle >= 0 ? String(row[colMiddle] ?? "").trim() : "";
-              const email = colEmail >= 0 ? String(row[colEmail] ?? "").trim() : "";
+              const email =
+                colEmail >= 0 ? String(row[colEmail] ?? "").trim() : "";
               return {
                 student_id,
                 first_name,
@@ -786,24 +774,37 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         }
 
         if (parsed.length === 0) {
-          toast.error("No student rows detected. Please check the template format.");
+          toast.error(
+            "No student rows detected. Please check the template format.",
+          );
           return;
         }
 
         // Validation (block blanks)
-        const emailRegex =
-          /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         const invalidRows: string[] = [];
         parsed.forEach((s, i) => {
-          if (!s.student_id || !/^\d{9}$/.test(s.student_id) || !s.student_id.startsWith("20")) {
+          if (
+            !s.student_id ||
+            !/^\d{9}$/.test(s.student_id) ||
+            !s.student_id.startsWith("20")
+          ) {
             invalidRows.push(`Row ${i + 2}: Invalid Student ID`);
             return;
           }
-          if (!s.first_name || !/^[a-zA-ZñÑ\s]+$/.test(s.first_name)) {
+          if (
+            !s.first_name ||
+            !/^[a-zA-ZñÑ\s]+$/.test(s.first_name) ||
+            s.first_name.length < 4
+          ) {
             invalidRows.push(`Row ${i + 2}: Invalid First Name`);
             return;
           }
-          if (!s.last_name || !/^[a-zA-ZñÑ\s]+$/.test(s.last_name)) {
+          if (
+            !s.last_name ||
+            !/^[a-zA-ZñÑ\s]+$/.test(s.last_name) ||
+            s.last_name.length < 4
+          ) {
             invalidRows.push(`Row ${i + 2}: Invalid Last Name`);
             return;
           }
@@ -833,7 +834,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           return;
         }
 
-        const existingIds = new Set(classData.students.map((s) => s.student_id));
+        const existingIds = new Set(
+          classData.students.map((s) => s.student_id),
+        );
         const conflicts = parsed.filter((s) => existingIds.has(s.student_id));
         if (conflicts.length > 0) {
           toast.error(
@@ -850,14 +853,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
             students: newStudents,
             updatedAt: new Date().toISOString(),
           });
-          toast.success(
-            `Imported ${parsed.length} student(s) — saved automatically.`,
-          );
+          toast.success(`Imported ${parsed.length} student(s) — saved automatically.`);
         } catch (saveErr) {
           console.error("Auto-save after import failed:", saveErr);
-          toast.error(
-            `Imported ${parsed.length} student(s) locally, but save failed. Please retry.`,
-          );
+          toast.error(`Imported ${parsed.length} student(s) locally, but save failed. Please retry.`);
         }
       } catch (err) {
         console.error("Error importing students:", err);
@@ -873,7 +872,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
   // ── Field validators (called on every onChange for real-time feedback) ──
   const LETTERS_ONLY = /^[a-zA-ZñÑ\s.]+$/;
 
-  const validateStudentId = (value: string, students: BaseStudent[]): string => {
+  const validateStudentId = (
+    value: string,
+    students: BaseStudent[],
+  ): string => {
     if (!value) return "Student ID is required";
     if (!/^\d+$/.test(value))
       return "Numbers only — letters and symbols not allowed";
@@ -1008,11 +1010,2109 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     }
   };
 
-  // ... rest of file unchanged ...
+  const handleRemoveStudent = (studentId: string) => {
+    if (!classData) return;
+    const updatedStudents = classData.students.filter(
+      (s) => s.student_id !== studentId,
+    );
+    setClassData({ ...classData, students: updatedStudents });
+    toast.success("Student removed from roster");
+  };
+
+  const handleSort = (
+    field: "student_id" | "first_name" | "last_name" | "middle_name",
+  ) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder("asc");
+    }
+  };
+
+  const handleTagExam = async (examId: string) => {
+    if (!classData || !examId) return;
+
+    const selectedExam = allExams.find((e) => e.id === examId);
+    if (!selectedExam) return;
+
+    try {
+      // Use proper many-to-many tagging
+      await tagExamToClass(examId, classData.id, classData.class_name);
+
+      toast.success(`Tagged "${selectedExam.title}" to this class`);
+
+      // Refresh exams list
+      const updatedExams = await getExamsByClassId(classData.id);
+      setExams(updatedExams);
+      setStats((prev) => ({ ...prev, examCount: updatedExams.length }));
+
+      // Remove from "available to tag" list
+      setAllExams((prev) => prev.filter((e) => e.id !== examId));
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to tag exam");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== "stats" || !classData) return;
+
+    let isMounted = true;
+
+    const loadStatsData = async () => {
+      setStatsLoading(true);
+      try {
+        const studentMap = new Map<string, StudentStatsRow>();
+        (classData.students || []).forEach((student) => {
+          const middleName = (student as Student).middle_name?.trim();
+          const fullName = middleName
+            ? `${student.last_name}, ${student.first_name} ${middleName}`
+            : `${student.last_name}, ${student.first_name}`;
+          studentMap.set(student.student_id, {
+            studentId: student.student_id,
+            studentName: fullName,
+            email: student.email,
+            exams: {},
+          });
+        });
+
+        const summaryMap = new Map<string, ExamStatsSummary>();
+        const rosterByNormalizedId = new Map(
+          (classData.students || []).map((student) => [
+            student.student_id.trim().toLowerCase(),
+            student,
+          ]),
+        );
+
+        await Promise.all(
+          exams.map(async (exam) => {
+            const scannedResult = await ScanningService.getScannedResultsByExamId(
+              exam.id,
+            );
+            if (!scannedResult.success || !scannedResult.data) {
+              throw new Error(
+                scannedResult.error || `Failed to load scans for ${exam.title}`,
+              );
+            }
+
+            const deduped = dedupeLatestByStudent(
+              scannedResult.data.filter((row) => !row.isNullId),
+            );
+
+            let passCount = 0;
+            let failCount = 0;
+            let totalPercentage = 0;
+
+            deduped.forEach((row) => {
+              const normalizedStudentId = row.studentId.trim().toLowerCase();
+              const rosterStudent = rosterByNormalizedId.get(normalizedStudentId);
+              const canonicalStudentId =
+                rosterStudent?.student_id || row.studentId.trim();
+              const percentage =
+                row.totalQuestions > 0
+                  ? Math.round((row.score / row.totalQuestions) * 100)
+                  : 0;
+              const status: StudentExamStatus =
+                percentage >= PASSING_THRESHOLD ? "Passed" : "Failed";
+              const grade = calculateLetterGrade(percentage);
+
+              if (status === "Passed") passCount += 1;
+              else failCount += 1;
+              totalPercentage += percentage;
+
+              const existing =
+                studentMap.get(canonicalStudentId) ||
+                ({
+                  studentId: canonicalStudentId,
+                  studentName: rosterStudent
+                    ? `${rosterStudent.last_name}, ${rosterStudent.first_name}`
+                    : canonicalStudentId,
+                  email: rosterStudent?.email,
+                  exams: {},
+                } as StudentStatsRow);
+
+              existing.exams[exam.id] = {
+                examId: exam.id,
+                examTitle: exam.title,
+                subject: exam.subject || classData.course_subject || "General",
+                score: row.score,
+                totalQuestions: row.totalQuestions,
+                percentage,
+                grade,
+                status,
+                date: normalizeScannedDate(row.scannedAt),
+              };
+              studentMap.set(canonicalStudentId, existing);
+            });
+
+            summaryMap.set(exam.id, {
+              examId: exam.id,
+              examTitle: exam.title,
+              subject: exam.subject || classData.course_subject || "General",
+              scannedCount: deduped.length,
+              averagePercentage:
+                deduped.length > 0
+                  ? Math.round(totalPercentage / deduped.length)
+                  : 0,
+              passCount,
+              failCount,
+            });
+          }),
+        );
+
+        if (!isMounted) return;
+
+        const summaries = exams.map(
+          (exam) =>
+            summaryMap.get(exam.id) || {
+              examId: exam.id,
+              examTitle: exam.title,
+              subject: exam.subject || classData.course_subject || "General",
+              scannedCount: 0,
+              averagePercentage: 0,
+              passCount: 0,
+              failCount: 0,
+            },
+        );
+
+        const rows = Array.from(studentMap.values()).sort((a, b) =>
+          a.studentName.localeCompare(b.studentName),
+        );
+
+        setExamStatsSummaries(summaries);
+        setStudentStatsRows(rows);
+        setStatsExamFilter((prev) =>
+          prev === "all" || summaries.some((summary) => summary.examId === prev)
+            ? prev
+            : "all",
+        );
+      } catch (error) {
+        console.error("Error loading class stats data:", error);
+        toast.error("Failed to load stats data");
+        if (isMounted) {
+          setExamStatsSummaries([]);
+          setStudentStatsRows([]);
+        }
+      } finally {
+        if (isMounted) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
+    loadStatsData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, classData, exams]);
+
+  const displayedExamSummaries = useMemo(() => {
+    if (statsExamFilter === "all") return examStatsSummaries;
+    return examStatsSummaries.filter(
+      (summary) => summary.examId === statsExamFilter,
+    );
+  }, [examStatsSummaries, statsExamFilter]);
+
+  const displayedExamIds = useMemo(
+    () => displayedExamSummaries.map((summary) => summary.examId),
+    [displayedExamSummaries],
+  );
+
+  const classAverage = useMemo(() => {
+    const totalScanned = displayedExamSummaries.reduce(
+      (sum, summary) => sum + summary.scannedCount,
+      0,
+    );
+    if (totalScanned === 0) return null;
+
+    const weightedSum = displayedExamSummaries.reduce(
+      (sum, summary) =>
+        sum + summary.averagePercentage * summary.scannedCount,
+      0,
+    );
+    return Math.round(weightedSum / totalScanned);
+  }, [displayedExamSummaries]);
+
+  const totalPassCount = useMemo(
+    () =>
+      displayedExamSummaries.reduce(
+        (sum, summary) => sum + summary.passCount,
+        0,
+      ),
+    [displayedExamSummaries],
+  );
+
+  const totalFailCount = useMemo(
+    () =>
+      displayedExamSummaries.reduce(
+        (sum, summary) => sum + summary.failCount,
+        0,
+      ),
+    [displayedExamSummaries],
+  );
+
+  const totalScans = useMemo(
+    () =>
+      displayedExamSummaries.reduce(
+        (sum, summary) => sum + summary.scannedCount,
+        0,
+      ),
+    [displayedExamSummaries],
+  );
+
+  const statsSearchableStudents = useMemo<SearchableStudent[]>(
+    () =>
+      studentStatsRows.map((row) => ({
+        studentId: row.studentId,
+        studentName: row.studentName,
+        email: row.email,
+      })),
+    [studentStatsRows],
+  );
+
+  const filteredStatsStudentRows = useMemo(() => {
+    if (statsSearchSelectedStudentId) {
+      return studentStatsRows.filter(
+        (row) => row.studentId === statsSearchSelectedStudentId,
+      );
+    }
+    const query = statsStudentSearch.trim().toLowerCase();
+    if (!query) return studentStatsRows;
+    return studentStatsRows.filter(
+      (row) =>
+        row.studentName.toLowerCase().includes(query) ||
+        row.studentId.toLowerCase().includes(query),
+    );
+  }, [studentStatsRows, statsStudentSearch, statsSearchSelectedStudentId]);
+
+  useEffect(() => {
+    if (!statsSearchSelectedStudentId) return;
+    const stillExists = studentStatsRows.some(
+      (row) => row.studentId === statsSearchSelectedStudentId,
+    );
+    if (!stillExists) {
+      setStatsSearchSelectedStudentId(null);
+      setStatsStudentSearch("");
+      setPendingStatsJumpStudentId(null);
+    }
+  }, [studentStatsRows, statsSearchSelectedStudentId]);
+
+  useEffect(() => {
+    if (!pendingStatsJumpStudentId) return;
+    const rowEl = document.getElementById(
+      `stats-student-row-${pendingStatsJumpStudentId}`,
+    );
+    if (!rowEl) return;
+
+    rowEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    rowEl.classList.add("bg-emerald-50");
+    window.setTimeout(() => {
+      rowEl.classList.remove("bg-emerald-50");
+    }, 1200);
+    setPendingStatsJumpStudentId(null);
+  }, [pendingStatsJumpStudentId, filteredStatsStudentRows]);
+
+  useEffect(() => {
+    setSelectedStatsStudentIds((prev) => {
+      const validIds = new Set(studentStatsRows.map((row) => row.studentId));
+      const next = new Set(
+        Array.from(prev).filter((studentId) => validIds.has(studentId)),
+      );
+      if (next.size === prev.size) return prev;
+      return next;
+    });
+  }, [studentStatsRows]);
+
+  const selectedFilteredStatsCount = useMemo(
+    () =>
+      filteredStatsStudentRows.filter((row) =>
+        selectedStatsStudentIds.has(row.studentId),
+      ).length,
+    [filteredStatsStudentRows, selectedStatsStudentIds],
+  );
+
+  const statsHeaderCheckboxState: boolean | "indeterminate" = useMemo(() => {
+    if (filteredStatsStudentRows.length === 0) return false;
+    if (selectedFilteredStatsCount === 0) return false;
+    if (selectedFilteredStatsCount === filteredStatsStudentRows.length) {
+      return true;
+    }
+    return "indeterminate";
+  }, [filteredStatsStudentRows.length, selectedFilteredStatsCount]);
+
+  const toggleStatsStudentSelection = useCallback(
+    (studentId: string, checked: boolean) => {
+      setSelectedStatsStudentIds((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(studentId);
+        else next.delete(studentId);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const toggleSelectAllStatsStudents = useCallback(
+    (checked: boolean) => {
+      setSelectedStatsStudentIds((prev) => {
+        const next = new Set(prev);
+        filteredStatsStudentRows.forEach((row) => {
+          if (checked) next.add(row.studentId);
+          else next.delete(row.studentId);
+        });
+        return next;
+      });
+    },
+    [filteredStatsStudentRows],
+  );
+
+  const buildClassScoreStudentsPayload = useCallback(
+    (
+      targetStudentIds: string[],
+      options?: { requireAttemptedExam?: boolean },
+    ) => {
+      if (!classData) return [];
+      const requireAttemptedExam = options?.requireAttemptedExam ?? false;
+
+      const statsByStudentId = new Map(
+        studentStatsRows.map((row) => [row.studentId, row]),
+      );
+      const rosterByStudentId = new Map(
+        (classData.students || []).map((student) => [student.student_id, student]),
+      );
+
+      const payload = targetStudentIds.map((studentId) => {
+        const roster = rosterByStudentId.get(studentId);
+        const statsRow = statsByStudentId.get(studentId);
+        const middleName = roster
+          ? (roster as Student).middle_name?.trim()
+          : undefined;
+        const fallbackName = statsRow?.studentName || studentId;
+        const fullName = roster
+          ? middleName
+            ? `${roster.last_name}, ${roster.first_name} ${middleName}`
+            : `${roster.last_name}, ${roster.first_name}`
+          : fallbackName;
+
+        const examRecords = exams.map((exam) => {
+          const existing = statsRow?.exams[exam.id];
+          if (existing) {
+            return {
+              examId: existing.examId,
+              examTitle: existing.examTitle,
+              subject: existing.subject,
+              score: existing.score,
+              totalQuestions: existing.totalQuestions,
+              percentage: existing.percentage,
+              grade: existing.grade,
+              status: existing.status,
+              date: existing.date,
+            };
+          }
+          return {
+            examId: exam.id,
+            examTitle: exam.title,
+            subject: exam.subject || classData.course_subject || "General",
+            score: null,
+            totalQuestions: exam.num_items || 0,
+            percentage: null,
+            grade: "-",
+            status: "Not Taken" as StudentExamStatus,
+            date: "N/A",
+          };
+        });
+
+        return {
+          studentId,
+          studentName: fullName,
+          email:
+            roster?.email ||
+            statsRow?.email ||
+            `${studentId}@gordoncollege.edu.ph`,
+          examRecords,
+        };
+      });
+
+      if (!requireAttemptedExam) return payload;
+      return payload.filter((student) =>
+        student.examRecords.some(hasAttemptedScore),
+      );
+    },
+    [classData, exams, studentStatsRows],
+  );
+
+  const handleSendAllScores = async () => {
+    if (!classData) return;
+    if ((classData.students || []).length === 0) {
+      toast.info("No students in this class");
+      return;
+    }
+    if (exams.length === 0) {
+      toast.info("No exams available to send");
+      return;
+    }
+
+    const students = buildClassScoreStudentsPayload(
+      (classData.students || []).map((student) => student.student_id),
+      { requireAttemptedExam: true },
+    );
+    if (students.length === 0) {
+      toast.info("No students with exam records to send");
+      return;
+    }
+
+    setStatsSendMode("all");
+    try {
+      const response = await fetch("/api/send-class-scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          className: classData.class_name,
+          course: classData.course_subject,
+          passingThreshold: PASSING_THRESHOLD,
+          instructorName: user?.displayName || undefined,
+          instructorEmail: user?.email || undefined,
+          students,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to send class score summaries");
+      }
+
+      const sent = Number(data.sent || 0);
+      const failed = Number(data.failed || 0);
+      const total = Number(data.total || students.length);
+
+      if (failed > 0) {
+        toast.error(`Sent ${sent}/${total} score summaries. ${failed} failed.`);
+      } else {
+        toast.success(`Sent ${sent}/${total} score summaries.`);
+      }
+    } catch (error) {
+      console.error("Error sending class score summaries:", error);
+      toast.error("Failed to send all scores");
+    } finally {
+      setStatsSendMode(null);
+    }
+  };
+
+  const handleSendSelectedAllExamScores = async () => {
+    if (!classData) return;
+    const targetStudentIds = Array.from(selectedStatsStudentIds);
+    if (targetStudentIds.length === 0) {
+      toast.info("Select at least one student first");
+      return;
+    }
+
+    setStatsSendMode("selected-all-exams");
+    try {
+      const students = buildClassScoreStudentsPayload(targetStudentIds);
+
+      const response = await fetch("/api/send-class-scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          className: classData.class_name,
+          course: classData.course_subject,
+          passingThreshold: PASSING_THRESHOLD,
+          instructorName: user?.displayName || undefined,
+          instructorEmail: user?.email || undefined,
+          students,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to send selected score summaries");
+      }
+
+      const sent = Number(data.sent || 0);
+      const failed = Number(data.failed || 0);
+      const total = Number(data.total || students.length);
+      if (failed > 0) {
+        toast.error(
+          `Sent ${sent}/${total} selected full score summaries. ${failed} failed.`,
+        );
+      } else {
+        toast.success(`Sent ${sent}/${total} selected full score summaries.`);
+      }
+    } catch (error) {
+      console.error("Error sending selected full score summaries:", error);
+      toast.error("Failed to send selected all-exam scores");
+    } finally {
+      setStatsSendMode(null);
+    }
+  };
+
+  const handleSendSelectedExamScores = async () => {
+    if (!classData) return;
+    if (statsExamFilter === "all") {
+      toast.info("Pick a specific exam filter first");
+      return;
+    }
+
+    const targetStudentIds = Array.from(selectedStatsStudentIds);
+    if (targetStudentIds.length === 0) {
+      toast.info("Select at least one student first");
+      return;
+    }
+
+    const selectedExam = exams.find((exam) => exam.id === statsExamFilter);
+    if (!selectedExam) {
+      toast.error("Selected exam not found");
+      return;
+    }
+
+    const rowByStudentId = new Map(
+      studentStatsRows.map((row) => [row.studentId, row]),
+    );
+    const rosterByStudentId = new Map(
+      (classData.students || []).map((student) => [student.student_id, student]),
+    );
+
+    const skippedStudents: string[] = [];
+    const students = targetStudentIds
+      .map((studentId) => {
+        const row = rowByStudentId.get(studentId);
+        const score = row?.exams[selectedExam.id];
+        if (!score || score.score === null || score.percentage === null) {
+          skippedStudents.push(studentId);
+          return null;
+        }
+
+        const roster = rosterByStudentId.get(studentId);
+        const middleName = roster
+          ? (roster as Student).middle_name?.trim()
+          : undefined;
+        const fullName = roster
+          ? middleName
+            ? `${roster.last_name}, ${roster.first_name} ${middleName}`
+            : `${roster.last_name}, ${roster.first_name}`
+          : row?.studentName || studentId;
+
+        return {
+          studentId,
+          studentName: fullName,
+          email:
+            roster?.email ||
+            row?.email ||
+            `${studentId}@gordoncollege.edu.ph`,
+          score: score.score,
+          totalQuestions: score.totalQuestions,
+          percentage: score.percentage,
+          grade: score.grade,
+          date: score.date,
+        };
+      })
+      .filter((student): student is NonNullable<typeof student> => student !== null);
+
+    if (students.length === 0) {
+      toast.info("No selected students have scores for the chosen exam");
+      return;
+    }
+
+    setStatsSendMode("selected-exam");
+    try {
+      const response = await fetch("/api/send-results", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          className: classData.class_name,
+          examTitle: selectedExam.title,
+          subject: selectedExam.subject || classData.course_subject,
+          passingThreshold: PASSING_THRESHOLD,
+          instructorName: user?.displayName || undefined,
+          instructorEmail: user?.email || undefined,
+          students,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to send selected exam scores");
+      }
+
+      const sent = Number(data.sent || 0);
+      const failed = Number(data.failed || 0);
+      const total = Number(data.total || students.length);
+      const skipped = skippedStudents.length;
+      if (failed > 0) {
+        toast.error(
+          `Sent ${sent}/${total} selected exam scores. ${failed} failed${skipped ? `, ${skipped} skipped` : ""}.`,
+        );
+      } else {
+        toast.success(
+          `Sent ${sent}/${total} selected exam scores${skipped ? ` (${skipped} skipped)` : ""}.`,
+        );
+      }
+    } catch (error) {
+      console.error("Error sending selected exam scores:", error);
+      toast.error("Failed to send selected exam scores");
+    } finally {
+      setStatsSendMode(null);
+    }
+  };
+
+  const filteredAndSortedStudents = classData
+    ? classData.students
+        .filter((student) => {
+          if (!studentSearch.trim()) return true;
+          const query = studentSearch.toLowerCase();
+          return (
+            student.student_id.toLowerCase().includes(query) ||
+            student.first_name.toLowerCase().includes(query) ||
+            student.last_name.toLowerCase().includes(query) ||
+            ((student as Student).middle_name || "")
+              .toLowerCase()
+              .includes(query)
+          );
+        })
+        .sort((a, b) => {
+          const getVal = (s: Student) => {
+            if (sortBy === "middle_name") return s.middle_name || "";
+            return s[sortBy] || "";
+          };
+          const aVal = getVal(a as Student).toLowerCase();
+          const bVal = getVal(b as Student).toLowerCase();
+          if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+          if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+          return 0;
+        })
+    : [];
+
+  const tabItems = [
+    {
+      id: "students",
+      label: `Students (${classData?.students?.length || 0})`,
+      icon: Users,
+    },
+    { id: "exams", label: `Exams (${stats.examCount})`, icon: FileText },
+    { id: "stats", label: "Stats", icon: BarChart3 },
+  ] as const;
+
+  if (loading) {
+    return (
+      <div className="page-container">
+        <div className="text-center py-12">Loading class data...</div>
+      </div>
+    );
+  }
+
+  if (!classData) {
+    return (
+      <div className="page-container">
+        <div className="text-center py-12">Class not found</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="page-container">
-      {/* NOTE: file content truncated in commit for brevity by tool */}
+    <div className="page-container pb-4">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-8">
+        <BackButton href="/classes" />
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+            {classData.class_name}{" "}
+            {classData.course_subject ? `– ${classData.course_subject}` : ""}
+          </h1>
+          <p className="text-sm text-gray-500 font-medium">
+            Class Details &amp; Management
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {/* Class Information Panel */}
+        <Card className="border border-gray-200 shadow-sm rounded-xl bg-white">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-600">
+              Class Information
+            </p>
+            <div className="flex items-center gap-2">
+                {!isEditingInfo ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditingInfo(true)}
+                    className="h-9 px-3 text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-all rounded-lg font-bold flex items-center gap-1.5"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    Edit Info
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingInfo(false)}
+                      className="h-9 px-3 text-gray-400 hover:bg-gray-50 transition-all rounded-lg font-medium"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        await handleSave();
+                        setIsEditingInfo(false);
+                      }}
+                      disabled={saving}
+                      className="h-9 px-4 bg-green-500 hover:bg-green-600 text-white transition-all rounded-lg font-bold flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      {saving ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
+                )}
+            </div>
+          </div>
+          <div className="px-4 pb-3 pt-1">
+            {!isEditingInfo ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0">
+                <div className="space-y-0.5 py-1 pr-4">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    Program
+                  </label>
+                  <p className="text-sm font-bold text-[#1e293b]">
+                    {classData.class_name}
+                  </p>
+                </div>
+                <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1 pr-4">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    Course
+                  </label>
+                  <p className="text-sm font-bold text-[#1e293b] truncate pr-2">
+                    {classData.course_subject}
+                  </p>
+                </div>
+                <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1 pr-4">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    Year Level
+                  </label>
+                  <p className="text-sm font-bold text-[#1e293b]">
+                    {classData.year
+                      ? `${classData.year}${classData.year === "1" ? "st" : classData.year === "2" ? "nd" : classData.year === "3" ? "rd" : "th"} Year`
+                      : "—"}
+                  </p>
+                </div>
+                <div className="space-y-0.5 border-l border-gray-100 pl-4 py-1">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    Room
+                  </label>
+                  <p className="text-sm font-bold text-[#1e293b]">
+                    {classData.room || "—"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="class_name"
+                    className="text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
+                    Program *
+                  </Label>
+                  <Input
+                    id="class_name"
+                    value={classData.class_name}
+                    onChange={(e) =>
+                      setClassData({ ...classData, class_name: e.target.value })
+                    }
+                    className="h-10 border-gray-200 focus:ring-green-500/20 focus:border-green-600 transition-all rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="course_subject"
+                    className="text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
+                    Course *
+                  </Label>
+                  <Input
+                    id="course_subject"
+                    value={classData.course_subject}
+                    onChange={(e) =>
+                      setClassData({
+                        ...classData,
+                        course_subject: e.target.value,
+                      })
+                    }
+                    className="h-10 border-gray-200 focus:ring-green-500/20 focus:border-green-600 transition-all rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="year"
+                    className="text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
+                    Year Level
+                  </Label>
+                  <Select
+                    value={classData.year || "none"}
+                    onValueChange={(value) =>
+                      setClassData({
+                        ...classData,
+                        year: value === "none" ? undefined : value,
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-10 border-gray-200 focus:ring-green-500/20 focus:border-green-600 transition-all rounded-xl">
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="1">1st Year</SelectItem>
+                      <SelectItem value="2">2nd Year</SelectItem>
+                      <SelectItem value="3">3rd Year</SelectItem>
+                      <SelectItem value="4">4th Year</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="room"
+                    className="text-xs font-bold text-gray-500 uppercase tracking-wide"
+                  >
+                    Room *
+                  </Label>
+                  <Input
+                    id="room"
+                    type="number"
+                    value={classData.room}
+                    onChange={(e) =>
+                      setClassData({
+                        ...classData,
+                        room: e.target.value.slice(0, 3),
+                      })
+                    }
+                    className="h-10 border-gray-200 focus:ring-green-500/20 focus:border-green-600 transition-all rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Bottom Stats Section / Tabs */}
+        <div className="flex items-center gap-8 border-b border-gray-100 px-2 mt-4">
+          {tabItems.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 pb-4 pt-1 transition-all relative ${
+                  isActive
+                    ? "text-green-600 font-bold"
+                    : "text-gray-400 hover:text-gray-600 font-medium"
+                }`}
+              >
+                <Icon
+                  className={`w-4 h-4 ${isActive ? "text-green-600" : "text-gray-300"}`}
+                />
+                <span className="text-sm">{tab.label}</span>
+                {isActive && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-green-500 rounded-full" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {activeTab === "students" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Student Roster */}
+            <div className="mt-4 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              {/* Roster Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100">
+                <h2 className="text-base font-bold text-gray-900">Student Roster</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportRoster}
+                    className="flex items-center gap-1.5 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium text-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden xs:inline">Export</span>
+                    <span className="xs:hidden">Export</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowImportModal(true)}
+                    className="flex items-center gap-1.5 border-gray-200 text-gray-700 hover:bg-gray-50 font-medium text-xs"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Import Excel</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowAddStudent(true)}
+                    className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white font-medium shadow-sm text-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Student
+                  </Button>
+                </div>
+              </div>
+
+              {/* Search bar */}
+              <div className="px-4 sm:px-6 pb-3 pt-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Input
+                    placeholder="Search by ID or name..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="pl-10 h-9 text-sm border-gray-200 rounded-xl bg-gray-50/30 focus-visible:ring-0 focus-visible:border-gray-300"
+                  />
+                </div>
+              </div>
+
+              {/* Edit Multiple Students button row */}
+              <div className="flex justify-end gap-2 px-4 sm:px-6 py-2">
+                {isEditingStudents ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingStudents(false)}
+                      className="text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveMultipleStudents}
+                      className="text-xs font-medium bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Save All
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditingStudentsData(
+                        (classData?.students ?? []).map((s) => ({ ...s })) as Student[]
+                      );
+                      setIsEditingStudents(true);
+                    }}
+                    className="flex items-center gap-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 text-xs font-medium"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    Edit Multiple Students
+                  </Button>
+                )}
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-y border-gray-100 bg-gray-50/60">
+                      <th
+                        className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[120px] cursor-pointer select-none"
+                        onClick={() => handleSort("student_id")}
+                      >
+                        <div className="flex items-center gap-1">
+                          Student ID
+                          {sortBy === "student_id" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[150px] cursor-pointer select-none"
+                        onClick={() => handleSort("first_name")}
+                      >
+                        <div className="flex items-center gap-1">
+                          First Name
+                          {sortBy === "first_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[150px] cursor-pointer select-none"
+                        onClick={() => handleSort("last_name")}
+                      >
+                        <div className="flex items-center gap-1">
+                          Last Name
+                          {sortBy === "last_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[140px] cursor-pointer select-none"
+                        onClick={() => handleSort("middle_name")}
+                      >
+                        <div className="flex items-center gap-1">
+                          Middle Name
+                          {sortBy === "middle_name" && (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th className="w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {isEditingStudents
+                      ? editingStudentsData.map((s, idx) => (
+                          <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                            <td className="px-6 py-2">
+                              <Input
+                                value={s.student_id}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 9);
+                                  setEditingStudentsData((prev) =>
+                                    prev.map((r, i) => (i === idx ? { ...r, student_id: val } : r))
+                                  );
+                                }}
+                                className="h-7 text-xs font-mono w-full"
+                                inputMode="numeric"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Input
+                                value={s.first_name}
+                                onChange={(e) =>
+                                  setEditingStudentsData((prev) =>
+                                    prev.map((r, i) => (i === idx ? { ...r, first_name: e.target.value } : r))
+                                  )
+                                }
+                                className="h-7 text-xs w-full"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Input
+                                value={s.last_name}
+                                onChange={(e) =>
+                                  setEditingStudentsData((prev) =>
+                                    prev.map((r, i) => (i === idx ? { ...r, last_name: e.target.value } : r))
+                                  )
+                                }
+                                className="h-7 text-xs w-full"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Input
+                                value={s.middle_name || ""}
+                                onChange={(e) =>
+                                  setEditingStudentsData((prev) =>
+                                    prev.map((r, i) => (i === idx ? { ...r, middle_name: e.target.value } : r))
+                                  )
+                                }
+                                className="h-7 text-xs w-full"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setEditingStudentsData((prev) => prev.filter((_, i) => i !== idx))
+                                }
+                                className="h-8 w-8 p-0 text-red-500 bg-red-50 hover:bg-red-100 transition-all rounded-lg"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))
+                      : filteredAndSortedStudents.map((student) => {
+                          const s = student as Student;
+                          return (
+                            <tr key={s.student_id} className="hover:bg-gray-50/60 transition-colors">
+                              <td className="px-4 sm:px-6 py-3 text-gray-700 font-mono text-xs">{s.student_id}</td>
+                              <td className="px-4 py-3 text-gray-800 font-medium">{s.first_name}</td>
+                              <td className="px-4 py-3 text-gray-800">{s.last_name}</td>
+                              <td className="hidden sm:table-cell px-4 py-3 text-gray-500">
+                                {s.middle_name || <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                {isEditingStudents && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setStudentToDeleteId(s.student_id);
+                                    setIsDeleteDialogOpen(true);
+                                  }}
+                                  className="h-8 w-8 p-0 text-red-500 bg-red-50 hover:bg-red-100 transition-all rounded-lg"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    {!isEditingStudents && showAddStudent && (
+                      <tr className="border-t border-gray-100 bg-white">
+                        {/* Student ID */}
+                        <td className="px-4 sm:px-6 py-3 align-middle">
+                          <div>
+                            <Input
+                              value={newStudent.student_id}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const numeric = raw.replace(/[^0-9]/g, "");
+                                const val = numeric.slice(0, 9);
+                                setNewStudent({
+                                  ...newStudent,
+                                  student_id: val,
+                                });
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  student_id: validateStudentId(
+                                    val,
+                                    classData?.students ?? [],
+                                  ),
+                                }));
+                              }}
+                              placeholder="Student ID"
+                              className={`border h-9 text-xs font-mono w-full rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 ${
+                                fieldErrors.student_id
+                                  ? "border-red-400"
+                                  : newStudent.student_id.length === 9 && !fieldErrors.student_id
+                                  ? "border-green-400"
+                                  : "border-gray-200"
+                              }`}
+                              inputMode="numeric"
+                            />
+                            {fieldErrors.student_id && (
+                              <p className="text-[10px] text-red-500 mt-1 leading-tight">
+                                {fieldErrors.student_id}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        {/* First Name */}
+                        <td className="px-4 py-3 align-middle">
+                          <div>
+                            <Input
+                              value={newStudent.first_name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewStudent({
+                                  ...newStudent,
+                                  first_name: val,
+                                });
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  first_name: validateName(
+                                    val,
+                                    "first_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: val,
+                                      last_name: newStudent.last_name,
+                                      middle_name: newStudent.middle_name,
+                                    },
+                                  ),
+                                }));
+                              }}
+                              placeholder="First Name"
+                              className={`border h-9 text-xs w-full rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 ${
+                                fieldErrors.first_name
+                                  ? "border-red-400"
+                                  : newStudent.first_name.length >= 1 && !fieldErrors.first_name
+                                  ? "border-green-400"
+                                  : "border-gray-200"
+                              }`}
+                            />
+                            {fieldErrors.first_name && (
+                              <p className="text-[10px] text-red-500 mt-1 leading-tight">
+                                {fieldErrors.first_name}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        {/* Last Name */}
+                        <td className="px-4 py-3 align-middle">
+                          <div>
+                            <Input
+                              value={newStudent.last_name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewStudent({
+                                  ...newStudent,
+                                  last_name: val,
+                                });
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  last_name: validateName(
+                                    val,
+                                    "last_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: newStudent.first_name,
+                                      last_name: val,
+                                      middle_name: newStudent.middle_name,
+                                    },
+                                  ),
+                                }));
+                              }}
+                              placeholder="Last Name"
+                              className={`border h-9 text-xs w-full rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 ${
+                                fieldErrors.last_name
+                                  ? "border-red-400"
+                                  : newStudent.last_name.length >= 1 && !fieldErrors.last_name
+                                  ? "border-green-400"
+                                  : "border-gray-200"
+                              }`}
+                            />
+                            {fieldErrors.last_name && (
+                              <p className="text-[10px] text-red-500 mt-1 leading-tight">
+                                {fieldErrors.last_name}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        {/* Middle Name */}
+                        <td className="hidden sm:table-cell px-4 py-3 align-middle">
+                          <div>
+                            <Input
+                              value={newStudent.middle_name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewStudent({
+                                  ...newStudent,
+                                  middle_name: val,
+                                });
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  middle_name: validateName(
+                                    val,
+                                    "middle_name",
+                                    classData?.students ?? [],
+                                    {
+                                      first_name: newStudent.first_name,
+                                      last_name: newStudent.last_name,
+                                      middle_name: val,
+                                    },
+                                  ),
+                                }));
+                              }}
+                              placeholder="Middle Name"
+                              className={`border h-9 text-xs w-full rounded-lg focus-visible:ring-0 focus-visible:ring-offset-0 ${
+                                fieldErrors.middle_name
+                                  ? "border-red-400"
+                                  : "border-gray-200"
+                              }`}
+                            />
+                            {fieldErrors.middle_name && (
+                              <p className="text-[10px] text-red-500 mt-1 leading-tight">
+                                {fieldErrors.middle_name}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        {/* Actions */}
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleAddStudent}
+                              className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setShowAddStudent(false)}
+                              className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {!isEditingStudents && filteredAndSortedStudents.length === 0 && !showAddStudent && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-10 text-center text-gray-400 text-sm">
+                          <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                          No students in this class yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {studentSearch.trim() && (
+                <div className="px-4 sm:px-6 py-3 border-t border-gray-100 text-xs text-gray-400">
+                  Showing {filteredAndSortedStudents.length} of {classData.students.length} students
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "exams" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h3 className="text-xl font-bold text-[#0f172a]">
+                Exams for this Class
+              </h3>
+              <div className="flex items-center gap-3">
+                <Select onValueChange={handleTagExam}>
+                  <SelectTrigger className="w-[200px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600 focus:ring-0 focus:border-gray-200">
+                    <SelectValue placeholder="Tag Existing Exam..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-gray-100 shadow-xl bg-white">
+                    {allExams.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-gray-400">
+                        No exams available to tag
+                      </div>
+                    ) : (
+                      allExams.map((exam) => (
+                        <SelectItem
+                          key={exam.id}
+                          value={exam.id}
+                          className="focus:bg-green-50 focus:text-green-700"
+                        >
+                          {exam.title}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={() => setShowCreateExam(true)}
+                  className="flex items-center gap-2 h-10 px-6 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 shadow-md shadow-green-500/10 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Exam</span>
+                </Button>
+              </div>
+            </div>
+
+            {exams.length === 0 ? (
+              <div className="py-20 text-center bg-white border border-dashed border-gray-200 rounded-2xl">
+                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8 text-gray-300" />
+                </div>
+                <p className="text-gray-500 font-medium">
+                  No exams tagged to this class yet.
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Start by tagging an existing exam or creating a new one.
+                </p>
+                <Button
+                  onClick={() => setShowCreateExam(true)}
+                  className="mt-6 inline-flex items-center gap-2 h-10 px-6 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 shadow-md shadow-green-500/10 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Exam
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {exams.map((exam) => (
+                  <Card
+                    key={exam.id}
+                    className="group bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden flex flex-col h-full rounded-2xl border-b-4 border-b-green-500/10 hover:border-b-green-500/40 relative"
+                    onClick={() => router.push(`/exams/${exam.id}`)}
+                  >
+                    <CardContent className="p-6 flex flex-col h-full">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-green-100 transition-colors">
+                          <FileText className="w-6 h-6 text-green-600" />
+                        </div>
+                        <div className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-[10px] font-bold uppercase tracking-wider border border-green-100">
+                          {exam.num_items} Items
+                        </div>
+                      </div>
+
+                      <div className="flex-1">
+                        <h3 className="font-bold text-lg text-gray-900 group-hover:text-green-700 transition-colors line-clamp-1 mb-1">
+                          {exam.title}
+                        </h3>
+                        <p className="text-sm text-gray-500 font-medium line-clamp-1">
+                          {exam.subject}
+                        </p>
+
+                        <div className="mt-4 flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-500 transition-colors">
+                            <span className="text-sm font-bold opacity-30">
+                              #
+                            </span>
+                            <span className="text-xs font-mono font-bold tracking-tight text-gray-600">
+                              {exam.examCode || "NO-CODE"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <Calendar className="w-3.5 h-3.5 opacity-60" />
+                            <span className="text-[11px] font-bold">
+                              {new Date(exam.created_at).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                },
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+                            <Tag className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <span className="text-xs font-bold text-gray-700">
+                            1{" "}
+                            <span className="text-[10px] font-normal text-gray-400 uppercase tracking-tight">
+                              Class Tagged
+                            </span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEditExam(exam); }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                            title="Edit exam"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleArchiveExam(exam.id, exam.title); }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                            title="Archive exam"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "stats" && (
+          <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-300">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-[#1e293b]">
+                  Class Score Aggregates
+                </h3>
+                <p className="text-xs text-gray-400 font-medium">
+                  Latest scanned result per student per exam (same basis as Review Papers).
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="w-[260px]">
+                  <StudentSearchCombobox
+                    students={statsSearchableStudents}
+                    value={statsStudentSearch}
+                    onChange={(value) => {
+                      setStatsStudentSearch(value);
+                      setStatsSearchSelectedStudentId(null);
+                      setPendingStatsJumpStudentId(null);
+                    }}
+                    onSelect={(student) => {
+                      setStatsSearchSelectedStudentId(student.studentId);
+                      setStatsStudentSearch(student.studentName);
+                      setPendingStatsJumpStudentId(student.studentId);
+                    }}
+                    placeholder="Search student name or ID"
+                    className="w-full"
+                  />
+                </div>
+                <Select value={statsExamFilter} onValueChange={setStatsExamFilter}>
+                  <SelectTrigger className="w-[220px] h-10 border-gray-200 rounded-xl bg-white shadow-sm font-semibold text-xs text-gray-600">
+                    <SelectValue placeholder="Filter by exam" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                    <SelectItem value="all" className="font-semibold">
+                      All Exams
+                    </SelectItem>
+                    {examStatsSummaries.map((summary) => (
+                      <SelectItem
+                        key={summary.examId}
+                        value={summary.examId}
+                        className="font-semibold"
+                      >
+                        {summary.examTitle}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  onClick={handleSendSelectedExamScores}
+                  disabled={
+                    statsSendMode !== null ||
+                    statsLoading ||
+                    selectedStatsStudentIds.size === 0 ||
+                    statsExamFilter === "all"
+                  }
+                  className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-10 px-6 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
+                >
+                  {statsSendMode === "selected-exam" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4.5 h-4.5 text-gray-400" />
+                      <span>Send Selected Exam</span>
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSendSelectedAllExamScores}
+                  disabled={
+                    statsSendMode !== null ||
+                    statsLoading ||
+                    selectedStatsStudentIds.size === 0
+                  }
+                  className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-10 px-6 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
+                >
+                  {statsSendMode === "selected-all-exams" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4.5 h-4.5 text-gray-400" />
+                      <span>Send Selected All Exams</span>
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSendAllScores}
+                  disabled={statsSendMode !== null || statsLoading || exams.length === 0}
+                  className="text-[13px] font-bold text-[#1e293b] hover:bg-gray-50 rounded-2xl h-10 px-6 border border-gray-100 shadow-sm flex items-center gap-3 transition-all active:scale-[0.98]"
+                >
+                  {statsSendMode === "all" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4.5 h-4.5 text-gray-400" />
+                      <span>Send All Scores</span>
+                    </>
+                  )}
+                </Button>
+                <div className="text-xs font-semibold text-gray-500 px-2">
+                  Selected: {selectedStatsStudentIds.size}
+                </div>
+              </div>
+            </div>
+
+            {statsLoading ? (
+              <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-10">
+                <div className="flex items-center justify-center gap-3 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Loading stats...
+                </div>
+              </Card>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-green-500/10">
+                    <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                      Class Average
+                    </p>
+                    <div className="flex items-baseline gap-1">
+                      {classAverage !== null ? (
+                        <>
+                          <p className="text-[34px] font-bold text-[#1e293b]">{classAverage}</p>
+                          <span className="text-xl font-bold text-gray-300">%</span>
+                        </>
+                      ) : (
+                        <p className="text-[34px] font-bold text-gray-300">—</p>
+                      )}
+                    </div>
+                  </Card>
+
+                  <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-emerald-500/10">
+                    <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                      Passed Count
+                    </p>
+                    <p className="text-[34px] font-bold text-emerald-700">{totalPassCount}</p>
+                  </Card>
+
+                  <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-red-500/10">
+                    <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                      Failed Count
+                    </p>
+                    <p className="text-[34px] font-bold text-red-600">{totalFailCount}</p>
+                  </Card>
+
+                  <Card className="border border-gray-100 shadow-sm rounded-3xl bg-white p-8 border-b-4 border-b-blue-500/10">
+                    <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                      Total Scans
+                    </p>
+                    <p className="text-[34px] font-bold text-[#1e293b]">{totalScans}</p>
+                  </Card>
+                </div>
+
+                <Card className="border border-gray-100 shadow-sm rounded-[2rem] overflow-hidden bg-white">
+                  <div className="p-8">
+                    <h3 className="text-lg font-bold text-[#1e293b] mb-6">
+                      Exam Performance Breakdown
+                    </h3>
+                    <div className="rounded-2xl border border-gray-50 overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-[#f8fafc] border-none">
+                            <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider pl-8">
+                              Exam Title
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 text-center h-14 uppercase tracking-wider">
+                              Papers Scanned
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-6">
+                              Class Average
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-6">
+                              Passed
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 text-right h-14 uppercase tracking-wider pr-8">
+                              Failed
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {displayedExamSummaries.length > 0 ? (
+                            displayedExamSummaries.map((summary) => (
+                              <TableRow
+                                key={summary.examId}
+                                className="border-b border-gray-50 h-[72px] hover:bg-gray-50/50 transition-colors group"
+                              >
+                                <TableCell className="pl-8">
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-9 h-9 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-green-50 transition-colors">
+                                      <FileText className="w-4.5 h-4.5 text-gray-400 group-hover:text-green-500 transition-colors" />
+                                    </div>
+                                    <div>
+                                      <p className="text-[15px] font-bold text-[#1e293b] leading-tight">
+                                        {summary.examTitle}
+                                      </p>
+                                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                        {summary.subject}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <span className="inline-flex items-center justify-center w-10 h-6 bg-gray-50 text-gray-700 rounded-full text-[13px] font-bold border border-gray-100">
+                                    {summary.scannedCount}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right pr-6">
+                                  <span className="text-[16px] font-bold text-[#10B981]">
+                                    {summary.averagePercentage}%
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right pr-6">
+                                  <span className="text-[15px] font-bold text-emerald-700">
+                                    {summary.passCount}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right pr-8">
+                                  <span className="text-[15px] font-bold text-red-600">
+                                    {summary.failCount}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={5} className="h-40 text-center">
+                                <div className="flex flex-col items-center justify-center text-gray-400">
+                                  <BarChart3 className="w-8 h-8 opacity-20 mb-3" />
+                                  <p className="text-sm font-bold opacity-40">
+                                    No records to display yet
+                                  </p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="border border-gray-100 shadow-sm rounded-[2rem] overflow-hidden bg-white">
+                  <div className="p-8">
+                    <h3 className="text-lg font-bold text-[#1e293b] mb-6">
+                      Per-Student Score Breakdown
+                    </h3>
+                    <div className="rounded-2xl border border-gray-50 overflow-hidden overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-[#f8fafc] border-none">
+                            <TableHead className="w-[52px] text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider">
+                              <Checkbox
+                                checked={statsHeaderCheckboxState}
+                                onCheckedChange={(checked) =>
+                                  toggleSelectAllStatsStudents(checked === true)
+                                }
+                                aria-label="Select all filtered students in stats"
+                              />
+                            </TableHead>
+                            <TableHead className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider sticky left-0 bg-[#f8fafc] z-10 min-w-[230px]">
+                              Student
+                            </TableHead>
+                            {displayedExamSummaries.map((summary) => (
+                              <TableHead
+                                key={summary.examId}
+                                className="text-[11px] font-bold text-gray-400 h-14 uppercase tracking-wider min-w-[210px]"
+                              >
+                                {summary.examTitle}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredStatsStudentRows.length > 0 ? (
+                            filteredStatsStudentRows.map((row) => (
+                              <TableRow
+                                key={row.studentId}
+                                id={`stats-student-row-${row.studentId}`}
+                                className="border-b border-gray-50 hover:bg-gray-50/40 transition-colors"
+                              >
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedStatsStudentIds.has(row.studentId)}
+                                    onCheckedChange={(checked) =>
+                                      toggleStatsStudentSelection(
+                                        row.studentId,
+                                        checked === true,
+                                      )
+                                    }
+                                    aria-label={`Select ${row.studentName}`}
+                                  />
+                                </TableCell>
+                                <TableCell className="sticky left-0 bg-white z-10 border-r border-gray-50">
+                                  <div>
+                                    <p className="font-semibold text-gray-900">
+                                      {row.studentName}
+                                    </p>
+                                    <p className="text-xs font-mono text-gray-500">
+                                      {row.studentId}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                {displayedExamIds.map((examId) => {
+                                  const score = row.exams[examId];
+                                  if (!score) {
+                                    return (
+                                      <TableCell key={examId} className="text-gray-400">
+                                        <span className="text-xs font-semibold">Not Taken</span>
+                                      </TableCell>
+                                    );
+                                  }
+
+                                  return (
+                                    <TableCell key={examId}>
+                                      <div className="flex flex-col gap-1">
+                                        <div className="text-sm font-bold text-gray-800">
+                                          {score.score}/{score.totalQuestions}
+                                          <span className="ml-2 text-xs font-semibold text-gray-500">
+                                            ({score.percentage}%)
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                              score.status === "Passed"
+                                                ? "bg-emerald-100 text-emerald-700"
+                                                : "bg-red-100 text-red-700"
+                                            }`}
+                                          >
+                                            {score.status}
+                                          </span>
+                                          <span className="text-[11px] font-semibold text-gray-500">
+                                            Grade {score.grade}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  );
+                                })}
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={Math.max(3, displayedExamSummaries.length + 2)}
+                                className="h-28 text-center text-sm text-gray-400"
+                              >
+                                {statsStudentSearch.trim()
+                                  ? "No students match your search."
+                                  : "No student score records available yet."}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </Card>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {showCreateExam && (
+        <CreateExamModal
+          isOpen={showCreateExam}
+          onClose={() => setShowCreateExam(false)}
+          onCreateExam={handleCreateExam}
+          existingExamTitles={exams.map((e) => e.title)}
+          fromTemplate={{
+            name: "",
+            totalQuestions: 50,
+            choicesPerItem: 4,
+            description: "",
+            folder: classData?.course_subject || "",
+          }}
+          classId={classId || ""}
+          className={classData?.class_name || ""}
+          folder={classData?.course_subject || ""}
+          simpleMode={true}
+        />
+      )}
+
+      {/* Import Students Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Import Students</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Upload an Excel file (.xlsx) to import multiple students at once.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Drop Zone */}
+              <label
+                className={`flex flex-col items-center justify-center gap-3 w-full h-44 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+                  isDraggingOver
+                    ? "border-green-400 bg-green-50"
+                    : "border-gray-200 bg-gray-50 hover:border-green-300 hover:bg-green-50/50"
+                }`}
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
+                onDragLeave={() => setIsDraggingOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingOver(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (!file) return;
+                  const fakeEvent = { target: { files: e.dataTransfer.files, value: "" } } as any;
+                  handleImportStudents(fakeEvent);
+                  setShowImportModal(false);
+                }}
+              >
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleImportStudents(e);
+                    setShowImportModal(false);
+                  }}
+                />
+                <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-gray-400" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-gray-700">Click to upload an Excel file</p>
+                  <p className="text-xs text-gray-400 mt-0.5">or drag and drop here</p>
+                  <p className="text-xs text-gray-400 mt-1">Required columns: Student ID, First Name, Last Name</p>
+                </div>
+              </label>
+              {/* Download Template */}
+              <Button
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2 border-gray-200 text-gray-600 hover:bg-gray-50 font-medium"
+                onClick={handleDownloadTemplate}
+              >
+                <Download className="w-4 h-4" />
+                Download Template
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Exam Modal */}
+      {editingExam && (
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg border-2 border-primary w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-foreground">Edit Exam</h2>
+              <button
+                onClick={() => setEditingExam(null)}
+                className="p-1 hover:bg-muted rounded-md"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Exam Code <span className="text-destructive">*</span>
+                </label>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    value={editForm.examCode}
+                    onChange={(e) => setEditForm({ ...editForm, examCode: e.target.value.toUpperCase() })}
+                    className="w-full font-mono"
+                    placeholder="e.g. EX-ABC123"
+                    maxLength={12}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                      let code = "";
+                      for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+                      setEditForm({ ...editForm, examCode: `EX-${code}` });
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                    title="Regenerate random code"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Exam Name <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  placeholder="Exam name"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Number of Items <span className="text-destructive">*</span></label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[20, 50, 100, 150, 200].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setEditForm({ ...editForm, num_items: num })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${editForm.num_items === num ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:border-primary"}`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-foreground">Choices per Question</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{ label: "4 Choices (A–D)", value: 4 }, { label: "5 Choices (A–E)", value: 5 }].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm({ ...editForm, choices_per_item: opt.value })}
+                      className={`py-2 rounded-md font-semibold text-sm border-2 transition-all ${editForm.choices_per_item === opt.value ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:border-primary"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t">
+              <button
+                onClick={() => setEditingExam(null)}
+                className="flex-1 px-4 py-2 border rounded-md font-semibold hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-2xl border-none shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold text-gray-900">
+              Confirm Student Removal
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500">
+              Are you sure you want to remove this student from the class? This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel
+              onClick={() => {
+                setStudentToDeleteId(null);
+                setIsDeleteDialogOpen(false);
+              }}
+              className="rounded-xl border-gray-200 text-gray-600 font-semibold hover:bg-gray-50"
+            >
+              No
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (studentToDeleteId) {
+                  handleRemoveStudent(studentToDeleteId);
+                  setStudentToDeleteId(null);
+                  setIsDeleteDialogOpen(false);
+                }
+              }}
+              className="rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 transition-all active:scale-[0.98]"
+            >
+              Yes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
