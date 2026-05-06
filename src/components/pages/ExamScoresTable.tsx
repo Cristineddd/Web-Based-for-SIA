@@ -80,7 +80,7 @@ interface ExamScoresTableProps {
   onViewStudent?: (row: ExamScoreRow) => void;
   /** Callback when "Export" is clicked, with the currently-visible (filtered+sorted) rows */
   onExport?: (rows: ExamScoreRow[]) => void;
-  /** Current passing threshold percentage (0–100). Default 60. */
+    /** Current passing threshold percentage (0-100). Default 75. */
   passingThreshold?: number;
   /** Called when instructor changes the threshold inline. Parent should persist this. */
   onThresholdChange?: (newThreshold: number) => void;
@@ -142,7 +142,7 @@ export default function ExamScoresTable({
   examTitle = "Exam",
   onViewStudent,
   onExport,
-  passingThreshold = 60,
+    passingThreshold = 75,
   onThresholdChange,
 }: ExamScoresTableProps) {
   // ── State ───────────────────────────────────────────────────────────────

@@ -147,7 +147,7 @@ export default function Results() {
     skipped: 0,
   });
 
-  const passingThreshold = 60;
+  const passingThreshold = 75;
   const rowsCacheRef = useRef(rowsCache);
   const rowsSubscriptionsRef = useRef<Map<string, Unsubscribe>>(new Map());
 
