@@ -811,3 +811,93 @@ export function exportExamReportToExcel(
     borderedSheetNames: ['Exam Report'],
   });
 }
+
+// ─── Class-level All-Exams Export ────────────────────────────────────────────
+
+export interface ClassExamSheetData {
+  examTitle: string;
+  rows: ExamReportExportRow[];
+  metadata?: ExcelExportMetadata;
+}
+
+/**
+ * Exports every exam in a class as separate sheets in one XLSX workbook.
+ * Sheet names are truncated to 31 chars (Excel limit).
+ * Uses a direct synchronous download to ensure all sheets are preserved.
+ */
+export function exportClassAllExamsToExcel(
+  className: string,
+  exams: ClassExamSheetData[],
+): void {
+  const wb = XLSX.utils.book_new();
+
+  const headers = ['#', 'Student ID', 'Name', 'Score', 'Percentage', 'Status', 'Exam', 'Class'];
+
+  const sheetNames = new Set<string>();
+
+  exams.forEach(({ examTitle, rows, metadata }) => {
+    let sheetName = examTitle.replace(/[\\/?*[\]:]/g, '').substring(0, 28).trim() || 'Exam';
+    let suffix = 2;
+    const base = sheetName;
+    while (sheetNames.has(sheetName)) {
+      sheetName = `${base.substring(0, 25)}_${suffix}`;
+      suffix++;
+    }
+    sheetNames.add(sheetName);
+
+    const reportHeaderRows = buildExamReportLayoutRows(metadata);
+    const data = rows.map((r, i) => [
+      i + 1,
+      r.studentId,
+      r.studentName,
+      r.score,
+      r.percentage,
+      r.status,
+      r.examName,
+      r.className,
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
+    const hdrIdx = reportHeaderRows.length;
+
+    ws['!merges'] = [
+      XLSX.utils.decode_range('A1:H2'),
+      XLSX.utils.decode_range('A3:B3'),
+      XLSX.utils.decode_range('D3:E3'),
+      XLSX.utils.decode_range('G3:H3'),
+      XLSX.utils.decode_range('A4:B4'),
+      XLSX.utils.decode_range('G4:H4'),
+      XLSX.utils.decode_range('A5:C5'),
+      XLSX.utils.decode_range('G5:H5'),
+    ];
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 16 }, { wch: 30 }, { wch: 8 },
+      { wch: 13 }, { wch: 10 }, { wch: 24 }, { wch: 12 },
+    ];
+
+    stylizeHeaderRow(ws, headers.length, hdrIdx);
+    freezeHeaderRow(ws, hdrIdx + 1);
+
+    for (let r = hdrIdx + 1; r <= hdrIdx + data.length; r++) {
+      const cellRef = XLSX.utils.encode_cell({ r, c: 4 });
+      if (ws[cellRef]) ws[cellRef].z = '0"%"';
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+
+  if (wb.SheetNames.length === 0) {
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([['No exam data available']]),
+      'No Data',
+    );
+  }
+
+  const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  const filename = `${safeClass}_all_exams_report.xlsx`;
+
+  // Use a direct synchronous download to guarantee all sheets are preserved.
+  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  downloadArrayBufferExcel(buffer, filename);
+}
