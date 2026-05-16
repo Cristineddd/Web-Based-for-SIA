@@ -541,11 +541,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       // First name validation
       if (
         !student.first_name ||
-        !/^[a-zA-ZñÑ\s]+$/.test(student.first_name) ||
-        student.first_name.length < 4
+        !/^[a-zA-ZñÑ\s]+$/.test(student.first_name)
       ) {
         toast.error(
-          `Student ${i + 1}: First name must be at least 4 characters and contain only letters`,
+          `Student ${i + 1}: First name must contain only letters`,
         );
         return;
       }
@@ -553,11 +552,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       // Last name validation
       if (
         !student.last_name ||
-        !/^[a-zA-ZñÑ\s]+$/.test(student.last_name) ||
-        student.last_name.length < 4
+        !/^[a-zA-ZñÑ\s]+$/.test(student.last_name)
       ) {
         toast.error(
-          `Student ${i + 1}: Last name must be at least 4 characters and contain only letters`,
+          `Student ${i + 1}: Last name must contain only letters`,
         );
         return;
       }
@@ -615,9 +613,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     editingStudentsData.forEach((s, i) => {
       if (!s.student_id || !/^\d{9}$/.test(s.student_id) || !s.student_id.startsWith("20"))
         errors.push(`Row ${i + 1}: Invalid Student ID "${s.student_id}"`);
-      else if (!s.first_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.first_name) || s.first_name.length < 4)
+      else if (!s.first_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.first_name))
         errors.push(`Row ${i + 1}: Invalid First Name`);
-      else if (!s.last_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.last_name) || s.last_name.length < 4)
+      else if (!s.last_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.last_name))
         errors.push(`Row ${i + 1}: Invalid Last Name`);
     });
     if (errors.length > 0) {
@@ -794,16 +792,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           }
           if (
             !s.first_name ||
-            !/^[a-zA-ZñÑ\s]+$/.test(s.first_name) ||
-            s.first_name.length < 4
+            !/^[a-zA-ZñÑ\s]+$/.test(s.first_name)
           ) {
             invalidRows.push(`Row ${i + 2}: Invalid First Name`);
             return;
           }
           if (
             !s.last_name ||
-            !/^[a-zA-ZñÑ\s]+$/.test(s.last_name) ||
-            s.last_name.length < 4
+            !/^[a-zA-ZñÑ\s]+$/.test(s.last_name)
           ) {
             invalidRows.push(`Row ${i + 2}: Invalid Last Name`);
             return;

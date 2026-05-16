@@ -479,10 +479,6 @@ export default function StudentClasses() {
       toast.warning("First name must contain letters only");
       return;
     }
-    if (newStudent.first_name.trim().length < 4) {
-      toast.warning("First name must be at least 4 characters");
-      return;
-    }
 
     // Validation for Last Name - letters only, more than 3 letters
     if (!newStudent.last_name.trim()) {
@@ -491,10 +487,6 @@ export default function StudentClasses() {
     }
     if (!/^[a-zA-Z\s]+$/.test(newStudent.last_name.trim())) {
       toast.warning("Last name must contain letters only");
-      return;
-    }
-    if (newStudent.last_name.trim().length < 4) {
-      toast.warning("Last name must be at least 4 characters");
       return;
     }
 
@@ -1544,14 +1536,13 @@ export default function StudentClasses() {
                         }
                         className={
                           newStudent.first_name &&
-                          (!/^[a-zA-Z\s]+$/.test(newStudent.first_name) ||
-                            newStudent.first_name.length < 4)
+                          !/^[a-zA-Z\s]+$/.test(newStudent.first_name)
                             ? "border-red-300 focus:border-red-500"
                             : ""
                         }
                       />
                       <p className="text-xs text-gray-600">
-                        Letters only, 4+ characters
+                        Letters only
                       </p>
                     </div>
                   </div>
@@ -1571,14 +1562,13 @@ export default function StudentClasses() {
                         }
                         className={
                           newStudent.last_name &&
-                          (!/^[a-zA-Z\s]+$/.test(newStudent.last_name) ||
-                            newStudent.last_name.length < 4)
+                          !/^[a-zA-Z\s]+$/.test(newStudent.last_name)
                             ? "border-red-300 focus:border-red-500"
                             : ""
                         }
                       />
                       <p className="text-xs text-gray-600">
-                        Letters only, 4+ characters
+                        Letters only
                       </p>
                     </div>
                     <div className="space-y-2">
@@ -1638,12 +1628,10 @@ export default function StudentClasses() {
                           student.student_id.startsWith("20");
                         const isValidFirstName =
                           student.first_name &&
-                          /^[a-zA-Z\s]+$/.test(student.first_name) &&
-                          student.first_name.length >= 4;
+                          /^[a-zA-Z\s]+$/.test(student.first_name);
                         const isValidLastName =
                           student.last_name &&
-                          /^[a-zA-Z\s]+$/.test(student.last_name) &&
-                          student.last_name.length >= 4;
+                          /^[a-zA-Z\s]+$/.test(student.last_name);
                         const isValidEmail =
                           !student.email ||
                           student.email.includes("@gmail.com");
@@ -1733,12 +1721,10 @@ export default function StudentClasses() {
                             student.student_id.startsWith("20");
                           const isValidFirstName =
                             student.first_name &&
-                            /^[a-zA-Z\s]+$/.test(student.first_name) &&
-                            student.first_name.length >= 4;
+                            /^[a-zA-Z\s]+$/.test(student.first_name);
                           const isValidLastName =
                             student.last_name &&
-                            /^[a-zA-Z\s]+$/.test(student.last_name) &&
-                            student.last_name.length >= 4;
+                            /^[a-zA-Z\s]+$/.test(student.last_name);
                           const isValidEmail =
                             !student.email ||
                             student.email.includes("@gmail.com");
@@ -1762,12 +1748,10 @@ export default function StudentClasses() {
                       student.student_id.startsWith("20");
                     const isValidFirstName =
                       student.first_name &&
-                      /^[a-zA-Z\s]+$/.test(student.first_name) &&
-                      student.first_name.length >= 4;
+                      /^[a-zA-Z\s]+$/.test(student.first_name);
                     const isValidLastName =
                       student.last_name &&
-                      /^[a-zA-Z\s]+$/.test(student.last_name) &&
-                      student.last_name.length >= 4;
+                      /^[a-zA-Z\s]+$/.test(student.last_name);
                     const isValidEmail =
                       !student.email || student.email.includes("@gmail.com");
                     return !(
@@ -1822,12 +1806,10 @@ export default function StudentClasses() {
                     student.student_id.startsWith("20");
                   const isValidFirstName =
                     student.first_name &&
-                    /^[a-zA-Z\s]+$/.test(student.first_name) &&
-                    student.first_name.length >= 4;
+                    /^[a-zA-Z\s]+$/.test(student.first_name);
                   const isValidLastName =
                     student.last_name &&
-                    /^[a-zA-Z\s]+$/.test(student.last_name) &&
-                    student.last_name.length >= 4;
+                    /^[a-zA-Z\s]+$/.test(student.last_name);
                   const isValidEmail =
                     !student.email || student.email.includes("@gmail.com");
                   return !(
