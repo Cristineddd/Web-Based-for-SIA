@@ -948,3 +948,109 @@ export async function generateExamReportPdf(
   const safeExam = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
   doc.save(`${safeClass}_${safeExam}_exam_report.pdf`);
 }
+
+// ─── Class All-Exams PDF Export ───────────────────────────────────────────────
+
+export interface ClassAllExamsPdfData {
+  examTitle: string;
+  rows: PdfExamReportRow[];
+  metadata?: ExportMetadata;
+}
+
+/**
+ * Generates a single PDF containing all exams for a class.
+ * Structure: cover page → for each exam: section heading + results table + mini-summary.
+ */
+export async function generateClassAllExamsPdf(
+  className: string,
+  exams: ClassAllExamsPdfData[],
+): Promise<void> {
+  const logoBase64 = await loadGCLogoBase64();
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const generatedDate = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  // ── Cover page ──
+  const firstMeta = exams[0]?.metadata;
+  const coverMeta: { label: string; value: string }[] = [
+    { label: 'Class', value: className },
+    { label: 'Total Exams', value: String(exams.length) },
+  ];
+  if (firstMeta?.instructorName) coverMeta.push({ label: 'Instructor', value: firstMeta.instructorName });
+  if (firstMeta?.subject) coverMeta.push({ label: 'Subject', value: firstMeta.subject });
+  if (firstMeta?.section) coverMeta.push({ label: 'Section', value: firstMeta.section });
+  coverMeta.push({ label: 'Date Generated', value: generatedDate });
+
+  drawCoverPage(doc, className, 'All Exams Results Report', coverMeta, logoBase64);
+
+  // ── One section per exam ──
+  const cols = [
+    { header: '#', width: 10, align: 'center' as const },
+    { header: 'Student ID', width: 28 },
+    { header: 'Name', width: 50 },
+    { header: 'Score', width: 16, align: 'right' as const },
+    { header: '%', width: 16, align: 'right' as const },
+    { header: 'Status', width: CONTENT_WIDTH - 10 - 28 - 50 - 16 - 16 },
+  ];
+
+  exams.forEach(({ examTitle, rows, metadata }) => {
+    doc.addPage();
+    drawContentPageHeader(doc, logoBase64);
+    let y = MARGIN_TOP + 5;
+
+    // Exam title heading
+    y = drawSectionHeading(doc, y, examTitle);
+
+    // Optional metadata line
+    const metaParts: string[] = [];
+    if (metadata?.subject) metaParts.push(`Subject: ${metadata.subject}`);
+    if (metadata?.examDate) metaParts.push(`Date: ${metadata.examDate}`);
+    if (metadata?.numItems) metaParts.push(`Items: ${metadata.numItems}`);
+    if (metadata?.examCode) metaParts.push(`Code: ${metadata.examCode}`);
+    if (metaParts.length > 0) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...GRAY_500);
+      doc.text(metaParts.join('   •   '), MARGIN_LEFT, y);
+      doc.setTextColor(0);
+      y += 6;
+    }
+
+    // Results table
+    const tableRows = rows.map((r, i) => [
+      String(i + 1),
+      r.studentId,
+      r.studentName,
+      String(r.score),
+      `${r.percentage}%`,
+      r.status,
+    ]);
+
+    y = drawDataTable(doc, y, cols, tableRows, {
+      highlightFn: (row) => (row[5] === 'Failed' ? RED_50 : null),
+    });
+
+    // Mini summary
+    const passCount = rows.filter((r) => r.status === 'Passed').length;
+    const failCount = rows.length - passCount;
+    const avg = rows.length > 0
+      ? Math.round(rows.reduce((s, r) => s + r.percentage, 0) / rows.length)
+      : 0;
+
+    y += 6;
+    y = checkPageBreak(doc, y, 28);
+    y = drawSectionHeading(doc, y, 'Summary');
+    y = drawStatLine(doc, y, 'Total Records', String(rows.length));
+    y = drawStatLine(doc, y, 'Passed', String(passCount));
+    y = drawStatLine(doc, y, 'Failed', String(failCount));
+    drawStatLine(doc, y, 'Average Percentage', `${avg}%`);
+  });
+
+  addAllFooters(doc);
+
+  const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  doc.save(`${safeClass}_all_exams_report.pdf`);
+}

@@ -16,6 +16,7 @@ import {
 import {
   ChevronDown,
   ChevronUp,
+  Download,
   FileSpreadsheet,
   FileText,
   Folder,
@@ -30,7 +31,7 @@ import StudentSearchCombobox, {
   type SearchableStudent,
 } from "@/components/ui/StudentSearchCombobox";
 import { exportExamReportToExcel } from "@/services/excelExportService";
-import { ExportMetadata, generateExamReportPdf } from "@/services/pdfReportService";
+import { ExportMetadata, generateExamReportPdf, generateClassAllExamsPdf, ClassAllExamsPdfData } from "@/services/pdfReportService";
 import {
   collection,
   getDocs,
@@ -135,6 +136,7 @@ export default function Results() {
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
   const [sendingExamKey, setSendingExamKey] = useState<string | null>(null);
   const [sendingStudentClassId, setSendingStudentClassId] = useState<string | null>(null);
+  const [exportingClassId, setExportingClassId] = useState<string | null>(null);
   const [selectedStudentIdsByExam, setSelectedStudentIdsByExam] = useState<
     Record<string, string[]>
   >({});
@@ -147,7 +149,7 @@ export default function Results() {
     skipped: 0,
   });
 
-  const passingThreshold = 75;
+  const [passingThreshold, setPassingThreshold] = useState(75);
   const rowsCacheRef = useRef(rowsCache);
   const rowsSubscriptionsRef = useRef<Map<string, Unsubscribe>>(new Map());
 
@@ -648,6 +650,14 @@ export default function Results() {
     });
   }, [expandedClassIds, filteredClassViews, subscribeExamRows]);
 
+  // When passing threshold changes, tear down all subscriptions so they
+  // re-subscribe with the updated buildExamRows closure.
+  useEffect(() => {
+    rowsSubscriptionsRef.current.forEach((unsubscribe) => unsubscribe());
+    rowsSubscriptionsRef.current.clear();
+    setRowsCache({});
+  }, [passingThreshold]);
+
   useEffect(() => {
     const subscriptions = rowsSubscriptionsRef.current;
     return () => {
@@ -938,6 +948,61 @@ export default function Results() {
     });
   }, []);
 
+  const handleExportClass = useCallback(
+    async (view: ClassView) => {
+      // Always use allClassViews (pre-computed, unfiltered) to get every exam for this class
+      const classView = allClassViews.find((v) => v.cls.id === view.cls.id);
+      const classExams = classView?.exams ?? [];
+
+      if (classExams.length === 0) {
+        toast.info("No exams available to export for this class.");
+        return;
+      }
+
+      setExportingClassId(view.cls.id);
+      toast.info(`Exporting ${classExams.length} exam(s) for ${view.cls.class_name}…`);
+      try {
+        const examPdfData: ClassAllExamsPdfData[] = [];
+
+        // Fetch sequentially to avoid cache race conditions
+        for (const exam of classExams) {
+          const rows = await fetchExamRowsOnce(view.cls, exam);
+          const normalizedExamDate = normalizeDate(exam.created_at);
+          examPdfData.push({
+            examTitle: exam.title,
+            rows: rows.map((r) => ({
+              studentId: r.studentId,
+              studentName: r.studentName,
+              score: r.score,
+              percentage: r.percentage,
+              status: r.status,
+              examName: r.examName,
+              className: r.className,
+            })),
+            metadata: {
+              instructorName: user?.displayName || undefined,
+              subject: exam.subject || undefined,
+              section: view.cls.room || undefined,
+              numItems: exam.num_items || undefined,
+              choicesPerItem: exam.choices_per_item || undefined,
+              examDate: normalizedExamDate === "N/A" ? undefined : normalizedExamDate,
+              examCode: exam.examCode || undefined,
+            },
+          });
+        }
+
+        await generateClassAllExamsPdf(view.cls.class_name, examPdfData);
+        toast.success(`${examPdfData.length} exam(s) exported for ${view.cls.class_name}`);
+      } catch (error) {
+        console.error("Failed to export class exams:", error);
+        toast.error(`Failed to export class report for ${view.cls.class_name}`);
+      } finally {
+        setExportingClassId(null);
+      }
+    },
+    [allClassViews, fetchExamRowsOnce, user?.displayName],
+  );
+
   if (loading) {
     return (
       <div className="page-container flex items-center justify-center min-h-[55vh]">
@@ -976,7 +1041,7 @@ export default function Results() {
 
       {/* Filter Card */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Year Level</label>
             <Select value={yearFilter} onValueChange={setYearFilter}>
@@ -1018,6 +1083,27 @@ export default function Results() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+              Passing Threshold
+            </label>
+            <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={100}
+                  value={passingThreshold}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setPassingThreshold(val);
+                  }}
+                  className="w-32 h-2 accent-green-600 cursor-pointer"
+                />
+                <span className="text-sm font-bold text-green-700 w-12 text-center">
+                  {passingThreshold}%
+                </span>
+              </div>
           </div>
         </div>
       </div>
@@ -1073,8 +1159,8 @@ export default function Results() {
                 id={`results-class-${view.cls.id}`}
                 className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
               >
-                <button
-                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50/60 transition-colors"
+                <div
+                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50/60 transition-colors cursor-pointer"
                   onClick={() => toggleExpandClass(view.cls.id)}
                 >
                   <div>
@@ -1087,12 +1173,32 @@ export default function Results() {
                     <span className="text-xs font-semibold text-green-600 bg-green-50 border border-green-100 px-2.5 py-1 rounded-full">
                       {view.exams.length} reports
                     </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExportClass(view);
+                      }}
+                      disabled={exportingClassId === view.cls.id || view.exams.length === 0}
+                      className="border-emerald-200 text-emerald-700 text-xs h-7 px-2"
+                    >
+                      {exportingClassId === view.cls.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <>
+                          <Download className="w-3 h-3 mr-1" />
+                          Export All
+                        </>
+                      )}
+                    </Button>
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                   </div>
-                </button>
+                </div>
 
                 {isExpanded && (
-                  <div className="border-t bg-white p-4 space-y-4">
+                  <div className="border-t bg-white">
+                    <div className="max-h-[70vh] overflow-y-auto p-4 space-y-4">
                     <div className="rounded-xl border border-green-100 bg-green-50/40 p-3">
                       <p className="text-xs text-green-800 font-semibold mb-2">
                         Search student in this class
@@ -1386,6 +1492,7 @@ export default function Results() {
                         return examCards;
                       })()
                     )}
+                  </div>
                   </div>
                 )}
               </div>
