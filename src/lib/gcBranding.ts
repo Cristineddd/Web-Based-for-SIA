@@ -24,7 +24,14 @@ export const GC_LOGO_PATH = '/gclogo.png';
  */
 export async function loadGCLogoBase64(): Promise<string> {
   try {
-    const response = await fetch(GC_LOGO_PATH);
+    const primaryUrl =
+      typeof window !== 'undefined'
+        ? new URL(GC_LOGO_PATH, window.location.origin).toString()
+        : GC_LOGO_PATH;
+    let response = await fetch(primaryUrl, { cache: 'no-store' });
+    if (!response.ok && typeof window !== 'undefined') {
+      response = await fetch(GC_LOGO_PATH, { cache: 'no-store' });
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const blob = await response.blob();
     return new Promise((resolve, reject) => {

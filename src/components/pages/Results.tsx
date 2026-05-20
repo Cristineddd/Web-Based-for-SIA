@@ -16,6 +16,7 @@ import {
 import {
   ChevronDown,
   ChevronUp,
+  Download,
   FileSpreadsheet,
   FileText,
   Folder,
@@ -25,12 +26,12 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { getClasses, Class } from "@/services/classService";
-import { getExams, Exam } from "@/services/examService";
+import { getExams, updateExam, Exam } from "@/services/examService";
 import StudentSearchCombobox, {
   type SearchableStudent,
 } from "@/components/ui/StudentSearchCombobox";
 import { exportExamReportToExcel } from "@/services/excelExportService";
-import { ExportMetadata, generateExamReportPdf } from "@/services/pdfReportService";
+import { ExportMetadata, generateExamReportPdf, generateClassAllExamsPdf, ClassAllExamsPdfData } from "@/services/pdfReportService";
 import {
   collection,
   getDocs,
@@ -132,9 +133,12 @@ export default function Results() {
 
   const [expandedClassIds, setExpandedClassIds] = useState<Set<string>>(new Set());
   const [rowsCache, setRowsCache] = useState<Record<string, HubStudentRow[]>>({});
+  const rowsCacheRef = useRef<Record<string, HubStudentRow[]>>({});
+  const rowsSubscriptionsRef = useRef<Map<string, Unsubscribe>>(new Map());
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
   const [sendingExamKey, setSendingExamKey] = useState<string | null>(null);
   const [sendingStudentClassId, setSendingStudentClassId] = useState<string | null>(null);
+  const [exportingClassId, setExportingClassId] = useState<string | null>(null);
   const [selectedStudentIdsByExam, setSelectedStudentIdsByExam] = useState<
     Record<string, string[]>
   >({});
@@ -147,9 +151,52 @@ export default function Results() {
     skipped: 0,
   });
 
-  const passingThreshold = 60;
-  const rowsCacheRef = useRef(rowsCache);
-  const rowsSubscriptionsRef = useRef<Map<string, Unsubscribe>>(new Map());
+  const [passingThresholds, setPassingThresholds] = useState<Record<string, number>>({});
+  const thresholdSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  useEffect(() => {
+    setPassingThresholds((prev) => {
+      const next = { ...prev };
+      exams.forEach((exam) => {
+        if (next[exam.id] !== undefined) return;
+        if (typeof exam.passingThreshold === "number") {
+          next[exam.id] = exam.passingThreshold;
+        }
+      });
+      return next;
+    });
+  }, [exams]);
+
+  const handlePassingThresholdChange = useCallback((examId: string, value: number) => {
+    setPassingThresholds((prev) => ({
+      ...prev,
+      [examId]: value,
+    }));
+
+    const existing = thresholdSaveTimers.current[examId];
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    thresholdSaveTimers.current[examId] = setTimeout(async () => {
+      try {
+        await updateExam(examId, { passingThreshold: value });
+      } catch (error) {
+        console.error("Failed to update passing threshold:", error);
+        toast.error("Failed to save passing threshold");
+      }
+    }, 400);
+  }, [updateExam]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(thresholdSaveTimers.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const getPassingThreshold = useCallback(
+    (examId: string) => passingThresholds[examId] ?? 75,
+    [passingThresholds],
+  );
 
   useEffect(() => {
     rowsCacheRef.current = rowsCache;
@@ -442,6 +489,8 @@ export default function Results() {
       const studentMap = new Map(students.map((s) => [s.student_id, s]));
       const rowMap = new Map<string, HubStudentRow>();
 
+      const passingThreshold = getPassingThreshold(exam.id);
+
       scannedDocs.forEach((data) => {
         if (data.isNullId) return;
 
@@ -499,7 +548,7 @@ export default function Results() {
 
       return Array.from(rowMap.values()).sort((a, b) => a.studentName.localeCompare(b.studentName));
     },
-    [passingThreshold],
+    [getPassingThreshold],
   );
 
   const fetchExamRowsOnce = useCallback(
@@ -648,6 +697,14 @@ export default function Results() {
     });
   }, [expandedClassIds, filteredClassViews, subscribeExamRows]);
 
+  // When passing threshold changes, tear down all subscriptions so they
+  // re-subscribe with the updated buildExamRows closure.
+  useEffect(() => {
+    rowsSubscriptionsRef.current.forEach((unsubscribe) => unsubscribe());
+    rowsSubscriptionsRef.current.clear();
+    setRowsCache({});
+  }, [passingThresholds]);
+
   useEffect(() => {
     const subscriptions = rowsSubscriptionsRef.current;
     return () => {
@@ -674,7 +731,7 @@ export default function Results() {
           className: cls.class_name,
           examTitle: exam.title,
           subject: exam.subject,
-          passingThreshold,
+          passingThreshold: getPassingThreshold(exam.id),
           instructorName: user?.displayName || undefined,
           instructorEmail: user?.email || undefined,
           students: rows.map((row) => ({
@@ -701,7 +758,7 @@ export default function Results() {
         total: Number(data.total || rows.length),
       };
     },
-    [fetchExamRows, user?.displayName, user?.email],
+    [fetchExamRows, getPassingThreshold, user?.displayName, user?.email],
   );
 
   const handleSendSingleExam = useCallback(
@@ -938,6 +995,61 @@ export default function Results() {
     });
   }, []);
 
+  const handleExportClass = useCallback(
+    async (view: ClassView) => {
+      // Always use allClassViews (pre-computed, unfiltered) to get every exam for this class
+      const classView = allClassViews.find((v) => v.cls.id === view.cls.id);
+      const classExams = classView?.exams ?? [];
+
+      if (classExams.length === 0) {
+        toast.info("No exams available to export for this class.");
+        return;
+      }
+
+      setExportingClassId(view.cls.id);
+      toast.info(`Exporting ${classExams.length} exam(s) for ${view.cls.class_name}…`);
+      try {
+        const examPdfData: ClassAllExamsPdfData[] = [];
+
+        // Fetch sequentially to avoid cache race conditions
+        for (const exam of classExams) {
+          const rows = await fetchExamRowsOnce(view.cls, exam);
+          const normalizedExamDate = normalizeDate(exam.created_at);
+          examPdfData.push({
+            examTitle: exam.title,
+            rows: rows.map((r) => ({
+              studentId: r.studentId,
+              studentName: r.studentName,
+              score: r.score,
+              percentage: r.percentage,
+              status: r.status,
+              examName: r.examName,
+              className: r.className,
+            })),
+            metadata: {
+              instructorName: user?.displayName || undefined,
+              subject: exam.subject || undefined,
+              section: view.cls.room || undefined,
+              numItems: exam.num_items || undefined,
+              choicesPerItem: exam.choices_per_item || undefined,
+              examDate: normalizedExamDate === "N/A" ? undefined : normalizedExamDate,
+              examCode: exam.examCode || undefined,
+            },
+          });
+        }
+
+        await generateClassAllExamsPdf(view.cls.class_name, examPdfData);
+        toast.success(`${examPdfData.length} exam(s) exported for ${view.cls.class_name}`);
+      } catch (error) {
+        console.error("Failed to export class exams:", error);
+        toast.error(`Failed to export class report for ${view.cls.class_name}`);
+      } finally {
+        setExportingClassId(null);
+      }
+    },
+    [allClassViews, fetchExamRowsOnce, user?.displayName],
+  );
+
   if (loading) {
     return (
       <div className="page-container flex items-center justify-center min-h-[55vh]">
@@ -1073,8 +1185,8 @@ export default function Results() {
                 id={`results-class-${view.cls.id}`}
                 className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
               >
-                <button
-                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50/60 transition-colors"
+                <div
+                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50/60 transition-colors cursor-pointer"
                   onClick={() => toggleExpandClass(view.cls.id)}
                 >
                   <div>
@@ -1087,305 +1199,354 @@ export default function Results() {
                     <span className="text-xs font-semibold text-green-600 bg-green-50 border border-green-100 px-2.5 py-1 rounded-full">
                       {view.exams.length} reports
                     </span>
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExportClass(view);
+                      }}
+                      disabled={exportingClassId === view.cls.id || view.exams.length === 0}
+                      className="border-emerald-200 text-emerald-700 text-xs h-7 px-2"
+                    >
+                      {exportingClassId === view.cls.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <>
+                          <Download className="w-3 h-3 mr-1" />
+                          Export All
+                        </>
+                      )}
+                    </Button>
+                    {isExpanded ? (
+                      <ChevronUp className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                    )}
                   </div>
-                </button>
+                </div>
 
                 {isExpanded && (
-                  <div className="border-t bg-white p-4 space-y-4">
-                    <div className="rounded-xl border border-green-100 bg-green-50/40 p-3">
-                      <p className="text-xs text-green-800 font-semibold mb-2">
-                        Search student in this class
-                      </p>
-                      <StudentSearchCombobox
-                        students={searchableStudentsByClassId[view.cls.id] || []}
-                        value={classStudentSearch[view.cls.id] || ""}
-                        onChange={(value) => {
-                          setClassStudentSearch((prev) => ({
-                            ...prev,
-                            [view.cls.id]: value,
-                          }));
-                          setClassSelectedStudentId((prev) => ({
-                            ...prev,
-                            [view.cls.id]: null,
-                          }));
-                          setPendingStudentJump(null);
-                        }}
-                        onSelect={(student) => {
-                          setClassSelectedStudentId((prev) => ({
-                            ...prev,
-                            [view.cls.id]: student.studentId,
-                          }));
-                          setClassStudentSearch((prev) => ({
-                            ...prev,
-                            [view.cls.id]: student.studentName,
-                          }));
-                          setPendingStudentJump({
-                            studentId: student.studentId,
-                            classId: view.cls.id,
-                            startedAt: Date.now(),
-                            classScrolled: false,
-                          });
-                        }}
-                        placeholder="Search ID or name"
-                        className="w-full"
-                      />
-                      <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <p className="text-xs text-green-700">
-                          {selectedStudentForClass
-                            ? `Selected: ${selectedStudentForClass.last_name}, ${selectedStudentForClass.first_name}`
-                            : "Select a student to send all their exam scores in this class."}
+                  <div className="border-t bg-white">
+                    <div className="max-h-[70vh] overflow-y-auto p-4 space-y-4">
+                      <div className="rounded-xl border border-green-100 bg-green-50/40 p-3">
+                        <p className="text-xs text-green-800 font-semibold mb-2">
+                          Search student in this class
                         </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSendStudentAllExams(view)}
-                          disabled={
-                            !classSelectedStudentId[view.cls.id] ||
-                            sendingStudentClassId === view.cls.id
-                          }
-                          className="border-green-200 text-green-700"
-                        >
-                          {sendingStudentClassId === view.cls.id ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              Sending Student Scores...
-                            </>
-                          ) : (
-                            <>
-                              <Mail className="w-4 h-4 mr-2" />
-                              Send Student All Exams
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                    {view.exams.length === 0 ? (
-                      <p className="text-sm text-gray-400">No exams associated with this class.</p>
-                    ) : (
-                      (() => {
-                        const classSearchActive =
-                          Boolean(classSelectedStudentId[view.cls.id]) ||
-                          Boolean((classStudentSearch[view.cls.id] || "").trim());
-
-                        const examCards = view.exams
-                          .map((exam) => {
-                            const cacheKey = keyFor(view.cls.id, exam.id);
-                            const rows = rowsCache[cacheKey] || [];
-                            const displayRows = filterRowsByStudent(rows, view.cls.id);
-                            const isRowsLoading = !!loadingRows[cacheKey];
-                            const selectedIds = selectedStudentIdsByExam[cacheKey] || [];
-                            const selectedIdSet = new Set(selectedIds);
-                            const selectedDisplayCount = displayRows.filter((row) =>
-                              selectedIdSet.has(row.studentId),
-                            ).length;
-                            const allDisplayRowsSelected =
-                              displayRows.length > 0 && selectedDisplayCount === displayRows.length;
-                            const displayRowsPartiallySelected =
-                              selectedDisplayCount > 0 && selectedDisplayCount < displayRows.length;
-                            const avg =
-                              displayRows.length > 0
-                                ? Math.round(
-                                    displayRows.reduce((sum, row) => sum + row.percentage, 0) /
-                                      displayRows.length,
-                                  )
-                                : 0;
-
-                            if (classSearchActive && !isRowsLoading && displayRows.length === 0) {
-                              return null;
+                        <StudentSearchCombobox
+                          students={searchableStudentsByClassId[view.cls.id] || []}
+                          value={classStudentSearch[view.cls.id] || ""}
+                          onChange={(value) => {
+                            setClassStudentSearch((prev) => ({
+                              ...prev,
+                              [view.cls.id]: value,
+                            }));
+                            setClassSelectedStudentId((prev) => ({
+                              ...prev,
+                              [view.cls.id]: null,
+                            }));
+                            setPendingStudentJump(null);
+                          }}
+                          onSelect={(student) => {
+                            setClassSelectedStudentId((prev) => ({
+                              ...prev,
+                              [view.cls.id]: student.studentId,
+                            }));
+                            setClassStudentSearch((prev) => ({
+                              ...prev,
+                              [view.cls.id]: student.studentName,
+                            }));
+                            setPendingStudentJump({
+                              studentId: student.studentId,
+                              classId: view.cls.id,
+                              startedAt: Date.now(),
+                              classScrolled: false,
+                            });
+                          }}
+                          placeholder="Search ID or name"
+                          className="w-full"
+                        />
+                        <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <p className="text-xs text-green-700">
+                            {selectedStudentForClass
+                              ? `Selected: ${selectedStudentForClass.last_name}, ${selectedStudentForClass.first_name}`
+                              : "Select a student to send all their exam scores in this class."}
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSendStudentAllExams(view)}
+                            disabled={
+                              !classSelectedStudentId[view.cls.id] ||
+                              sendingStudentClassId === view.cls.id
                             }
+                            className="border-green-200 text-green-700"
+                          >
+                            {sendingStudentClassId === view.cls.id ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Sending Student Scores...
+                              </>
+                            ) : (
+                              <>
+                                <Mail className="w-4 h-4 mr-2" />
+                                Send Student All Exams
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      {view.exams.length === 0 ? (
+                        <p className="text-sm text-gray-400">No exams associated with this class.</p>
+                      ) : (
+                        (() => {
+                          const classSearchActive =
+                            Boolean(classSelectedStudentId[view.cls.id]) ||
+                            Boolean((classStudentSearch[view.cls.id] || "").trim());
 
-                            return (
-                              <Card key={exam.id} className="border border-green-100">
-                                <CardContent className="p-4 space-y-3">
-                                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                                    <div>
-                                      <p className="font-semibold text-gray-900">{exam.title}</p>
-                                      <p className="text-sm text-gray-500">
-                                        {exam.subject || "General"} | {exam.num_items} items
-                                      </p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      {isRowsLoading && (
-                                        <Badge variant="outline" className="border-amber-200 text-amber-700">
-                                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                          Syncing...
-                                        </Badge>
-                                      )}
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleSendSingleExam(view.cls, exam)}
-                                        disabled={sendingExamKey === cacheKey}
-                                        className="border-green-200 text-green-700"
-                                      >
-                                        {sendingExamKey === cacheKey ? (
-                                          <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                            Sending
-                                          </>
-                                        ) : (
-                                          <>
-                                            <Mail className="w-4 h-4 mr-2" />
-                                            Send All Results
-                                          </>
+                          const examCards = view.exams
+                            .map((exam) => {
+                              const cacheKey = keyFor(view.cls.id, exam.id);
+                              const rows = rowsCache[cacheKey] || [];
+                              const displayRows = filterRowsByStudent(rows, view.cls.id);
+                              const isRowsLoading = !!loadingRows[cacheKey];
+                              const selectedIds = selectedStudentIdsByExam[cacheKey] || [];
+                              const selectedIdSet = new Set(selectedIds);
+                              const selectedDisplayCount = displayRows.filter((row) =>
+                                selectedIdSet.has(row.studentId),
+                              ).length;
+                              const allDisplayRowsSelected =
+                                displayRows.length > 0 && selectedDisplayCount === displayRows.length;
+                              const displayRowsPartiallySelected =
+                                selectedDisplayCount > 0 && selectedDisplayCount < displayRows.length;
+                              const avg =
+                                displayRows.length > 0
+                                  ? Math.round(
+                                      displayRows.reduce((sum, row) => sum + row.percentage, 0) /
+                                        displayRows.length,
+                                    )
+                                  : 0;
+
+                              if (classSearchActive && !isRowsLoading && displayRows.length === 0) {
+                                return null;
+                              }
+
+                              return (
+                                <Card key={exam.id} className="border border-green-100">
+                                  <CardContent className="p-4 space-y-3">
+                                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                                      <div>
+                                        <p className="font-semibold text-gray-900">{exam.title}</p>
+                                        <p className="text-sm text-gray-500">
+                                          {exam.subject || "General"} | {exam.num_items} items
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <div className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/60 px-2 py-1">
+                                          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                                            Pass
+                                          </span>
+                                          <input
+                                            type="range"
+                                            min={1}
+                                            max={100}
+                                            value={getPassingThreshold(exam.id)}
+                                            onChange={(e) =>
+                                              handlePassingThresholdChange(
+                                                exam.id,
+                                                Number(e.target.value),
+                                              )
+                                            }
+                                            className="w-20 h-2 accent-emerald-600 cursor-pointer"
+                                          />
+                                          <span className="text-xs font-semibold text-emerald-700 w-9 text-right">
+                                            {getPassingThreshold(exam.id)}%
+                                          </span>
+                                        </div>
+                                        {isRowsLoading && (
+                                          <Badge
+                                            variant="outline"
+                                            className="border-amber-200 text-amber-700"
+                                          >
+                                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                            Syncing...
+                                          </Badge>
                                         )}
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() =>
-                                          handleSendSelectedExam(view.cls, exam, displayRows)
-                                        }
-                                        disabled={
-                                          sendingExamKey === cacheKey || selectedDisplayCount === 0
-                                        }
-                                        className="border-blue-200 text-blue-700"
-                                      >
-                                        <Mail className="w-4 h-4 mr-2" />
-                                        Send Selected ({selectedDisplayCount})
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleExport(view.cls, exam, "xlsx")}
-                                        className="border-emerald-200 text-emerald-700"
-                                      >
-                                        <FileSpreadsheet className="w-4 h-4 mr-2" />
-                                        Export XLSX
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleExport(view.cls, exam, "pdf")}
-                                        className="border-red-200 text-red-700"
-                                      >
-                                        <FileText className="w-4 h-4 mr-2" />
-                                        Export PDF
-                                      </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleSendSingleExam(view.cls, exam)}
+                                          disabled={sendingExamKey === cacheKey}
+                                          className="border-green-200 text-green-700"
+                                        >
+                                          {sendingExamKey === cacheKey ? (
+                                            <>
+                                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                              Sending
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Mail className="w-4 h-4 mr-2" />
+                                              Send All Results
+                                            </>
+                                          )}
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleSendSelectedExam(view.cls, exam, displayRows)
+                                          }
+                                          disabled={
+                                            sendingExamKey === cacheKey || selectedDisplayCount === 0
+                                          }
+                                          className="border-blue-200 text-blue-700"
+                                        >
+                                          <Mail className="w-4 h-4 mr-2" />
+                                          Send Selected ({selectedDisplayCount})
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleExport(view.cls, exam, "xlsx")}
+                                          className="border-emerald-200 text-emerald-700"
+                                        >
+                                          <FileSpreadsheet className="w-4 h-4 mr-2" />
+                                          Export XLSX
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleExport(view.cls, exam, "pdf")}
+                                          className="border-red-200 text-red-700"
+                                        >
+                                          <FileText className="w-4 h-4 mr-2" />
+                                          Export PDF
+                                        </Button>
+                                      </div>
                                     </div>
-                                  </div>
 
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="rounded-lg border bg-white p-3">
-                                      <p className="text-xs text-gray-500">Reported Students</p>
-                                      <p className="text-xl font-bold text-green-700">
-                                        {displayRows.length}
-                                      </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                      <div className="rounded-lg border bg-white p-3">
+                                        <p className="text-xs text-gray-500">Reported Students</p>
+                                        <p className="text-xl font-bold text-green-700">
+                                          {displayRows.length}
+                                        </p>
+                                      </div>
+                                      <div className="rounded-lg border bg-white p-3">
+                                        <p className="text-xs text-gray-500">Average Percentage</p>
+                                        <p className="text-xl font-bold text-green-700">
+                                          {displayRows.length ? `${avg}%` : "-"}
+                                        </p>
+                                      </div>
+                                      <div className="rounded-lg border bg-white p-3">
+                                        <p className="text-xs text-gray-500">Pass Count</p>
+                                        <p className="text-xl font-bold text-green-700">
+                                          {displayRows.filter((r) => r.status === "Passed").length}
+                                        </p>
+                                      </div>
                                     </div>
-                                    <div className="rounded-lg border bg-white p-3">
-                                      <p className="text-xs text-gray-500">Average Percentage</p>
-                                      <p className="text-xl font-bold text-green-700">
-                                        {displayRows.length ? `${avg}%` : "-"}
-                                      </p>
-                                    </div>
-                                    <div className="rounded-lg border bg-white p-3">
-                                      <p className="text-xs text-gray-500">Pass Count</p>
-                                      <p className="text-xl font-bold text-green-700">
-                                        {displayRows.filter((r) => r.status === "Passed").length}
-                                      </p>
-                                    </div>
-                                  </div>
 
-                                  {displayRows.length > 0 ? (
-                                    <div className="overflow-x-auto rounded-lg border">
-                                      <table className="min-w-full text-sm">
-                                        <thead className="bg-green-50 text-left">
-                                          <tr>
-                                            <th className="px-3 py-2 w-10">
-                                              <Checkbox
-                                                checked={
-                                                  allDisplayRowsSelected
-                                                    ? true
-                                                    : displayRowsPartiallySelected
-                                                      ? "indeterminate"
-                                                      : false
-                                                }
-                                                onCheckedChange={(checked) =>
-                                                  setExamBulkSelection(
-                                                    cacheKey,
-                                                    displayRows,
-                                                    checked === true,
-                                                  )
-                                                }
-                                                aria-label="Select all students in exam"
-                                              />
-                                            </th>
-                                            <th className="px-3 py-2 font-semibold">Student ID</th>
-                                            <th className="px-3 py-2 font-semibold">Name</th>
-                                            <th className="px-3 py-2 font-semibold">Score</th>
-                                            <th className="px-3 py-2 font-semibold">Percentage</th>
-                                            <th className="px-3 py-2 font-semibold">Status</th>
-                                            <th className="px-3 py-2 font-semibold">Date</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {displayRows.map((row) => (
-                                            <tr
-                                              key={row.studentId}
-                                              id={`results-row-${cacheKey}-${row.studentId}`}
-                                              className="border-t transition-colors"
-                                            >
-                                              <td className="px-3 py-2">
+                                    {displayRows.length > 0 ? (
+                                      <div className="overflow-x-auto rounded-lg border">
+                                        <table className="min-w-full text-sm">
+                                          <thead className="bg-green-50 text-left">
+                                            <tr>
+                                              <th className="px-3 py-2 w-10">
                                                 <Checkbox
-                                                  checked={selectedIdSet.has(row.studentId)}
+                                                  checked={
+                                                    allDisplayRowsSelected
+                                                      ? true
+                                                      : displayRowsPartiallySelected
+                                                        ? "indeterminate"
+                                                        : false
+                                                  }
                                                   onCheckedChange={(checked) =>
-                                                    setExamStudentSelection(
+                                                    setExamBulkSelection(
                                                       cacheKey,
-                                                      row.studentId,
+                                                      displayRows,
                                                       checked === true,
                                                     )
                                                   }
-                                                  aria-label={`Select ${row.studentName}`}
+                                                  aria-label="Select all students in exam"
                                                 />
-                                              </td>
-                                              <td className="px-3 py-2 font-mono text-xs">
-                                                {row.studentId}
-                                              </td>
-                                              <td className="px-3 py-2">{row.studentName}</td>
-                                              <td className="px-3 py-2">
-                                                {row.score}/{row.totalQuestions}
-                                              </td>
-                                              <td className="px-3 py-2">{row.percentage}%</td>
-                                              <td className="px-3 py-2">
-                                                <Badge
-                                                  className={
-                                                    row.status === "Passed"
-                                                      ? "bg-green-100 text-green-700"
-                                                      : "bg-red-100 text-red-700"
-                                                  }
-                                                >
-                                                  {row.status}
-                                                </Badge>
-                                              </td>
-                                              <td className="px-3 py-2">{row.date}</td>
+                                              </th>
+                                              <th className="px-3 py-2 font-semibold">Student ID</th>
+                                              <th className="px-3 py-2 font-semibold">Name</th>
+                                              <th className="px-3 py-2 font-semibold">Score</th>
+                                              <th className="px-3 py-2 font-semibold">Percentage</th>
+                                              <th className="px-3 py-2 font-semibold">Status</th>
+                                              <th className="px-3 py-2 font-semibold">Date</th>
                                             </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  ) : (
-                                    <div className="rounded-lg border border-dashed bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                                      No student results available yet.
-                                    </div>
-                                  )}
-                                </CardContent>
-                              </Card>
+                                          </thead>
+                                          <tbody>
+                                            {displayRows.map((row) => (
+                                              <tr
+                                                key={row.studentId}
+                                                id={`results-row-${cacheKey}-${row.studentId}`}
+                                                className="border-t transition-colors"
+                                              >
+                                                <td className="px-3 py-2">
+                                                  <Checkbox
+                                                    checked={selectedIdSet.has(row.studentId)}
+                                                    onCheckedChange={(checked) =>
+                                                      setExamStudentSelection(
+                                                        cacheKey,
+                                                        row.studentId,
+                                                        checked === true,
+                                                      )
+                                                    }
+                                                    aria-label={`Select ${row.studentName}`}
+                                                  />
+                                                </td>
+                                                <td className="px-3 py-2 font-mono text-xs">
+                                                  {row.studentId}
+                                                </td>
+                                                <td className="px-3 py-2">{row.studentName}</td>
+                                                <td className="px-3 py-2">
+                                                  {row.score}/{row.totalQuestions}
+                                                </td>
+                                                <td className="px-3 py-2">{row.percentage}%</td>
+                                                <td className="px-3 py-2">
+                                                  <Badge
+                                                    className={
+                                                      row.status === "Passed"
+                                                        ? "bg-green-100 text-green-700"
+                                                        : "bg-red-100 text-red-700"
+                                                    }
+                                                  >
+                                                    {row.status}
+                                                  </Badge>
+                                                </td>
+                                                <td className="px-3 py-2">{row.date}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    ) : (
+                                      <div className="rounded-lg border border-dashed bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                                        No student results available yet.
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              );
+                            })
+                            .filter((card): card is JSX.Element => card !== null);
+
+                          if (examCards.length === 0) {
+                            return (
+                              <div className="rounded-lg border border-dashed bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                                No matching records for this student in the current class.
+                              </div>
                             );
-                          })
-                          .filter((card): card is JSX.Element => card !== null);
+                          }
 
-                        if (examCards.length === 0) {
-                          return (
-                            <div className="rounded-lg border border-dashed bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                              No matching records for this student in the current class.
-                            </div>
-                          );
-                        }
-
-                        return examCards;
-                      })()
-                    )}
+                          return examCards;
+                        })()
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -160,16 +160,24 @@ interface WorkbookExportOptions {
   titleCellBySheetName?: Record<string, string>;
 }
 
-function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
+function toArrayBuffer(data: ArrayBuffer | SharedArrayBuffer | Uint8Array): ArrayBuffer {
   if (data instanceof ArrayBuffer) return data;
-  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+  if (data instanceof Uint8Array) {
+    const copy = new Uint8Array(data.byteLength);
+    copy.set(data);
+    return copy.buffer;
+  }
+  const copy = new Uint8Array(data.byteLength);
+  copy.set(new Uint8Array(data));
+  return copy.buffer;
 }
 
 function downloadArrayBufferExcel(
-  data: ArrayBuffer | Uint8Array,
+  data: ArrayBuffer | SharedArrayBuffer | Uint8Array,
   filename: string,
 ): void {
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const buffer = toArrayBuffer(data);
+  const bytes = new Uint8Array(buffer);
   const blob = new Blob([bytes], { type: EXCEL_MIME_TYPE });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -723,7 +731,9 @@ export function exportExamReportToExcel(
   className: string,
   metadata?: ExcelExportMetadata,
 ): void {
-  const wb = XLSX.utils.book_new();
+  const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  const safeExam = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  const filename = `${safeClass}_${safeExam}_exam_report.xlsx`;
 
   const headers = [
     '#',
@@ -748,66 +758,179 @@ export function exportExamReportToExcel(
   ]);
 
   const reportHeaderRows = buildExamReportLayoutRows(metadata);
-  const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
-  const headerRowIndex = reportHeaderRows.length;
-  ws['!merges'] = [
-    XLSX.utils.decode_range('A1:H2'),
-    XLSX.utils.decode_range('A3:B3'),
-    XLSX.utils.decode_range('D3:E3'),
-    XLSX.utils.decode_range('G3:H3'),
-    XLSX.utils.decode_range('A4:B4'),
-    XLSX.utils.decode_range('G4:H4'),
-    XLSX.utils.decode_range('A5:C5'),
-    XLSX.utils.decode_range('G5:H5'),
-  ];
-  ws['!cols'] = [
-    { wch: 8 },
-    { wch: 16 },
-    { wch: 30 },
-    { wch: 10 },
-    { wch: 14 },
-    { wch: 12 },
-    { wch: 14 },
-    { wch: 10 },
-  ];
-  ws['!rows'] = [
-    { hpt: 28 },
-    { hpt: 24 },
-    { hpt: 22 },
-    { hpt: 22 },
-    { hpt: 22 },
-    { hpt: 18 },
-    { hpt: 18 },
-    { hpt: 18 },
-    { hpt: 18 },
-    { hpt: 18 },
-  ];
-  stylizeHeaderRow(ws, headers.length, headerRowIndex);
-  freezeHeaderRow(ws, headerRowIndex + 1);
 
-  // Percentage column format
-  for (let r = headerRowIndex + 1; r <= headerRowIndex + data.length; r++) {
-    const cellRef = XLSX.utils.encode_cell({ r, c: 4 });
-    if (ws[cellRef]) {
-      ws[cellRef].z = '0"%"';
+  const exportWithExcelJS = async (): Promise<void> => {
+    const ExcelJS = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Exam Report');
+
+    const rowsToAdd = [...reportHeaderRows, headers, ...data];
+    rowsToAdd.forEach((row) => worksheet.addRow(row));
+
+    worksheet.mergeCells('A1:H1');
+    worksheet.mergeCells('A3:B3');
+    worksheet.mergeCells('G3:H3');
+    worksheet.mergeCells('A4:B4');
+    worksheet.mergeCells('G4:H4');
+    worksheet.mergeCells('A5:C5');
+    worksheet.mergeCells('G5:H5');
+    worksheet.mergeCells('A6:B6');
+
+    worksheet.columns = [
+      { width: 6 },
+      { width: 16 },
+      { width: 30 },
+      { width: 10 },
+      { width: 14 },
+      { width: 12 },
+      { width: 16 },
+      { width: 12 },
+    ];
+
+    worksheet.getRow(1).height = 36;
+    worksheet.getRow(2).height = 20;
+    worksheet.getRow(3).height = 18;
+    worksheet.getRow(4).height = 18;
+    worksheet.getRow(5).height = 18;
+    worksheet.getRow(6).height = 18;
+
+    const titleCell = worksheet.getCell('A1');
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    titleCell.font = { name: 'Calibri', size: 16, bold: true };
+
+    const headerRowIndex = reportHeaderRows.length + 1; // 1-based
+    const headerRow = worksheet.getRow(headerRowIndex);
+    headerRow.font = { bold: true };
+
+    worksheet.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+
+    for (let rowIndex = headerRowIndex + 1; rowIndex <= worksheet.rowCount; rowIndex++) {
+      const cell = worksheet.getCell(rowIndex, 5);
+      cell.numFmt = '0"%"';
     }
+
+    const usedRowCount = worksheet.rowCount;
+    const usedColumnCount = worksheet.columnCount;
+    for (let rowIndex = 1; rowIndex <= usedRowCount; rowIndex++) {
+      for (let columnIndex = 1; columnIndex <= usedColumnCount; columnIndex++) {
+        worksheet.getCell(rowIndex, columnIndex).border = {
+          top: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+          left: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+          bottom: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+          right: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+        };
+      }
+    }
+
+    const logoBase64 = await loadGCLogoBase64();
+    if (logoBase64) {
+      const logoId = workbook.addImage({ base64: logoBase64, extension: 'png' });
+      worksheet.addImage(logoId, {
+        tl: { col: 2.8, row: 0.06 },
+        ext: { width: 42, height: 42 },
+        editAs: 'oneCell',
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    downloadArrayBufferExcel(buffer as ArrayBuffer | Uint8Array, filename);
+  };
+
+  void exportWithExcelJS().catch((error) => {
+    console.warn('[Excel Export] Falling back to SheetJS export:', error);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Exam Report');
+    XLSX.writeFile(wb, filename);
+  });
+}
+
+// ─── Class-level All-Exams Export ────────────────────────────────────────────
+
+export interface ClassExamSheetData {
+  examTitle: string;
+  rows: ExamReportExportRow[];
+  metadata?: ExcelExportMetadata;
+}
+
+/**
+ * Exports every exam in a class as separate sheets in one XLSX workbook.
+ * Sheet names are truncated to 31 chars (Excel limit).
+ * Uses a direct synchronous download to ensure all sheets are preserved.
+ */
+export function exportClassAllExamsToExcel(
+  className: string,
+  exams: ClassExamSheetData[],
+): void {
+  const wb = XLSX.utils.book_new();
+
+  const headers = ['#', 'Student ID', 'Name', 'Score', 'Percentage', 'Status', 'Exam', 'Class'];
+
+  const sheetNames = new Set<string>();
+
+  exams.forEach(({ examTitle, rows, metadata }) => {
+    let sheetName = examTitle.replace(/[\\/?*[\]:]/g, '').substring(0, 28).trim() || 'Exam';
+    let suffix = 2;
+    const base = sheetName;
+    while (sheetNames.has(sheetName)) {
+      sheetName = `${base.substring(0, 25)}_${suffix}`;
+      suffix++;
+    }
+    sheetNames.add(sheetName);
+
+    const reportHeaderRows = buildExamReportLayoutRows(metadata);
+    const data = rows.map((r, i) => [
+      i + 1,
+      r.studentId,
+      r.studentName,
+      r.score,
+      r.percentage,
+      r.status,
+      r.examName,
+      r.className,
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
+    const hdrIdx = reportHeaderRows.length;
+
+    ws['!merges'] = [
+      XLSX.utils.decode_range('A1:H1'),
+      XLSX.utils.decode_range('A3:B3'),
+      XLSX.utils.decode_range('G3:H3'),
+      XLSX.utils.decode_range('A4:B4'),
+      XLSX.utils.decode_range('G4:H4'),
+      XLSX.utils.decode_range('A5:C5'),
+      XLSX.utils.decode_range('G5:H5'),
+      XLSX.utils.decode_range('A6:B6'),
+    ];
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 16 }, { wch: 30 }, { wch: 8 },
+      { wch: 13 }, { wch: 10 }, { wch: 24 }, { wch: 12 },
+    ];
+
+    stylizeHeaderRow(ws, headers.length, hdrIdx);
+    freezeHeaderRow(ws, hdrIdx + 1);
+
+    for (let r = hdrIdx + 1; r <= hdrIdx + data.length; r++) {
+      const cellRef = XLSX.utils.encode_cell({ r, c: 4 });
+      if (ws[cellRef]) ws[cellRef].z = '0"%"';
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+
+  if (wb.SheetNames.length === 0) {
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([['No exam data available']]),
+      'No Data',
+    );
   }
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Exam Report');
-
   const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
-  const safeExam = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
-  void exportWorkbookWithLogo(wb, `${safeClass}_${safeExam}_exam_report.xlsx`, {
-    logoPlacementBySheetName: {
-      'Exam Report': {
-  col: 0.5,
-  row: 0.1,
-  width: 60,
-  height: 60,
-  editAs: 'absolute',
-}
-    },
-    centeredTitleBySheetName: ['Exam Report'],
-    borderedSheetNames: ['Exam Report'],
-  });
+  const filename = `${safeClass}_all_exams_report.xlsx`;
+
+  // Use a direct synchronous download to guarantee all sheets are preserved.
+  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  downloadArrayBufferExcel(buffer, filename);
 }
