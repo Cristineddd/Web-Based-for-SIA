@@ -299,14 +299,6 @@ async function exportWorkbookWithLogo(
   downloadArrayBufferExcel(buffer, filename);
 }
 
-function formatExcelHeaderDate(value: Date): string {
-  return value.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-}
-
 function textOrNA(value?: string | number): string {
   if (value === undefined || value === null || value === '') return 'N/A';
   return String(value);
@@ -327,31 +319,10 @@ function buildExamReportLayoutRows(metadata?: ExcelExportMetadata): unknown[][] 
   return [
     [GC_SYSTEM_NAME, '', '', '', '', '', '', ''],
     ['', '', '', '', '', '', '', ''],
-    [
-      `Instructor: ${textOrNA(metadata?.instructorName)}`,
-      '',
-      '',
-      '',
-      '',
-      '',
-      `Generated: ${formatExcelHeaderDate(new Date())}`,
-      '',
-    ],
-    [
-      `Subject: ${textOrNA(metadata?.subject)}`,
-      '',
-      '',
-      '',
-      '',
-      '',
-      `Exam Date: ${textOrNA(metadata?.examDate)}`,
-      '',
-    ],
-    [itemsAndChoicesText, '', '', '', '', '', `Section: ${textOrNA(metadata?.section)}`, ''],
-    [`Exam Code: ${textOrNA(metadata?.examCode)}`, '', '', '', '', '', '', ''],
-    ['', '', '', '', '', '', '', ''],
-    ['', '', '', '', '', '', '', ''],
-    ['', '', '', '', '', '', '', ''],
+    [`Instructor: ${textOrNA(metadata?.instructorName)}`, '', '', '', '', '', '', ''],
+    [`Class: ${textOrNA(metadata?.className)}`, '', '', '', `Exam Date: ${textOrNA(metadata?.examDate)}`, '', '', ''],
+    [`Subject: ${textOrNA(metadata?.subject)}`, '', '', '', `Exam Name: ${textOrNA(metadata?.examTitle)}`, '', '', ''],
+    [itemsAndChoicesText, '', '', '', `Exam Code: ${textOrNA(metadata?.examCode)}`, '', '', ''],
     ['', '', '', '', '', '', '', ''],
   ];
 }
@@ -742,8 +713,6 @@ export function exportExamReportToExcel(
     'Score',
     'Percentage',
     'Status',
-    'Exam Name',
-    'Class',
   ];
 
   const data = rows.map((r, i) => [
@@ -753,60 +722,75 @@ export function exportExamReportToExcel(
     r.score,
     r.percentage,
     r.status,
-    r.examName,
-    r.className,
   ]);
 
   const reportHeaderRows = buildExamReportLayoutRows(metadata);
 
   const exportWithExcelJS = async (): Promise<void> => {
-    const ExcelJS = await import('exceljs');
+    const ExcelJSImport = await import('exceljs');
+    const ExcelJS = (ExcelJSImport as { default?: typeof import('exceljs') }).default ?? ExcelJSImport;
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Exam Report');
 
     const rowsToAdd = [...reportHeaderRows, headers, ...data];
     rowsToAdd.forEach((row) => worksheet.addRow(row));
 
-    worksheet.mergeCells('A1:H1');
-    worksheet.mergeCells('A3:B3');
-    worksheet.mergeCells('G3:H3');
-    worksheet.mergeCells('A4:B4');
-    worksheet.mergeCells('G4:H4');
-    worksheet.mergeCells('A5:C5');
-    worksheet.mergeCells('G5:H5');
-    worksheet.mergeCells('A6:B6');
+      const safeMerge = (range: string) => {
+        try {
+          worksheet.mergeCells(range);
+        } catch {
+          // Ignore overlapping merge errors for idempotent merges.
+        }
+      };
 
+      safeMerge('A1:F1');
+      safeMerge('A3:C3');
+      safeMerge('A4:C4');
+      safeMerge('A5:C5');
+      safeMerge('A6:C6');
     worksheet.columns = [
       { width: 6 },
       { width: 16 },
       { width: 30 },
       { width: 10 },
-      { width: 14 },
+      { width: 22 },
       { width: 12 },
       { width: 16 },
       { width: 12 },
     ];
 
     worksheet.getRow(1).height = 36;
-    worksheet.getRow(2).height = 20;
+    worksheet.getRow(2).height = 18;
     worksheet.getRow(3).height = 18;
     worksheet.getRow(4).height = 18;
     worksheet.getRow(5).height = 18;
     worksheet.getRow(6).height = 18;
+    worksheet.getRow(7).height = 18;
 
     const titleCell = worksheet.getCell('A1');
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     titleCell.font = { name: 'Calibri', size: 16, bold: true };
 
+    const leftAlign = { horizontal: 'left', vertical: 'middle' } as const;
+    worksheet.getCell('E4').alignment = leftAlign;
+    worksheet.getCell('E5').alignment = leftAlign;
+    worksheet.getCell('E6').alignment = leftAlign;
+
     const headerRowIndex = reportHeaderRows.length + 1; // 1-based
     const headerRow = worksheet.getRow(headerRowIndex);
     headerRow.font = { bold: true };
+    for (let col = 4; col <= 6; col++) {
+      headerRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+    }
 
     worksheet.views = [{ state: 'frozen', ySplit: headerRowIndex }];
 
     for (let rowIndex = headerRowIndex + 1; rowIndex <= worksheet.rowCount; rowIndex++) {
-      const cell = worksheet.getCell(rowIndex, 5);
-      cell.numFmt = '0"%"';
+      const percentCell = worksheet.getCell(rowIndex, 5);
+      percentCell.numFmt = '0"%"';
+      for (let col = 4; col <= 6; col++) {
+        worksheet.getCell(rowIndex, col).alignment = { horizontal: 'center', vertical: 'middle' };
+      }
     }
 
     const usedRowCount = worksheet.rowCount;
@@ -824,12 +808,19 @@ export function exportExamReportToExcel(
 
     const logoBase64 = await loadGCLogoBase64();
     if (logoBase64) {
-      const logoId = workbook.addImage({ base64: logoBase64, extension: 'png' });
-      worksheet.addImage(logoId, {
-        tl: { col: 2.8, row: 0.06 },
-        ext: { width: 42, height: 42 },
-        editAs: 'oneCell',
-      });
+      try {
+        const cleanedBase64 = logoBase64.includes(',')
+          ? logoBase64.split(',')[1]
+          : logoBase64;
+        const logoId = workbook.addImage({ base64: cleanedBase64, extension: 'png' });
+        worksheet.addImage(logoId, {
+          tl: { col: 2.8, row: 0.06 },
+          ext: { width: 42, height: 42 },
+          editAs: 'oneCell',
+        });
+      } catch (error) {
+        console.warn('[Excel Export] Logo embed failed:', error);
+      }
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -864,7 +855,7 @@ export function exportClassAllExamsToExcel(
 ): void {
   const wb = XLSX.utils.book_new();
 
-  const headers = ['#', 'Student ID', 'Name', 'Score', 'Percentage', 'Status', 'Exam', 'Class'];
+  const headers = ['#', 'Student ID', 'Name', 'Score', 'Percentage', 'Status'];
 
   const sheetNames = new Set<string>();
 
@@ -886,22 +877,17 @@ export function exportClassAllExamsToExcel(
       r.score,
       r.percentage,
       r.status,
-      r.examName,
-      r.className,
     ]);
 
     const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
     const hdrIdx = reportHeaderRows.length;
 
     ws['!merges'] = [
-      XLSX.utils.decode_range('A1:H1'),
-      XLSX.utils.decode_range('A3:B3'),
-      XLSX.utils.decode_range('G3:H3'),
-      XLSX.utils.decode_range('A4:B4'),
-      XLSX.utils.decode_range('G4:H4'),
+      XLSX.utils.decode_range('A1:F1'),
+      XLSX.utils.decode_range('A3:C3'),
+      XLSX.utils.decode_range('A4:C4'),
       XLSX.utils.decode_range('A5:C5'),
-      XLSX.utils.decode_range('G5:H5'),
-      XLSX.utils.decode_range('A6:B6'),
+      XLSX.utils.decode_range('A6:C6'),
     ];
     ws['!cols'] = [
       { wch: 6 }, { wch: 16 }, { wch: 30 }, { wch: 8 },

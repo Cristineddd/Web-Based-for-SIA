@@ -941,11 +941,13 @@ export default function Results() {
       const metadata: ExportMetadata = {
         instructorName: user?.displayName || undefined,
         subject: exam.subject || undefined,
-        section: cls.room || undefined,
+        className: cls.class_name || undefined,
+        room: cls.room || undefined,
         numItems: exam.num_items || undefined,
         choicesPerItem: exam.choices_per_item || undefined,
         examDate: normalizedExamDate === "N/A" ? undefined : normalizedExamDate,
         examCode: exam.examCode || undefined,
+        examTitle: exam.title || undefined,
       };
 
       if (format === "xlsx") {
@@ -1029,11 +1031,13 @@ export default function Results() {
             metadata: {
               instructorName: user?.displayName || undefined,
               subject: exam.subject || undefined,
-              section: view.cls.room || undefined,
+              className: view.cls.class_name || undefined,
+              room: view.cls.room || undefined,
               numItems: exam.num_items || undefined,
               choicesPerItem: exam.choices_per_item || undefined,
               examDate: normalizedExamDate === "N/A" ? undefined : normalizedExamDate,
               examCode: exam.examCode || undefined,
+              examTitle: exam.title || undefined,
             },
           });
         }

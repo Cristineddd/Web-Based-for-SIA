@@ -114,6 +114,9 @@ export interface ExcelExportMetadata {
   instructorName?: string;
   subject?: string;
   section?: string;
+  room?: string;
+  className?: string;
+  examTitle?: string;
   numItems?: number;
   choicesPerItem?: number;
   examDate?: string;
