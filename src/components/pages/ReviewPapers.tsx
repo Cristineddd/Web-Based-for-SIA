@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { FileText, Loader2, Mail, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
 import { getClassById, getClasses, type Class } from '@/services/classService';
-import { getExamById, getExams, type Exam } from '@/services/examService';
+import { getExamById, getExams, updateExam, type Exam } from '@/services/examService';
 import { ScanningService } from '@/services/scanningService';
 import type { ScannedResult } from '@/types/scanning';
 
@@ -50,7 +50,6 @@ interface StudentResultRow {
   scannedDate: string;
 }
 
-const PASSING_PERCENTAGE = 75;
 
 function calculateLetterGrade(percentage: number): string {
   if (percentage >= 90) return 'A';
@@ -107,9 +106,59 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
   const [rows, setRows] = useState<StudentResultRow[]>([]);
 
   const [selectedExamId, setSelectedExamId] = useState(examId);
-  const [selectedCourse, setSelectedCourse] = useState('all');
-  const [selectedSection, setSelectedSection] = useState('all');
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [passingThresholds, setPassingThresholds] = useState<Record<string, number>>({});
+  const thresholdSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    setPassingThresholds((prev) => {
+      const next = { ...prev };
+      availableExams.forEach((exam) => {
+        if (next[exam.id] !== undefined) return;
+        if (typeof exam.passingThreshold === 'number') {
+          next[exam.id] = exam.passingThreshold;
+        }
+      });
+      if (activeExam && next[activeExam.id] === undefined) {
+        if (typeof activeExam.passingThreshold === 'number') {
+          next[activeExam.id] = activeExam.passingThreshold;
+        }
+      }
+      return next;
+    });
+  }, [activeExam, availableExams]);
+
+  const getPassingThreshold = useCallback(
+    (targetExamId: string) => passingThresholds[targetExamId] ?? 75,
+    [passingThresholds],
+  );
+
+  const setPassingThreshold = useCallback((targetExamId: string, value: number) => {
+    setPassingThresholds((prev) => ({
+      ...prev,
+      [targetExamId]: value,
+    }));
+
+    const existing = thresholdSaveTimers.current[targetExamId];
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    thresholdSaveTimers.current[targetExamId] = setTimeout(async () => {
+      try {
+        await updateExam(targetExamId, { passingThreshold: value });
+      } catch (error) {
+        console.error('Failed to update passing threshold:', error);
+        toast.error('Failed to save passing threshold');
+      }
+    }, 400);
+  }, [updateExam]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(thresholdSaveTimers.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -253,7 +302,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
               score: result.score,
               totalQuestions: result.totalQuestions,
               percentage,
-              status: percentage >= PASSING_PERCENTAGE ? 'Passed' : 'Failed',
+              status: percentage >= getPassingThreshold(targetExam.id) ? 'Passed' : 'Failed',
               letterGrade: calculateLetterGrade(percentage),
               email: student?.email,
               scannedDate: normalizeDate(result.scannedAt),
@@ -263,8 +312,6 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
 
         setRows(nextRows);
         setSelectedStudentIds(new Set());
-        setSelectedCourse('all');
-        setSelectedSection('all');
       } catch (error) {
         console.error('Failed to load exam review rows:', error);
         toast.error('Failed to load student results');
@@ -274,7 +321,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
         setLoadingRows(false);
       }
     },
-    [availableExams, resolveClassForExam],
+    [availableExams, getPassingThreshold, resolveClassForExam],
   );
 
   useEffect(() => {
@@ -282,19 +329,15 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
     loadRowsForExam(selectedExamId);
   }, [selectedExamId, loadRowsForExam]);
 
-  const courseOptions = useMemo(() => {
-    return Array.from(new Set(rows.map((row) => row.course))).sort();
-  }, [rows]);
+  const scoredRows = useMemo(() => {
+    const threshold = getPassingThreshold(selectedExamId);
+    return rows.map((row) => ({
+      ...row,
+      status: row.percentage >= threshold ? 'Passed' : 'Failed',
+    }));
+  }, [getPassingThreshold, rows, selectedExamId]);
 
-  const sectionOptions = useMemo(() => {
-    return Array.from(new Set(rows.map((row) => row.section))).sort();
-  }, [rows]);
-
-  const filteredRows = useMemo(() => {
-    return rows
-      .filter((row) => (selectedCourse === 'all' ? true : row.course === selectedCourse))
-      .filter((row) => (selectedSection === 'all' ? true : row.section === selectedSection));
-  }, [rows, selectedCourse, selectedSection]);
+  const filteredRows = useMemo(() => scoredRows, [scoredRows]);
 
   const selectedRows = useMemo(() => {
     return filteredRows.filter((row) => selectedStudentIds.has(row.studentId));
@@ -309,8 +352,8 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
   }, [filteredRows, selectedStudentIds]);
 
   const totalPassed = useMemo(
-    () => rows.filter((row) => row.status === 'Passed').length,
-    [rows],
+    () => scoredRows.filter((row) => row.status === 'Passed').length,
+    [scoredRows],
   );
 
   const handleToggleStudent = useCallback((studentId: string, checked: boolean) => {
@@ -354,7 +397,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
           className: studentsToSend[0]?.className || activeExam.className || 'General',
           examTitle: activeExam.title,
           subject: activeExam.subject,
-          passingThreshold: PASSING_PERCENTAGE,
+          passingThreshold: getPassingThreshold(activeExam.id),
           instructorName: user?.displayName || undefined,
           instructorEmail: user?.email || undefined,
           students: studentsToSend.map((row) => ({
@@ -396,7 +439,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
         setSendingMode(null);
       }
     },
-    [activeExam, user?.displayName, user?.email],
+    [activeExam, getPassingThreshold, user?.displayName, user?.email],
   );
 
   const handleSendSelected = useCallback(async () => {
@@ -469,7 +512,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
               <FileText className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Passed ({PASSING_PERCENTAGE}%+)</p>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Passed ({getPassingThreshold(activeExam.id)}%+)</p>
               <p className="text-2xl font-bold text-[#1e293b]">{totalPassed}</p>
             </div>
           </div>
@@ -490,62 +533,31 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
       </div>
 
       <Card className="border border-gray-100 shadow-sm rounded-xl bg-white">
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <CardContent className="p-4 grid grid-cols-1 gap-3">
           <div>
-            <p className="text-xs text-gray-500 mb-1">Exam</p>
-            <Select value={selectedExamId} onValueChange={setSelectedExamId}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="Select exam" />
-              </SelectTrigger>
-              <SelectContent className="bg-white">
-                {availableExams.map((exam) => (
-                  <SelectItem key={exam.id} value={exam.id}>
-                    {exam.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Section</p>
-            <Select value={selectedSection} onValueChange={setSelectedSection}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="All Sections" />
-              </SelectTrigger>
-              <SelectContent className="bg-white">
-                <SelectItem value="all">All Sections</SelectItem>
-                {sectionOptions.map((section) => (
-                  <SelectItem key={section} value={section}>
-                    {section}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Course</p>
-            <Select value={selectedCourse} onValueChange={setSelectedCourse}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="All Courses" />
-              </SelectTrigger>
-              <SelectContent className="bg-white">
-                <SelectItem value="all">All Courses</SelectItem>
-                {courseOptions.map((course) => (
-                  <SelectItem key={course} value={course}>
-                    {course}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <p className="text-xs text-gray-500 mb-1">Passing Threshold</p>
+            <div className="flex items-center gap-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={getPassingThreshold(selectedExamId)}
+                onChange={(event) =>
+                  setPassingThreshold(selectedExamId, Number(event.target.value))
+                }
+                className="w-full h-2 accent-emerald-600 cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-emerald-700 w-10 text-right">
+                {getPassingThreshold(selectedExamId)}%
+              </span>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Badge variant="outline" className="border-gray-200 text-gray-500 font-medium">
-          {filteredRows.length} student(s) in current filters
+          {filteredRows.length} student(s)
         </Badge>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -605,7 +617,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
           </div>
         ) : filteredRows.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground font-medium">No students match the current filters.</p>
+            <p className="text-muted-foreground font-medium">No students available for this exam.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -102,6 +102,7 @@ export interface Exam {
   logoUrl?: string;
   scannedCount?: number;
   averageScore?: string;
+  passingThreshold?: number;
 }
 
 export interface GeneratedSheet {
@@ -371,6 +372,7 @@ export async function getExams(userId?: string): Promise<Exam[]> {
           taggedClasses: data.taggedClasses || [],
           isArchived: data.isArchived,
           examCode: examCode,
+          passingThreshold: data.passingThreshold,
         });
       }
     });
@@ -449,6 +451,7 @@ export async function getExamById(examId: string): Promise<Exam | null> {
       status: (data.status as "draft" | "final") || "draft",
       institutionName: data.institutionName,
       logoUrl: data.logoUrl,
+      passingThreshold: data.passingThreshold,
     };
   } catch (error: any) {
     // Silently handle offline errors - don't throw
@@ -480,7 +483,13 @@ export async function updateExam(
   const docRef = doc(db, "exams", examId);
   try {
     // Check if we're only updating archive status or other systemic fields
-    const systemicFields = ["isArchived", "archivedAt", "classId", "className"];
+    const systemicFields = [
+      "isArchived",
+      "archivedAt",
+      "classId",
+      "className",
+      "passingThreshold",
+    ];
     const isOnlyArchiveUpdate = Object.keys(updates).every((key) =>
       systemicFields.includes(key),
     );
@@ -708,6 +717,7 @@ export async function getExamsByClassId(classId: string): Promise<Exam[]> {
         isArchived: data.isArchived || false,
         examCode: data.examCode,
         status: data.status,
+        passingThreshold: data.passingThreshold,
       };
       examMap.set(docSnap.id, exam);
     };
