@@ -9,13 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+
 import {
   Table,
   TableBody,
@@ -333,7 +327,7 @@ export default function ReviewPapersPage({ params, embedded = false }: ReviewPap
     const threshold = getPassingThreshold(selectedExamId);
     return rows.map((row) => ({
       ...row,
-      status: row.percentage >= threshold ? 'Passed' : 'Failed',
+      status: (row.percentage >= threshold ? 'Passed' : 'Failed') as 'Passed' | 'Failed',
     }));
   }, [getPassingThreshold, rows, selectedExamId]);
 

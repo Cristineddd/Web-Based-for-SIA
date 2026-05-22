@@ -104,6 +104,19 @@ function freezeHeaderRow(ws: XLSX.WorkSheet, frozenRows: number = 1): void {
   (ws as any)['!views'] = [{ state: 'frozen', ySplit: frozenRows }];
 }
 
+/** Remove control characters that break XLSX XML (keep tab/newline/carriage) */
+function sanitizeCell(value: unknown): string | number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+  const s = String(value);
+  // Remove C0 control characters except LF(\n), CR(\r), TAB(\t)
+  return s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+}
+
+function sanitizeRow(row: unknown[]): unknown[] {
+  return row.map((c) => sanitizeCell(c));
+}
+
 /**
  * Build a worksheet with Gordon College branding rows prepended.
  * Returns the worksheet and the 0-based row index of the data header.
@@ -114,7 +127,7 @@ function buildBrandedSheet(
   metadata?: ExcelExportMetadata,
 ): { ws: XLSX.WorkSheet; headerRowIndex: number } {
   const brandingRows = getExcelBrandingRows(metadata);
-  const allRows = [...brandingRows, headerRow, ...dataRows];
+  const allRows = [...brandingRows.map(sanitizeRow), sanitizeRow(headerRow), ...dataRows.map(sanitizeRow)];
   const ws = XLSX.utils.aoa_to_sheet(allRows);
   const headerRowIndex = brandingRows.length; // 0-based index of the header
   return { ws, headerRowIndex };
@@ -830,7 +843,10 @@ export function exportExamReportToExcel(
   void exportWithExcelJS().catch((error) => {
     console.warn('[Excel Export] Falling back to SheetJS export:', error);
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
+    const sanitizedReportHeaders = reportHeaderRows.map(sanitizeRow);
+    const sanitizedHeaders = sanitizeRow(headers);
+    const sanitizedData = data.map(sanitizeRow);
+    const ws = XLSX.utils.aoa_to_sheet([...sanitizedReportHeaders, sanitizedHeaders, ...sanitizedData]);
     XLSX.utils.book_append_sheet(wb, ws, 'Exam Report');
     XLSX.writeFile(wb, filename);
   });
@@ -888,96 +904,6 @@ export function exportClassAllExamsToExcel(
       XLSX.utils.decode_range('A4:C4'),
       XLSX.utils.decode_range('A5:C5'),
       XLSX.utils.decode_range('A6:C6'),
-    ];
-    ws['!cols'] = [
-      { wch: 6 }, { wch: 16 }, { wch: 30 }, { wch: 8 },
-      { wch: 13 }, { wch: 10 }, { wch: 24 }, { wch: 12 },
-    ];
-
-    stylizeHeaderRow(ws, headers.length, hdrIdx);
-    freezeHeaderRow(ws, hdrIdx + 1);
-
-    for (let r = hdrIdx + 1; r <= hdrIdx + data.length; r++) {
-      const cellRef = XLSX.utils.encode_cell({ r, c: 4 });
-      if (ws[cellRef]) ws[cellRef].z = '0"%"';
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  });
-
-  if (wb.SheetNames.length === 0) {
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet([['No exam data available']]),
-      'No Data',
-    );
-  }
-
-  const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
-  const filename = `${safeClass}_all_exams_report.xlsx`;
-
-  // Use a direct synchronous download to guarantee all sheets are preserved.
-  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
-  downloadArrayBufferExcel(buffer, filename);
-}
-
-// ─── Class-level All-Exams Export ────────────────────────────────────────────
-
-export interface ClassExamSheetData {
-  examTitle: string;
-  rows: ExamReportExportRow[];
-  metadata?: ExcelExportMetadata;
-}
-
-/**
- * Exports every exam in a class as separate sheets in one XLSX workbook.
- * Sheet names are truncated to 31 chars (Excel limit).
- * Uses a direct synchronous download to ensure all sheets are preserved.
- */
-export function exportClassAllExamsToExcel(
-  className: string,
-  exams: ClassExamSheetData[],
-): void {
-  const wb = XLSX.utils.book_new();
-
-  const headers = ['#', 'Student ID', 'Name', 'Score', 'Percentage', 'Status', 'Exam', 'Class'];
-
-  const sheetNames = new Set<string>();
-
-  exams.forEach(({ examTitle, rows, metadata }) => {
-    let sheetName = examTitle.replace(/[\\/?*[\]:]/g, '').substring(0, 28).trim() || 'Exam';
-    let suffix = 2;
-    const base = sheetName;
-    while (sheetNames.has(sheetName)) {
-      sheetName = `${base.substring(0, 25)}_${suffix}`;
-      suffix++;
-    }
-    sheetNames.add(sheetName);
-
-    const reportHeaderRows = buildExamReportLayoutRows(metadata);
-    const data = rows.map((r, i) => [
-      i + 1,
-      r.studentId,
-      r.studentName,
-      r.score,
-      r.percentage,
-      r.status,
-      r.examName,
-      r.className,
-    ]);
-
-    const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
-    const hdrIdx = reportHeaderRows.length;
-
-    ws['!merges'] = [
-      XLSX.utils.decode_range('A1:H2'),
-      XLSX.utils.decode_range('A3:B3'),
-      XLSX.utils.decode_range('D3:E3'),
-      XLSX.utils.decode_range('G3:H3'),
-      XLSX.utils.decode_range('A4:B4'),
-      XLSX.utils.decode_range('G4:H4'),
-      XLSX.utils.decode_range('A5:C5'),
-      XLSX.utils.decode_range('G5:H5'),
     ];
     ws['!cols'] = [
       { wch: 6 }, { wch: 16 }, { wch: 30 }, { wch: 8 },
