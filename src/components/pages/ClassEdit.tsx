@@ -45,6 +45,7 @@ import {
   getExams,
   updateExam,
   archiveExam,
+  tagExamToClass,
   type Exam,
 } from "@/services/examService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -411,12 +412,17 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         instructorId: user.instructorId,
         createdBy: user.id,
         classId: classId,
-        className: classData?.class_name || "",
+        className: classData?.class_name || formData.className || "",
         created_at: new Date().toISOString(),
       };
 
       const { createExam } = await import("@/services/examService");
       const newExam = await createExam(examData, user.id, user.instructorId);
+
+      // Ensure the exam is properly tagged to this class (many-to-many)
+      if (classId && classData?.class_name) {
+        await tagExamToClass(newExam.id, classId, classData.class_name);
+      }
 
       if (user.email) {
         AuditLogger.logActivity(
@@ -431,7 +437,11 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         ).catch(console.error);
       }
 
-      setExams((prev) => [newExam, ...prev]);
+      // Refresh exams list to include the new exam
+      const updatedExams = await getExamsByClassId(classId!);
+      setExams(updatedExams);
+      setStats((prev) => ({ ...prev, examCount: updatedExams.length }));
+
       toast.success(`Exam "${formData.name}" created successfully`);
       setShowCreateExam(false);
     } catch (error) {
@@ -531,11 +541,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       // First name validation
       if (
         !student.first_name ||
-        !/^[a-zA-ZñÑ\s]+$/.test(student.first_name) ||
-        student.first_name.length < 4
+        !/^[a-zA-ZñÑ\s]+$/.test(student.first_name)
       ) {
         toast.error(
-          `Student ${i + 1}: First name must be at least 4 characters and contain only letters`,
+          `Student ${i + 1}: First name must contain only letters`,
         );
         return;
       }
@@ -543,11 +552,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
       // Last name validation
       if (
         !student.last_name ||
-        !/^[a-zA-ZñÑ\s]+$/.test(student.last_name) ||
-        student.last_name.length < 4
+        !/^[a-zA-ZñÑ\s]+$/.test(student.last_name)
       ) {
         toast.error(
-          `Student ${i + 1}: Last name must be at least 4 characters and contain only letters`,
+          `Student ${i + 1}: Last name must contain only letters`,
         );
         return;
       }
@@ -590,10 +598,10 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
 
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ["Student ID", "First Name", "Last Name", "Middle Name (Optional)"],
-      ["201234567", "Juan", "Dela Cruz", "Santos"],
+      ["Student ID", "First Name", "Last Name", "Middle Name (Optional)", "Email (Optional)"],
+      ["201234567", "Juan", "Dela Cruz", "Santos", "juan@example.com"],
     ]);
-    ws["!cols"] = [{ wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 25 }];
+    ws["!cols"] = [{ wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 30 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
     XLSX.writeFile(wb, "student_import_template.xlsx");
@@ -605,9 +613,9 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     editingStudentsData.forEach((s, i) => {
       if (!s.student_id || !/^\d{9}$/.test(s.student_id) || !s.student_id.startsWith("20"))
         errors.push(`Row ${i + 1}: Invalid Student ID "${s.student_id}"`);
-      else if (!s.first_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.first_name) || s.first_name.length < 4)
+      else if (!s.first_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.first_name))
         errors.push(`Row ${i + 1}: Invalid First Name`);
-      else if (!s.last_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.last_name) || s.last_name.length < 4)
+      else if (!s.last_name || !/^[a-zA-Z\u00c0-\u024f\s]+$/i.test(s.last_name))
         errors.push(`Row ${i + 1}: Invalid Last Name`);
     });
     if (errors.length > 0) {
@@ -694,6 +702,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         const aliasesStudentId = new Set(["student id", "studentid", "id"]);
         const aliasesFirst = new Set(["first name", "firstname", "first"]);
         const aliasesLast = new Set(["last name", "lastname", "last"]);
+        const aliasesMiddle = new Set([
+          "middle name",
+          "middlename",
+          "middle",
+          "middle name optional",
+        ]);
         const aliasesEmail = new Set([
           "email",
           "email optional",
@@ -708,11 +722,12 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
         const colStudentId = findCol(aliasesStudentId);
         const colFirst = findCol(aliasesFirst);
         const colLast = findCol(aliasesLast);
+        const colMiddle = findCol(aliasesMiddle);
         const colEmail = findCol(aliasesEmail);
 
         let parsed: Student[];
         if (colStudentId === -1 || colFirst === -1 || colLast === -1) {
-          // Fallback: assume A-D (Student ID, First Name, Last Name, Email)
+          // Fallback: assume A=StudentID, B=FirstName, C=LastName, D=MiddleName, E=Email
           parsed = aoa
             .slice(1)
             .filter((row) =>
@@ -722,11 +737,13 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               const student_id = String(row[0] ?? "").trim();
               const first_name = String(row[1] ?? "").trim();
               const last_name = String(row[2] ?? "").trim();
-              const email = String(row[3] ?? "").trim();
+              const middle_name = String(row[3] ?? "").trim();
+              const email = String(row[4] ?? "").trim();
               return {
                 student_id,
                 first_name,
                 last_name,
+                ...(middle_name ? { middle_name } : {}),
                 ...(email ? { email } : {}),
               } as Student;
             });
@@ -740,12 +757,15 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
               const student_id = String(row[colStudentId] ?? "").trim();
               const first_name = String(row[colFirst] ?? "").trim();
               const last_name = String(row[colLast] ?? "").trim();
+              const middle_name =
+                colMiddle >= 0 ? String(row[colMiddle] ?? "").trim() : "";
               const email =
                 colEmail >= 0 ? String(row[colEmail] ?? "").trim() : "";
               return {
                 student_id,
                 first_name,
                 last_name,
+                ...(middle_name ? { middle_name } : {}),
                 ...(email ? { email } : {}),
               } as Student;
             });
@@ -772,16 +792,14 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
           }
           if (
             !s.first_name ||
-            !/^[a-zA-ZñÑ\s]+$/.test(s.first_name) ||
-            s.first_name.length < 4
+            !/^[a-zA-ZñÑ\s]+$/.test(s.first_name)
           ) {
             invalidRows.push(`Row ${i + 2}: Invalid First Name`);
             return;
           }
           if (
             !s.last_name ||
-            !/^[a-zA-ZñÑ\s]+$/.test(s.last_name) ||
-            s.last_name.length < 4
+            !/^[a-zA-ZñÑ\s]+$/.test(s.last_name)
           ) {
             invalidRows.push(`Row ${i + 2}: Invalid Last Name`);
             return;
@@ -1015,19 +1033,17 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
     if (!selectedExam) return;
 
     try {
-      await updateExam(examId, {
-        classId: classData.id,
-        className: classData.class_name,
-      });
+      // Use proper many-to-many tagging
+      await tagExamToClass(examId, classData.id, classData.class_name);
 
       toast.success(`Tagged "${selectedExam.title}" to this class`);
 
-      // Refresh exams
+      // Refresh exams list
       const updatedExams = await getExamsByClassId(classData.id);
       setExams(updatedExams);
       setStats((prev) => ({ ...prev, examCount: updatedExams.length }));
 
-      // Update allExams (remove the tagged one)
+      // Remove from "available to tag" list
       setAllExams((prev) => prev.filter((e) => e.id !== examId));
     } catch (err) {
       console.error(err);
@@ -2393,6 +2409,13 @@ export default function ClassEdit({ classId: propClassId }: ClassEditProps) {
                 <p className="text-xs text-gray-400 mt-1">
                   Start by tagging an existing exam or creating a new one.
                 </p>
+                <Button
+                  onClick={() => setShowCreateExam(true)}
+                  className="mt-6 inline-flex items-center gap-2 h-10 px-6 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 shadow-md shadow-green-500/10 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Exam
+                </Button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

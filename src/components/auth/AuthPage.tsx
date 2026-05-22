@@ -4,8 +4,12 @@ import { useState } from 'react';
 import { LoginForm } from './LoginForm';
 import { SignUpForm } from './SignUpForm';
 
-export function AuthPage() {
-  const [isLogin, setIsLogin] = useState(true);
+interface AuthPageProps {
+  initialMode?: 'login' | 'signup';
+}
+
+export function AuthPage({ initialMode = 'login' }: AuthPageProps) {
+  const [isLogin, setIsLogin] = useState(initialMode === 'login');
 
   const toggleMode = () => setIsLogin(!isLogin);
 

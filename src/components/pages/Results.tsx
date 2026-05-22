@@ -1092,7 +1092,7 @@ export default function Results() {
 
       {/* Filter Card */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Year Level</label>
             <Select value={yearFilter} onValueChange={setYearFilter}>
@@ -1134,6 +1134,27 @@ export default function Results() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+              Passing Threshold
+            </label>
+            <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={100}
+                  value={passingThreshold}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setPassingThreshold(val);
+                  }}
+                  className="w-32 h-2 accent-green-600 cursor-pointer"
+                />
+                <span className="text-sm font-bold text-green-700 w-12 text-center">
+                  {passingThreshold}%
+                </span>
+              </div>
           </div>
         </div>
       </div>
@@ -1551,6 +1572,7 @@ export default function Results() {
                         })()
                       )}
                     </div>
+                  </div>
                   </div>
                 )}
               </div>

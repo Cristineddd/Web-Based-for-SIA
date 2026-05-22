@@ -139,13 +139,21 @@ export async function createClass(
     );
     console.log("[SUCCESS] Class created successfully with ID:", docRef.id);
 
+    // Fetch the saved document to get server timestamps
+    const savedDoc = await getDoc(docRef);
+    const savedData = savedDoc.data() as any;
+
     // Return the class with the generated ID (include instructorId)
     const newClass: Class = {
       id: docRef.id,
       ...classData,
       createdBy: userId,
       ...(instructorId && { instructorId: instructorId }), // Include instructorId in return value
-      updatedAt: new Date().toISOString(),
+      created_at:
+        savedData.created_at ||
+        savedData.createdAt?.toDate?.()?.toISOString() ||
+        new Date().toISOString(),
+      updatedAt: savedData.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
     };
 
     return newClass;
