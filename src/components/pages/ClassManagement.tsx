@@ -160,8 +160,8 @@ export default function ClassManagement() {
         },
       );
 
-      // Refresh page to update sidebar exam link status
-      window.location.reload();
+      // Navigate to the actual class edit page with the real Firestore ID
+      router.push(`/classes/edit/${newClassDoc.id}`);
     } catch (error) {
       console.error("Error saving class to Firebase:", error);
       setClasses((prevClasses) => prevClasses.filter((c) => c.id !== tempId));

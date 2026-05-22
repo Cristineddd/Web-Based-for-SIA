@@ -21,6 +21,20 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
   },
+  // Redirect singular/wrong URL paths to correct plural paths
+  async redirects() {
+    return [
+      { source: "/exam", destination: "/exams", permanent: true },
+      { source: "/exam/:path*", destination: "/exams/:path*", permanent: true },
+      { source: "/class", destination: "/classes", permanent: true },
+      { source: "/class/:path*", destination: "/classes/:path*", permanent: true },
+      { source: "/result", destination: "/results", permanent: true },
+      { source: "/result/:path*", destination: "/results/:path*", permanent: true },
+      { source: "/archives", destination: "/archive", permanent: true },
+      { source: "/archives/:path*", destination: "/archive/:path*", permanent: true },
+      { source: "/home", destination: "/dashboard", permanent: true },
+    ];
+  },
   // Fix COOP warning for Google Sign-In popup
   async headers() {
     return [

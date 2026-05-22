@@ -11,7 +11,7 @@ const SETTINGS_COLLECTION = "instructorSettings";
 
 /** The shape of a single instructor's persisted settings document. */
 export interface InstructorSettings {
-  /** Minimum percentage to be considered "passing" (0–100). Default 60. */
+  /** Minimum percentage to be considered "passing" (0-100). Default 75. */
   passingThreshold: number;
   /** Institution name shown in exports / headers. */
   institutionName?: string;
@@ -24,7 +24,7 @@ export interface InstructorSettings {
 }
 
 const DEFAULT_SETTINGS: InstructorSettings = {
-  passingThreshold: 60,
+  passingThreshold: 75,
   institutionName: "Gordon College",
   timezone: "UTC-8:00 (Philippine Time)",
 };

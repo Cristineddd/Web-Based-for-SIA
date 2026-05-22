@@ -589,24 +589,26 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
         <div className="mt-6">
           {activeTab === "key_answer" && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h3 className="text-xl font-bold text-[#0f172a]">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-lg sm:text-xl font-bold text-[#0f172a] shrink-0">
                   Answer Key Configuration
                 </h3>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={handleDownloadTemplate}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                    title="Download Template"
                   >
-                    <Download className="w-4 h-4" />
-                    <span>Template</span>
+                    <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Template</span>
                   </button>
                   <button
                     onClick={() => importKeyRef.current?.click()}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                    title="Import Key"
                   >
-                    <Upload className="w-4 h-4" />
-                    <span>Import Key</span>
+                    <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Import Key</span>
                   </button>
                   <input
                     ref={importKeyRef}
@@ -622,64 +624,104 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                   <button
                     onClick={handleSaveAnswerKey}
                     disabled={isSavingKey}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all shadow-sm disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-green-600 text-white rounded-lg text-xs sm:text-sm font-bold hover:bg-green-700 transition-all shadow-sm disabled:opacity-50"
+                    title="Save Changes"
                   >
                     {isSavingKey ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                     ) : (
-                      <Save className="w-4 h-4" />
+                      <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     )}
-                    <span>{isSavingKey ? "Saving..." : "Save Changes"}</span>
+                    <span className="hidden sm:inline">{isSavingKey ? "Saving..." : "Save Changes"}</span>
                   </button>
                 </div>
               </div>
 
-              <Card className="border-none shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm p-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-1">
-                  {Array.from({ length: exam.num_items }).map((_, idx) => {
-                    const qNum = idx + 1;
-                    const selectedOption = answerKey ? answerKey[qNum] : null;
-                    const choices = ["A", "B", "C", "D", "E"].slice(
-                      0,
-                      exam.choices_per_item || 5,
-                    );
+              <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                {(() => {
+                  const totalQ = exam.num_items;
+                  const choices = ["A", "B", "C", "D", "E"].slice(0, exam.choices_per_item || 5);
 
-                    return (
-                      <div
-                        key={qNum}
-                        className="flex items-center gap-4 py-2 group hover:bg-green-50/30 rounded-lg transition-colors px-2"
-                      >
-                        <span className="w-6 text-sm font-bold text-gray-400 tabular-nums">
-                          {qNum}.
-                        </span>
-                        <div className="flex items-center gap-3">
-                          {choices.map((choice) => {
-                            const isSelected = selectedOption === choice;
-                            return (
-                              <button
-                                key={choice}
-                                onClick={() =>
-                                  setAnswerKey((prev) => ({
-                                    ...prev,
-                                    [qNum]: isSelected ? "" : choice,
-                                  }))
-                                }
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border-2 ${
-                                  isSelected
-                                    ? "bg-green-600 border-green-600 text-white ring-4 ring-green-500/10 scale-110"
-                                    : "bg-white border-gray-200 text-gray-400 hover:border-green-300 hover:text-green-600"
-                                }`}
-                              >
-                                {choice}
-                              </button>
-                            );
-                          })}
-                        </div>
+                  const buildColumns = (numCols: number) => {
+                    const perCol = Math.ceil(totalQ / numCols);
+                    const cols: number[][] = [];
+                    for (let c = 0; c < numCols; c++) {
+                      const start = c * perCol + 1;
+                      const end = Math.min(start + perCol - 1, totalQ);
+                      const col: number[] = [];
+                      for (let q = start; q <= end; q++) col.push(q);
+                      if (col.length > 0) cols.push(col);
+                    }
+                    return cols;
+                  };
+
+                  const mobileColumns = buildColumns(2);
+                  const desktopColumns = buildColumns(3);
+
+                  const renderColumn = (col: number[], colIdx: number, totalCols: number, isMobile: boolean) => (
+                    <div
+                      key={colIdx}
+                      className={`flex flex-col ${
+                        colIdx < totalCols - 1 ? "border-r border-gray-200" : ""
+                      }`}
+                    >
+                      {col.map((qNum, rowIdx) => {
+                        const selectedOption = answerKey ? answerKey[qNum] : null;
+                        const isLast = rowIdx === col.length - 1;
+                        return (
+                          <div
+                            key={qNum}
+                            className={`flex items-center gap-2 ${isMobile ? "px-2 py-1.5" : "px-4 py-2.5 gap-4"} ${!isLast ? "border-b border-gray-100" : ""}`}
+                          >
+                            <span className={`text-right font-medium text-gray-400 tabular-nums shrink-0 ${isMobile ? "w-5 text-xs" : "w-6 text-sm"}`}>
+                              {qNum}.
+                            </span>
+                            <div className={`flex items-center ${isMobile ? "gap-1" : "gap-2.5"}`}>
+                              {choices.map((choice) => {
+                                const isSelected = selectedOption === choice;
+                                return (
+                                  <button
+                                    key={choice}
+                                    onClick={() =>
+                                      setAnswerKey((prev) => ({
+                                        ...prev,
+                                        [qNum]: isSelected ? "" : choice,
+                                      }))
+                                    }
+                                    className={`rounded-full flex items-center justify-center font-bold transition-all border-2 ${
+                                      isMobile ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs"
+                                    } ${
+                                      isSelected
+                                        ? "bg-green-600 border-green-600 text-white ring-4 ring-green-500/10 scale-110"
+                                        : "bg-white border-gray-200 text-gray-400 hover:border-green-300 hover:text-green-600"
+                                    }`}
+                                  >
+                                    {choice}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+
+                  return (
+                    <>
+                      {/* Mobile: 2-column, column-first */}
+                      <div className="grid grid-cols-2 md:hidden">
+                        {mobileColumns.map((col, i) => renderColumn(col, i, mobileColumns.length, true))}
                       </div>
-                    );
-                  })}
-                </div>
-              </Card>
+
+                      {/* Desktop: 3-column, column-first */}
+                      <div className="hidden md:grid md:grid-cols-3">
+                        {desktopColumns.map((col, i) => renderColumn(col, i, desktopColumns.length, false))}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           )}
 
