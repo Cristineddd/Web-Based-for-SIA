@@ -270,8 +270,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: new Error('Full name is required') };
       }
 
+      // Validate that full name doesn't contain numbers
+      if (/\d/.test(fullName)) {
+        return { error: new Error('Full name cannot contain numbers') };
+      }
+
+      // Validate that full name contains only letters, spaces, and common name characters
+      if (!/^[a-zA-Z\s\-'.]+$/.test(fullName.trim())) {
+        return { error: new Error('Full name can only contain letters, spaces, hyphens, and apostrophes') };
+      }
+
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return { error: new Error('Please enter a valid email address') };
+      }
+
+      // Validate Gordon College email domain
+      if (!email.toLowerCase().endsWith('@gordon.edu.ph')) {
+        return { error: new Error('Only Gordon College email addresses (@gordon.edu.ph) are allowed') };
       }
 
       // OPTIMIZATION 8: Parallel execution for faster signup
@@ -398,6 +413,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error };
       }
 
+      // Validate Gordon College email domain
+      if (!email.toLowerCase().endsWith('@gordon.edu.ph')) {
+        const error = new Error('Only Gordon College email addresses (@gordon.edu.ph) are allowed');
+        return { error };
+      }
+
       // Clear any cached user data for this email
       // (Will be re-fetched on auth state change)
       
@@ -465,6 +486,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       const result = await signInWithPopup(auth, provider);
       const firebaseUser = result.user;
+
+      // Validate Gordon College email domain
+      const email = firebaseUser.email || '';
+      if (!email.toLowerCase().endsWith('@gordon.edu.ph')) {
+        // Sign out the user immediately
+        await firebaseSignOut(auth);
+        return { error: new Error('Only Gordon College email addresses (@gordon.edu.ph) are allowed') };
+      }
 
       // Check if user document already exists (optimized with single read)
       const userDocRef = doc(db, 'users', firebaseUser.uid);

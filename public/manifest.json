@@ -1,0 +1,59 @@
+{
+  "id": "/",
+  "name": "GC Smart Check - Exam Grading System",
+  "short_name": "GC Scan",
+  "description": "Mobile OMR scanning and instant scoring for Gordon College faculty",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/gclogo.png",
+      "sizes": "600x667",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/gclogo.png",
+      "sizes": "600x667",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/gclogo.png",
+      "sizes": "600x667",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "GC Scan mobile view"
+    },
+    {
+      "src": "/gclogo.png",
+      "sizes": "600x667",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "GC Scan desktop view"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Go to dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "/gclogo.png", "sizes": "600x667", "type": "image/png" }]
+    },
+    {
+      "name": "Scan Exams",
+      "short_name": "Scan",
+      "description": "Start scanning answer sheets",
+      "url": "/exams",
+      "icons": [{ "src": "/gclogo.png", "sizes": "600x667", "type": "image/png" }]
+    }
+  ]
+}

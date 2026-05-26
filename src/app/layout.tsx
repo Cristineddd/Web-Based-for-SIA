@@ -4,9 +4,10 @@ import "../globals.css";
 import { RootProviders } from "@/components/providers/RootProviders";
 
 const poppins = Poppins({
-  weight: ["400", "500", "600", "700"],
+  weight: ["600", "700"],
   variable: "--font-poppins",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {

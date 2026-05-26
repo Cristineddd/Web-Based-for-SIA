@@ -22,6 +22,9 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
   const [success, setSuccess] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong' | null>(null);
 
   useEffect(() => {
     // Only redirect if signup was successful (not just if user exists)
@@ -32,6 +35,51 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
       return () => clearTimeout(timer);
     }
   }, [user, success, router]);
+
+  const handleNameChange = (value: string) => {
+    setFullName(value);
+    
+    // Validate in real-time
+    if (value && /\d/.test(value)) {
+      setNameError('Full name cannot contain numbers');
+    } else if (value && !/^[a-zA-Z\s\-'.]*$/.test(value)) {
+      setNameError('Only letters, spaces, hyphens, and apostrophes allowed');
+    } else {
+      setNameError(null);
+    }
+  };
+
+  const validatePassword = (value: string) => {
+    setPassword(value);
+    
+    if (!value) {
+      setPasswordError(null);
+      setPasswordStrength(null);
+      return;
+    }
+
+    const errors = [];
+    if (value.length < 8) errors.push('at least 8 characters');
+    if (!/[A-Z]/.test(value)) errors.push('one uppercase letter');
+    if (!/[a-z]/.test(value)) errors.push('one lowercase letter');
+    if (!/[0-9]/.test(value)) errors.push('one number');
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) errors.push('one special character');
+
+    if (errors.length > 0) {
+      setPasswordError(`Password must contain ${errors.join(', ')}`);
+      setPasswordStrength('weak');
+    } else {
+      setPasswordError(null);
+      // Calculate strength
+      if (value.length >= 12) {
+        setPasswordStrength('strong');
+      } else if (value.length >= 10) {
+        setPasswordStrength('medium');
+      } else {
+        setPasswordStrength('medium');
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,24 +258,33 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="relative">
-            <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Full name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
-              required
-              autoFocus
-            />
+          <div className="space-y-1">
+            <div className="relative">
+              <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Full name"
+                value={fullName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                className={`h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 ${
+                  nameError 
+                    ? 'border-red-300 focus:border-red-400 focus-visible:ring-red-100' 
+                    : 'border-gray-200 focus:border-green-400 focus-visible:ring-green-100'
+                }`}
+                required
+                autoFocus
+              />
+            </div>
+            {nameError && (
+              <p className="text-xs text-red-600 pl-1">{nameError}</p>
+            )}
           </div>
 
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <Input
               type="email"
-              placeholder="Email"
+              placeholder="yourname@gordon.edu.ph"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
@@ -235,23 +292,58 @@ export function SignUpForm({ onToggleMode }: SignUpFormProps) {
             />
           </div>
 
-          <div className="relative">
-            <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <Input
-              type="password"
-              placeholder="Password (at least 6 characters)"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
-              required
-              minLength={6}
-            />
+          <div className="space-y-1">
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Input
+                type="password"
+                placeholder="Password (min 8 chars, upper, lower, number, special)"
+                value={password}
+                onChange={(e) => validatePassword(e.target.value)}
+                className={`h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 ${
+                  passwordError 
+                    ? 'border-red-300 focus:border-red-400 focus-visible:ring-red-100' 
+                    : passwordStrength === 'strong'
+                    ? 'border-green-300 focus:border-green-400 focus-visible:ring-green-100'
+                    : 'border-gray-200 focus:border-green-400 focus-visible:ring-green-100'
+                }`}
+                required
+                minLength={8}
+              />
+            </div>
+            {passwordError && (
+              <p className="text-xs text-red-600 pl-1">{passwordError}</p>
+            )}
+            {passwordStrength && !passwordError && (
+              <div className="flex items-center gap-2 pl-1">
+                <div className="flex gap-1 flex-1">
+                  <div className={`h-1 flex-1 rounded-full ${
+                    passwordStrength === 'weak' ? 'bg-red-500' :
+                    passwordStrength === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                  }`} />
+                  <div className={`h-1 flex-1 rounded-full ${
+                    passwordStrength === 'medium' || passwordStrength === 'strong' ? 
+                    passwordStrength === 'medium' ? 'bg-yellow-500' : 'bg-green-500' : 'bg-gray-200'
+                  }`} />
+                  <div className={`h-1 flex-1 rounded-full ${
+                    passwordStrength === 'strong' ? 'bg-green-500' : 'bg-gray-200'
+                  }`} />
+                </div>
+                <span className={`text-xs font-medium ${
+                  passwordStrength === 'weak' ? 'text-red-600' :
+                  passwordStrength === 'medium' ? 'text-yellow-600' : 'text-green-600'
+                }`}>
+                  {passwordStrength === 'weak' ? 'Weak' :
+                   passwordStrength === 'medium' ? 'Medium' : 'Strong'}
+                </span>
+              </div>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full h-12 sm:h-14 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50"
+            disabled={loading || !!nameError || !!passwordError}
+            className="w-full h-12 sm:h-14 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

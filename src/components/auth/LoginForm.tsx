@@ -103,7 +103,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                   <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input
                     type="email"
-                    placeholder="Email"
+                    placeholder="yourname@gordon.edu.ph"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-12 sm:h-14 text-base rounded-lg pl-12 pr-4 border-2 focus-visible:ring-2 focus-visible:ring-offset-0 border-gray-200 focus:border-green-400 focus-visible:ring-green-100"
@@ -335,7 +335,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
                   <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder="yourname@gordon.edu.ph"
                     value={resetEmail}
                     onChange={(e) => setResetEmail(e.target.value)}
                     className="h-14 text-base rounded-xl pl-12 pr-4 border-2 border-gray-200 focus:border-green-400 focus-visible:ring-green-100 focus-visible:ring-2 focus-visible:ring-offset-0"

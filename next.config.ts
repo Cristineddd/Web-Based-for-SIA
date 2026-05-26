@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   turbopack: {},
+  output: 'standalone',
+  outputFileTracingRoot: '/Users/crystalmae/Downloads/Web-Based-for-SIA-main',
   typescript: {
     // Allow build to succeed even with type errors (pre-existing unused imports)
     ignoreBuildErrors: true,
