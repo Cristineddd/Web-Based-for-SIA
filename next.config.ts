@@ -3,8 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   turbopack: {},
-  output: 'standalone',
-  outputFileTracingRoot: '/Users/crystalmae/Downloads/Web-Based-for-SIA-main',
   typescript: {
     // Allow build to succeed even with type errors (pre-existing unused imports)
     ignoreBuildErrors: true,
@@ -37,7 +35,7 @@ const nextConfig: NextConfig = {
       { source: "/home", destination: "/dashboard", permanent: true },
     ];
   },
-  // Fix COOP warning for Google Sign-In popup
+  // Fix COOP warning for Google Sign-In popup + PWA headers
   async headers() {
     return [
       {
@@ -46,6 +44,32 @@ const nextConfig: NextConfig = {
           {
             key: 'Cross-Origin-Opener-Policy',
             value: 'same-origin-allow-popups',
+          },
+        ],
+      },
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
+      {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/manifest+json',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
           },
         ],
       },
