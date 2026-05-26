@@ -12,13 +12,13 @@
   "icons": [
     {
       "src": "/gclogo.png",
-      "sizes": "600x667",
+      "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
       "src": "/gclogo.png",
-      "sizes": "600x667",
+      "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "maskable"
     }

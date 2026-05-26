@@ -15,6 +15,16 @@ export const metadata: Metadata = {
   description: "Gordon College Smart Check - Automated exam grading system",
   icons: {
     icon: "/favicon.ico",
+    apple: "/gclogo.png",
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "GC Smart Check",
+  },
+  formatDetection: {
+    telephone: false,
   },
 };
 

@@ -71,11 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (firestoreTimeoutRef.current) clearTimeout(firestoreTimeoutRef.current);
   }, []);
 
-  // OPTIMIZATION 11: Restore session from localStorage on mount
+  // OPTIMIZATION 11: Restore session from sessionStorage on mount
   useEffect(() => {
     const restoreSession = () => {
       try {
-        const savedSession = localStorage.getItem('auth_session');
+        const savedSession = sessionStorage.getItem('auth_session');
         if (savedSession) {
           const session = JSON.parse(savedSession);
           setUser(session.user);
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         // Silently fail if session data is corrupted
-        console.warn('Could not restore session from localStorage');
+        console.warn('Could not restore session from sessionStorage');
       }
     };
 
@@ -115,8 +115,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               user: cachedUser,
             };
             setSession(newSession);
-            // OPTIMIZATION 11: Persist session to localStorage
-            localStorage.setItem('auth_session', JSON.stringify(newSession));
+            // OPTIMIZATION 11: Persist session to sessionStorage
+            sessionStorage.setItem('auth_session', JSON.stringify(newSession));
           } else {
             // Create basic app user from Firebase data
             const basicAppUser: AppUser = {
@@ -142,8 +142,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               user: basicAppUser,
             };
             setSession(newSession);
-            // OPTIMIZATION 11: Persist session to localStorage
-            localStorage.setItem('auth_session', JSON.stringify(newSession));
+            // OPTIMIZATION 11: Persist session to sessionStorage
+            sessionStorage.setItem('auth_session', JSON.stringify(newSession));
             
             // Set loading to false immediately - user can access app now
             setLoading(false);
@@ -219,8 +219,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     user: fullUserData,
                   };
                   setSession(updatedSession);
-                  // OPTIMIZATION 11: Persist updated session to localStorage
-                  localStorage.setItem('auth_session', JSON.stringify(updatedSession));
+                  // OPTIMIZATION 11: Persist updated session to sessionStorage
+                  sessionStorage.setItem('auth_session', JSON.stringify(updatedSession));
                 }
               } catch (error) {
                 // Silently fail - user is already logged in with basic data
@@ -237,8 +237,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
           setSession(null);
           setUserRole(null);
-          // OPTIMIZATION 11: Clear session from localStorage
-          localStorage.removeItem('auth_session');
+          // OPTIMIZATION 11: Clear session from sessionStorage
+          sessionStorage.removeItem('auth_session');
           clearTimeouts();
           setLoading(false);
         }
@@ -567,8 +567,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserRole(null);
       setFirebaseUser(null);
       
-      // OPTIMIZATION 11: Clear session from localStorage
-      localStorage.removeItem('auth_session');
+      // OPTIMIZATION 11: Clear session from sessionStorage
+      sessionStorage.removeItem('auth_session');
       
       // Clear cache on sign out
       if (firebaseUser?.uid) {
