@@ -1,0 +1,114 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isInstructor() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/instructors/$(request.auth.uid));
+    }
+    
+    function isStudent() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/students/$(request.auth.uid));
+    }
+    
+    // Users collection - users can read/write their own data
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+    
+    // Instructors collection
+    match /instructors/{instructorId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isOwner(instructorId);
+    }
+    
+    // Students collection
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow create: if isInstructor();
+      allow update, delete: if isInstructor() || isOwner(studentId);
+    }
+    
+    // Classes collection - instructors can manage their own classes
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow create: if isInstructor();
+      allow update, delete: if isAuthenticated() && 
+                               (resource.data.createdBy == request.auth.uid || 
+                                resource.data.instructorId == request.auth.uid);
+    }
+    
+    // Exams collection - instructors can manage their own exams
+    match /exams/{examId} {
+      allow read: if isAuthenticated();
+      allow create: if isInstructor();
+      allow update, delete: if isAuthenticated() && 
+                               resource.data.createdBy == request.auth.uid;
+    }
+    
+    // Scanned results - instructors can manage results for their exams
+    match /scanned_results/{resultId} {
+      allow read: if isAuthenticated();
+      allow create: if isInstructor();
+      allow update, delete: if isInstructor();
+    }
+    
+    // Student grades - instructors and students can read, instructors can write
+    match /studentGrades/{gradeId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isInstructor();
+      allow delete: if isInstructor();
+    }
+    
+    // Duplicate score overrides
+    match /duplicateScoreOverrides/{overrideId} {
+      allow read: if isAuthenticated();
+      allow write: if isInstructor();
+    }
+    
+    // Audit logs - read only for authenticated users, write for instructors
+    match /auditLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Audit logs should not be modified
+    }
+    
+    // Templates collection
+    match /templates/{templateId} {
+      allow read: if isAuthenticated();
+      allow create: if isInstructor();
+      allow update, delete: if isAuthenticated() && 
+                               resource.data.createdBy == request.auth.uid;
+    }
+    
+    // Answer keys
+    match /answerKeys/{keyId} {
+      allow read: if isAuthenticated();
+      allow write: if isInstructor();
+    }
+    
+    // Exam sheets
+    match /examSheets/{sheetId} {
+      allow read: if isAuthenticated();
+      allow write: if isInstructor();
+    }
+    
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -11,7 +11,7 @@ function MainLayoutContent({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col">
       <div className="flex flex-1">
         <Sidebar />
-        <main className={`flex-1 overflow-auto bg-gray-50 transition-all duration-300 pt-14 md:pt-0 ${collapsed ? 'md:ml-16' : 'md:ml-64'}`}>
+        <main className={`flex-1 overflow-auto bg-gray-50 transition-all duration-300 pt-14 pb-32 md:pt-0 md:pb-0 ${collapsed ? 'md:ml-16' : 'md:ml-64'}`}>
           <div className="max-w-6xl mx-auto">
             {children}
           </div>

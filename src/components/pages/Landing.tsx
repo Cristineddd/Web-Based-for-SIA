@@ -53,8 +53,8 @@ export default function Landing() {
       <ParticleBackground />
       {/* Nav */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16">
             <a
               href="/"
               className="flex items-center gap-2.5"
@@ -68,9 +68,9 @@ export default function Landing() {
                 alt={`${GC_INSTITUTION_NAME} logo`}
                 width={32}
                 height={32}
-                className="object-contain"
+                className="object-contain w-7 h-7 sm:w-8 sm:h-8"
               />
-              <span className="text-base font-bold text-gray-900 tracking-tight">
+              <span className="text-sm sm:text-base font-bold text-gray-900 tracking-tight whitespace-nowrap">
                 {GC_SYSTEM_NAME}
               </span>
             </a>
@@ -86,14 +86,14 @@ export default function Landing() {
               <button
                 type="button"
                 onClick={() => openAuth('login')}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap"
               >
                 Log in
               </button>
               <button
                 type="button"
                 onClick={() => openAuth('signup')}
-                className="ml-2 px-5 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm"
+                className="ml-1 sm:ml-2 px-3 sm:px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm whitespace-nowrap"
               >
                 Sign up
               </button>
@@ -103,7 +103,7 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section className="relative pt-24 pb-32 px-6 lg:px-8 overflow-hidden bg-gradient-to-b from-transparent to-transparent z-10">
+      <section className="relative pt-16 pb-24 px-4 sm:px-6 lg:px-8 overflow-hidden bg-gradient-to-b from-transparent to-transparent z-10">
         {/* Subtle background pattern */}
         <div 
           className="absolute inset-0 opacity-[0.03]"
@@ -114,7 +114,7 @@ export default function Landing() {
         />
 
         <div className="max-w-7xl mx-auto relative">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
             {/* Left column */}
             <div>
               <div className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 rounded-full mb-6">
@@ -123,13 +123,13 @@ export default function Landing() {
                 </span>
               </div>
 
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 leading-[1.05] tracking-tight mb-6">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-gray-900 leading-[1.1] sm:leading-[1.05] tracking-tight mb-6">
                 Grade 200 papers.
                 <br />
                 <span className="text-green-600">In 10 minutes.</span>
               </h1>
 
-              <p className="text-xl text-gray-600 leading-relaxed mb-10 max-w-xl">
+              <p className="text-lg sm:text-xl text-gray-600 leading-relaxed mb-8 sm:mb-10 max-w-xl">
                 Mobile OMR scanning and instant scoring — built for Gordon College faculty. Sign up with your <span className="font-semibold text-green-700">@gordon.edu.ph</span> email.
               </p>
 
@@ -153,7 +153,7 @@ export default function Landing() {
               </div>
 
               {/* Trust bar */}
-              <div className="flex flex-wrap items-center gap-6 text-sm text-gray-600">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs sm:text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                   <ScanLine className="w-4 h-4 text-green-600" />
                   <span>Mobile scanning</span>
@@ -236,21 +236,21 @@ export default function Landing() {
       </section>
 
       {/* How it works */}
-      <section id="how-it-works" className="py-24 px-6 lg:px-8 bg-transparent relative z-10">
+      <section id="how-it-works" className="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 bg-transparent relative z-10">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-12 sm:mb-16">
             <div className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 rounded-full mb-4">
               <span className="text-xs font-semibold text-green-700 uppercase tracking-wider">How it works</span>
             </div>
-            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
               Three simple steps
             </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-base sm:text-lg lg:text-xl text-gray-600 max-w-2xl mx-auto">
               From paper exams to digital results in minutes
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {[
               {
                 step: '01',
@@ -290,21 +290,21 @@ export default function Landing() {
       </section>
 
       {/* Features */}
-      <section className="py-24 px-6 lg:px-8 bg-white/40 backdrop-blur-sm relative z-10">
+      <section className="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 bg-white/40 backdrop-blur-sm relative z-10">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-12 sm:mb-16">
             <div className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 rounded-full mb-4">
               <span className="text-xs font-semibold text-green-700 uppercase tracking-wider">Features</span>
             </div>
-            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
               Everything you need
             </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-base sm:text-lg lg:text-xl text-gray-600 max-w-2xl mx-auto">
               Built specifically for paper-based exam grading at Gordon College
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {[
               {
                 title: 'Answer key management',
@@ -343,30 +343,27 @@ export default function Landing() {
       </section>
 
       {/* CTA */}
-      <section className="py-24 px-6 lg:px-8 bg-gradient-to-b from-transparent to-green-50/50 relative z-10">
+      <section className="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-transparent to-green-50/50 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 rounded-full mb-6">
             <span className="text-xs font-semibold text-green-700 uppercase tracking-wider">
               Free for Gordon College Faculty
             </span>
           </div>
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 mb-6">
             Start grading smarter today
           </h2>
-          <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg lg:text-xl text-gray-600 mb-8 sm:mb-10 max-w-2xl mx-auto">
             Join Gordon College instructors who are saving hours on exam grading. Set up your first exam in under 5 minutes.
           </p>
           <button
             type="button"
             onClick={() => openAuth('signup')}
-            className="inline-flex items-center gap-2 px-10 py-5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-lg transition-all shadow-xl shadow-green-600/25"
+            className="inline-flex items-center justify-center gap-2 px-8 py-4 sm:px-10 sm:py-5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-base sm:text-lg transition-all shadow-xl shadow-green-600/25 w-full sm:w-auto"
           >
             Create free account
             <ArrowRight className="w-5 h-5" />
           </button>
-          <p className="mt-6 text-sm text-gray-500">
-            No credit card required · No installation needed
-          </p>
         </div>
       </section>
 

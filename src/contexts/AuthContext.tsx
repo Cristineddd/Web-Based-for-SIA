@@ -187,8 +187,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     })
                   ]) as any;
                 } catch (timeoutError) {
-                  console.warn('Firestore fetch timed out - using cached data');
-                  return; // Fail fast, user already has basic data
+                  // Timeout is intentional - fail fast and use cached data
+                  return;
                 }
                 
                 if (userDoc && userDoc.exists()) {
@@ -285,8 +285,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Validate Gordon College email domain
-      if (!email.toLowerCase().endsWith('@gordon.edu.ph')) {
-        return { error: new Error('Only Gordon College email addresses (@gordon.edu.ph) are allowed') };
+      const isValidDomain = email.toLowerCase().endsWith('@gordon.edu.ph') || 
+                           email.toLowerCase().endsWith('@gordoncollege.edu.ph');
+      if (!isValidDomain) {
+        return { error: new Error('Only Gordon College email addresses (@gordon.edu.ph or @gordoncollege.edu.ph) are allowed') };
       }
 
       // OPTIMIZATION 8: Parallel execution for faster signup
@@ -414,8 +416,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Validate Gordon College email domain
-      if (!email.toLowerCase().endsWith('@gordon.edu.ph')) {
-        const error = new Error('Only Gordon College email addresses (@gordon.edu.ph) are allowed');
+      const isValidDomain = email.toLowerCase().endsWith('@gordon.edu.ph') || 
+                           email.toLowerCase().endsWith('@gordoncollege.edu.ph');
+      if (!isValidDomain) {
+        const error = new Error('Only Gordon College email addresses (@gordon.edu.ph or @gordoncollege.edu.ph) are allowed');
         return { error };
       }
 
@@ -489,10 +493,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Validate Gordon College email domain
       const email = firebaseUser.email || '';
-      if (!email.toLowerCase().endsWith('@gordon.edu.ph')) {
+      const isValidDomain = email.toLowerCase().endsWith('@gordon.edu.ph') || 
+                           email.toLowerCase().endsWith('@gordoncollege.edu.ph');
+      if (!isValidDomain) {
         // Sign out the user immediately
         await firebaseSignOut(auth);
-        return { error: new Error('Only Gordon College email addresses (@gordon.edu.ph) are allowed') };
+        return { error: new Error('Only Gordon College email addresses (@gordon.edu.ph or @gordoncollege.edu.ph) are allowed') };
       }
 
       // Check if user document already exists (optimized with single read)
@@ -525,6 +531,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             authProvider: 'google',
+            needsNameSetup: !firebaseUser.displayName, // Flag to show welcome modal
           });
 
           console.log('✅ Google user profile created:', instructorId);
@@ -536,7 +543,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      return { error: null };
+      return { error: null, isNewUser: !userDoc.exists() };
     } catch (error: any) {
       console.error('Google sign in error:', error);
 

@@ -1,13 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Download } from 'lucide-react';
+import { X, Download, Share } from 'lucide-react';
 
 export function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    // Check if iOS
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    setIsIOS(iOS);
+
+    // Check if already installed (standalone mode)
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || 
+                      (window.navigator as any).standalone === true;
+    setIsStandalone(standalone);
+
+    // Don't show prompt if already installed
+    if (standalone) return;
+
+    // For iOS, show prompt after a delay (no beforeinstallprompt event)
+    if (iOS) {
+      const hasSeenPrompt = localStorage.getItem('pwa-prompt-seen');
+      if (!hasSeenPrompt) {
+        setTimeout(() => setShowPrompt(true), 3000);
+      }
+    }
+
+    // For Android/Chrome
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -33,9 +56,10 @@ export function PWAInstallPrompt() {
 
   const handleDismiss = () => {
     setShowPrompt(false);
+    localStorage.setItem('pwa-prompt-seen', 'true');
   };
 
-  if (!showPrompt) return null;
+  if (!showPrompt || isStandalone) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md z-50 animate-slide-up">
@@ -50,19 +74,33 @@ export function PWAInstallPrompt() {
         
         <div className="flex items-start gap-3 pr-6">
           <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
-            <Download className="w-6 h-6 text-green-600" />
+            {isIOS ? (
+              <Share className="w-6 h-6 text-green-600" />
+            ) : (
+              <Download className="w-6 h-6 text-green-600" />
+            )}
           </div>
           <div className="flex-1">
             <h3 className="font-bold text-gray-900 mb-1">Install GC Scan</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Install the app for faster access and offline support.
-            </p>
-            <button
-              onClick={handleInstall}
-              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm transition-colors"
-            >
-              Install Now
-            </button>
+            {isIOS ? (
+              <>
+                <p className="text-sm text-gray-600 mb-3">
+                  Tap <Share className="w-4 h-4 inline mx-0.5" /> then "Add to Home Screen" to install.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 mb-3">
+                  Install the app for faster access and offline support.
+                </p>
+                <button
+                  onClick={handleInstall}
+                  className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm transition-colors"
+                >
+                  Install Now
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

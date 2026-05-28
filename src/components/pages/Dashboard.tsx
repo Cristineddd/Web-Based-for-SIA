@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { X, Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { WelcomeNameModal } from "@/components/modals/WelcomeNameModal";
+import { useWelcomeModal } from "@/hooks/useWelcomeModal";
 import {
   FileText,
   Users,
@@ -17,6 +19,9 @@ import {
   Hash,
   CalendarDays,
   Tag,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import { CreateExamModal } from "@/components/modals/CreateExamModal";
 import { toast } from "sonner";
@@ -68,6 +73,7 @@ interface DashboardStats {
 export default function Dashboard() {
   const { userRole, user } = useAuth();
   const router = useRouter();
+  const { showWelcomeModal, handleNameSubmit, handleClose } = useWelcomeModal();
   const [stats, setStats] = useState<DashboardStats>({
     totalExams: 0,
     totalStudents: 0,
@@ -299,10 +305,24 @@ export default function Dashboard() {
     }
   };
 
-  const rawName = user?.displayName || user?.email?.split("@")[0] || "Faculty";
-  const displayName = rawName
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  // Get user's actual name with title
+  const getDisplayName = () => {
+    if (user?.displayName) {
+      const name = user.displayName;
+      // Check if name already has a title
+      if (name.match(/^(Prof\.|Dr\.|Mr\.|Ms\.|Mrs\.)/i)) {
+        return name;
+      }
+      // Add "Prof." prefix if no title
+      return `Prof. ${name}`;
+    }
+    if (user?.email) {
+      const emailName = user.email.split("@")[0];
+      return `Prof. ${emailName.charAt(0).toUpperCase() + emailName.slice(1)}`;
+    }
+    return "Faculty";
+  };
+  const displayName = getDisplayName();
 
   const statCards = [
     {
@@ -334,25 +354,25 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
         {/* Header */}
         <div className="flex flex-col gap-4 mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Welcome back, {displayName}!
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Here&apos;s what&apos;s happening with your classes today.
-            </p>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                Welcome back, {displayName}!
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Here&apos;s what&apos;s happening with your classes today.
+              </p>
+            </div>
           </div>
-          <div className="self-end sm:self-auto">
-            <Link href="/classes">
-              <Button className="bg-green-600 hover:bg-green-700 text-white rounded-xl py-2.5 px-5 shadow-sm transition-all active:scale-95">
-                <Plus className="w-4 h-4 mr-1.5" />
-                Create Class
-              </Button>
-            </Link>
-          </div>
+          <Link href="/classes" className="self-end sm:self-auto">
+            <Button className="bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 h-11 sm:h-auto sm:py-2.5 px-4 sm:px-5">
+              <Plus className="w-4 h-4 mr-1.5" />
+              <span className="text-sm sm:text-base">New Class</span>
+            </Button>
+          </Link>
         </div>
 
         {/* Pending role notice */}
@@ -411,15 +431,26 @@ export default function Dashboard() {
                 <BookOpen className="w-4 h-4 text-green-600" />
                 Recent Classes
               </CardTitle>
-              <Link href="/classes">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-green-600 hover:text-green-700 hover:bg-green-50 text-sm font-medium h-8 px-3"
-                >
-                  View All
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href="/classes">
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    New
+                  </Button>
+                </Link>
+                <Link href="/classes">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-green-600 hover:text-green-700 hover:bg-green-50 text-sm font-medium h-8 px-3"
+                  >
+                    View All
+                  </Button>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent className="px-6 pb-6 pt-2">
               {loading ? (
@@ -719,6 +750,14 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Welcome Name Modal for new Google users */}
+      <WelcomeNameModal
+        isOpen={showWelcomeModal}
+        onClose={handleClose}
+        onSubmit={handleNameSubmit}
+        currentName={user?.displayName || ""}
+      />
     </div>
   );
 }
