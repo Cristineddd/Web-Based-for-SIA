@@ -250,9 +250,9 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile bottom navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 safe-area-inset-bottom">
-        <div className="bg-white rounded-[28px] shadow-[0_-2px_20px_rgba(0,0,0,0.08)] mx-auto border border-gray-200/50">
-          <div className="flex items-center justify-around h-[68px] px-2">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-2 pb-3 safe-area-inset-bottom">
+        <div className="bg-white rounded-[28px] shadow-[0_-2px_20px_rgba(0,0,0,0.08)] mx-auto border border-gray-200/50 overflow-hidden">
+          <div className="flex items-center justify-between h-[64px] px-1.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
@@ -262,14 +262,14 @@ export function Sidebar() {
               const content = (
                 <div
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1.5 px-3 py-2 rounded-2xl transition-all duration-200 min-w-[56px] relative",
+                    "flex flex-1 flex-col items-center justify-center gap-1 px-0.5 py-2 rounded-2xl transition-all duration-200 relative",
                     isActive && "scale-105",
                     isDisabled && "opacity-30 cursor-not-allowed grayscale pointer-events-none",
                   )}
                 >
                   <div
                     className={cn(
-                      "w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200",
+                      "w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200",
                       isActive
                         ? "bg-green-600 shadow-lg shadow-green-600/30"
                         : "bg-transparent",
@@ -277,14 +277,14 @@ export function Sidebar() {
                   >
                     <Icon
                       className={cn(
-                        "w-6 h-6 flex-shrink-0 transition-all duration-200",
+                        "w-[22px] h-[22px] flex-shrink-0 transition-all duration-200",
                         isActive ? "text-white" : "text-gray-500",
                       )}
                     />
                   </div>
                   <span
                     className={cn(
-                      "text-[11px] font-medium transition-all duration-200",
+                      "text-[10px] font-medium transition-all duration-200 leading-none",
                       isActive ? "text-green-700" : "text-gray-500",
                     )}
                   >
@@ -295,14 +295,14 @@ export function Sidebar() {
 
               if (isDisabled) {
                 return (
-                  <div key={item.path} title="Create at least one class to access exams">
+                  <div key={item.path} className="flex-1 min-w-0" title="Create at least one class to access exams">
                     {content}
                   </div>
                 );
               }
 
               return (
-                <Link key={item.path} href={item.path}>
+                <Link key={item.path} href={item.path} className="flex-1 min-w-0">
                   {content}
                 </Link>
               );
