@@ -66,7 +66,7 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-3 shadow-sm">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-3 shadow-sm safe-area-inset-top">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
             <Image
