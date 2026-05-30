@@ -118,9 +118,6 @@ export function Sidebar() {
                 <h1 className="font-bold text-gray-900 text-sm leading-tight">
                   GC SMART CHECK
                 </h1>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Exam &amp; Quiz Builder
-                </p>
               </div>
             </div>
           ) : (

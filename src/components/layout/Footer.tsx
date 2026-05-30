@@ -55,7 +55,6 @@ export function Footer() {
                 <h3 className="text-base font-bold text-[#166534]">
                   GC SMART CHECK
                 </h3>
-                <p className="text-xs text-gray-400">Exam &amp; Quiz Builder</p>
               </div>
             </div>
             <p className="text-sm text-gray-500 leading-relaxed">
