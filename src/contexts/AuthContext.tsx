@@ -27,6 +27,7 @@ interface AppUser {
   displayName?: string;
   role: AppRole;
   instructorId?: string; // New field for instructor ID
+  photoURL?: string; // Profile picture (e.g. from Google sign-in)
 }
 
 interface AppSession {
@@ -129,8 +130,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               },
               displayName: firebaseUser.displayName || '',
               role: 'instructor',
+              photoURL: firebaseUser.photoURL || undefined,
             };
-            
+
             setUser(basicAppUser);
             setUserRole('instructor');
             userCache.set(firebaseUser.uid, basicAppUser);
@@ -205,6 +207,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     displayName: userData.fullName || firebaseUser.displayName || '',
                     role: userData.role || 'instructor',
                     instructorId: userData.instructorId, // Read directly from users collection
+                    photoURL: userData.photoURL || firebaseUser.photoURL || undefined,
                   };
                   
                   setUser(fullUserData);

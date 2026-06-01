@@ -151,7 +151,7 @@ function SupportContent() {
                 <CardContent className="space-y-3 text-md text-gray-600">
                   <p>
                     If you have questions about this Privacy Policy, please
-                    contact us at support@sia-system.com
+                    contact us at gc.smartcheck@gmail.com
                   </p>
                 </CardContent>
               </Card>

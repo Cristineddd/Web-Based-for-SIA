@@ -63,6 +63,30 @@ export function Sidebar() {
     return "?";
   };
 
+  // Renders the user's Google profile picture when available, otherwise the
+  // email initial. `sizeClass`/`textClass` control the circle and fallback text.
+  const renderAvatar = (sizeClass: string, textClass: string) => (
+    <div
+      className={cn(
+        sizeClass,
+        "bg-green-600 rounded-full flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0",
+        textClass,
+      )}
+    >
+      {user?.photoURL ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={user.photoURL}
+          alt={user.displayName || user.email || "User"}
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        getEmailInitial()
+      )}
+    </div>
+  );
+
   return (
     <>
       {/* Mobile top bar */}
@@ -84,10 +108,10 @@ export function Sidebar() {
         {user && (
           <button
             onClick={() => setShowSignOutModal(true)}
-            className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-xs hover:bg-green-700 transition-colors"
+            className="hover:opacity-90 transition-opacity"
             title={user.email}
           >
-            {getEmailInitial()}
+            {renderAvatar("w-8 h-8", "text-xs")}
           </button>
         )}
       </div>
@@ -186,9 +210,7 @@ export function Sidebar() {
           {!collapsed && user && (
             <div className="px-3 py-2 mb-2">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                  {getEmailInitial()}
-                </div>
+                {renderAvatar("w-9 h-9", "text-sm")}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 truncate">
                     {user.displayName || "Faculty"}
@@ -205,13 +227,8 @@ export function Sidebar() {
           )}
           
           {collapsed && user && (
-            <div className="flex justify-center mb-2">
-              <div 
-                className="w-9 h-9 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm cursor-help"
-                title={user.email}
-              >
-                {getEmailInitial()}
-              </div>
+            <div className="flex justify-center mb-2 cursor-help" title={user.email}>
+              {renderAvatar("w-9 h-9", "text-sm")}
             </div>
           )}
 

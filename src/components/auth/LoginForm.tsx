@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { LegalLinks } from "@/components/auth/LegalLinks";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ArrowLeft, Mail, Lock, Eye, EyeOff, X } from "lucide-react";
@@ -273,15 +274,10 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
           )}
         </div>
 
-        <div className="mt-8 text-center text-sm text-gray-600">
-          <a href="/terms" className="hover:underline transition-all">
-            Terms of use
-          </a>
-          <span> - </span>
-          <a href="/privacy" className="hover:underline transition-all">
-            Privacy policy
-          </a>
-        </div>
+        <LegalLinks
+          separator=" - "
+          className="mt-8 text-center text-sm text-gray-600"
+        />
       </div>
 
       {/* Forgot Password Modal */}
