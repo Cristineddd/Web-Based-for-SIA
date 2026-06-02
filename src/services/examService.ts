@@ -489,6 +489,7 @@ export async function updateExam(
       "classId",
       "className",
       "passingThreshold",
+      "status",
     ];
     const isOnlyArchiveUpdate = Object.keys(updates).every((key) =>
       systemicFields.includes(key),

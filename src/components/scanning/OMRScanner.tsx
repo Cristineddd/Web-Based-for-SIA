@@ -3166,7 +3166,7 @@ export default function OMRScanner({ examId }: OMRScannerProps) {
             <p className="text-sm text-gray-400 max-w-xs leading-relaxed mb-6">
               Please set up the answer key before scanning papers.
             </p>
-            <Link href={`/exams/${examId}/edit-key`}>
+            <Link href={`/exams/${examId}?tab=key_answer`}>
               <Button className="h-10 px-6 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-sm shadow-green-500/20 transition-all">
                 Set Up Answer Key
               </Button>

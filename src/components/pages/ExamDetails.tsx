@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import {
   FileText,
@@ -48,6 +48,7 @@ interface ExamDetailsProps {
 export default function ExamDetails({ params }: ExamDetailsProps) {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const importKeyRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [exam, setExam] = useState<Exam | null>(null);
@@ -75,7 +76,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [scannedCount, setScannedCount] = useState(0);
-  const [activeTab, setActiveTab] = useState("key_answer");
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "key_answer");
   const [answerKey, setAnswerKey] = useState<Record<number, string>>({});
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [existingKeyId, setExistingKeyId] = useState<string | null>(null);
@@ -668,6 +669,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                       {col.map((qNum, rowIdx) => {
                         const selectedOption = answerKey ? answerKey[qNum] : null;
                         const isLast = rowIdx === col.length - 1;
+                        const hasFiveChoices = choices.length === 5;
                         return (
                           <div
                             key={qNum}
@@ -676,7 +678,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                             <span className={`text-right font-medium text-gray-400 tabular-nums shrink-0 ${isMobile ? "w-5 text-xs" : "w-6 text-sm"}`}>
                               {qNum}.
                             </span>
-                            <div className={`flex items-center ${isMobile ? "gap-1" : "gap-2.5"}`}>
+                            <div className={`flex items-center ${isMobile && hasFiveChoices ? "gap-0.5" : isMobile ? "gap-1" : "gap-2.5"}`}>
                               {choices.map((choice) => {
                                 const isSelected = selectedOption === choice;
                                 return (
@@ -689,7 +691,7 @@ export default function ExamDetails({ params }: ExamDetailsProps) {
                                       }))
                                     }
                                     className={`rounded-full flex items-center justify-center font-bold transition-all border-2 ${
-                                      isMobile ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs"
+                                      isMobile && hasFiveChoices ? "w-5 h-5 text-[9px]" : isMobile ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs"
                                     } ${
                                       isSelected
                                         ? "bg-green-600 border-green-600 text-white ring-4 ring-green-500/10 scale-110"
