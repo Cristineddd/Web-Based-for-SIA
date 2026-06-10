@@ -703,6 +703,58 @@ export function exportStudentRosterToExcel(students: StudentExportRow[]): void {
   void exportWorkbookWithLogo(wb, 'student_roster.xlsx');
 }
 
+export interface ExamReportDisplayRow {
+  studentId: string;
+  studentName: string;
+  score: number | '';
+  percentage: number | '';
+  status: 'Passed' | 'Failed' | '';
+  examName: string;
+  className: string;
+}
+
+export function mergeExamReportRowsWithRoster(
+  rows: ExamReportExportRow[],
+  rosterStudents: ClassRosterExportStudent[],
+  defaults: { examName: string; className: string },
+): ExamReportDisplayRow[] {
+  const scoreById = new Map(
+    rows.map((row) => [String(row.studentId || '').trim(), row]),
+  );
+  const merged = new Map<string, ExamReportDisplayRow>();
+
+  rosterStudents.forEach((student) => {
+    const studentId = String(student.studentId || '').trim();
+    if (!studentId) return;
+
+    const scored = scoreById.get(studentId);
+    merged.set(
+      studentId,
+      scored
+        ? { ...scored }
+        : {
+            studentId,
+            studentName: student.studentName || studentId,
+            score: '',
+            percentage: '',
+            status: '',
+            examName: defaults.examName,
+            className: defaults.className,
+          },
+    );
+  });
+
+  rows.forEach((row) => {
+    const studentId = String(row.studentId || '').trim();
+    if (!studentId || merged.has(studentId)) return;
+    merged.set(studentId, { ...row });
+  });
+
+  return Array.from(merged.values()).sort((a, b) =>
+    a.studentName.localeCompare(b.studentName, undefined, { sensitivity: 'base' }),
+  );
+}
+
 /**
  * Export a single exam report with required SS4 columns.
  *
@@ -714,6 +766,7 @@ export function exportExamReportToExcel(
   examTitle: string,
   className: string,
   metadata?: ExcelExportMetadata,
+  rosterStudents: ClassRosterExportStudent[] = [],
 ): void {
   const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
   const safeExam = examTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
@@ -728,13 +781,18 @@ export function exportExamReportToExcel(
     'Status',
   ];
 
-  const data = rows.map((r, i) => [
+  const mergedRows = mergeExamReportRowsWithRoster(rows, rosterStudents, {
+    examName: examTitle,
+    className,
+  });
+
+  const data = mergedRows.map((r, i) => [
     i + 1,
     r.studentId,
     r.studentName,
-    r.score,
-    r.percentage,
-    r.status,
+    r.score === '' ? '' : r.score,
+    r.percentage === '' ? '' : r.percentage,
+    r.status === '' ? '' : r.status,
   ]);
 
   const reportHeaderRows = buildExamReportLayoutRows(metadata);
@@ -800,7 +858,9 @@ export function exportExamReportToExcel(
 
     for (let rowIndex = headerRowIndex + 1; rowIndex <= worksheet.rowCount; rowIndex++) {
       const percentCell = worksheet.getCell(rowIndex, 5);
-      percentCell.numFmt = '0"%"';
+      if (percentCell.value !== '' && percentCell.value != null) {
+        percentCell.numFmt = '0"%"';
+      }
       for (let col = 4; col <= 6; col++) {
         worksheet.getCell(rowIndex, col).alignment = { horizontal: 'center', vertical: 'middle' };
       }
@@ -860,79 +920,253 @@ export interface ClassExamSheetData {
   metadata?: ExcelExportMetadata;
 }
 
+export interface ClassRosterExportStudent {
+  studentId: string;
+  studentName: string;
+}
+
+function columnIndexToLetter(index: number): string {
+  return XLSX.utils.encode_col(index);
+}
+
+function buildClassAllExamsWideRows(
+  exams: ClassExamSheetData[],
+  classMetadata?: Pick<ExcelExportMetadata, 'instructorName' | 'className' | 'subject'>,
+  rosterStudents: ClassRosterExportStudent[] = [],
+): { allRows: unknown[][]; examCount: number; dataStartRowIndex: number } {
+  const examCount = Math.max(exams.length, 1);
+  const totalColumns = 3 + examCount;
+  const padRow = (cells: unknown[]): unknown[] => {
+    const row = [...cells];
+    while (row.length < totalColumns) row.push('');
+    return row;
+  };
+
+  const studentMap = new Map<string, { studentId: string; studentName: string }>();
+  const scoreMaps = exams.map(() => new Map<string, number>());
+
+  rosterStudents.forEach((student) => {
+    const studentId = String(student.studentId || '').trim();
+    if (!studentId) return;
+    studentMap.set(studentId, {
+      studentId,
+      studentName: student.studentName || studentId,
+    });
+  });
+
+  exams.forEach((exam, examIndex) => {
+    exam.rows.forEach((row) => {
+      const studentId = String(row.studentId || '').trim();
+      if (!studentId) return;
+
+      if (!studentMap.has(studentId)) {
+        studentMap.set(studentId, {
+          studentId,
+          studentName: row.studentName,
+        });
+      }
+      scoreMaps[examIndex].set(studentId, row.score);
+    });
+  });
+
+  const students = Array.from(studentMap.values()).sort((a, b) =>
+    a.studentName.localeCompare(b.studentName, undefined, { sensitivity: 'base' }),
+  );
+
+  const metadata = {
+    instructorName: classMetadata?.instructorName ?? exams[0]?.metadata?.instructorName,
+    className: classMetadata?.className ?? exams[0]?.metadata?.className,
+    subject: classMetadata?.subject ?? exams[0]?.metadata?.subject,
+  };
+
+  const quizLabelRow = padRow([
+    '',
+    '',
+    '',
+    ...exams.map((exam) => exam.examTitle),
+  ]);
+  const columnHeaderRow = padRow([
+    '#',
+    'Student ID',
+    'Name',
+    ...exams.map(() => 'Score'),
+  ]);
+
+  const dataRows = students.map((student, index) =>
+    padRow([
+      index + 1,
+      student.studentId,
+      student.studentName,
+      ...exams.map((_, examIndex) => scoreMaps[examIndex].get(student.studentId) ?? ''),
+    ]),
+  );
+
+  const allRows = [
+    padRow([GC_SYSTEM_NAME]),
+    padRow(['']),
+    padRow([`Instructor: ${textOrNA(metadata.instructorName)}`]),
+    padRow([`Class: ${textOrNA(metadata.className)}`]),
+    padRow([`Subject: ${textOrNA(metadata.subject)}`]),
+    padRow(['']),
+    quizLabelRow,
+    columnHeaderRow,
+    ...dataRows,
+  ];
+
+  return {
+    allRows,
+    examCount,
+    dataStartRowIndex: 8,
+  };
+}
+
 /**
- * Exports every exam in a class as separate sheets in one XLSX workbook.
- * Sheet names are truncated to 31 chars (Excel limit).
- * Uses a direct synchronous download to ensure all sheets are preserved.
+ * Exports all exams in a class to a single wide-format Excel sheet.
+ * Each exam appears as its own score column (Quiz 1, Quiz 2, …) with one row per student.
  */
 export function exportClassAllExamsToExcel(
   className: string,
   exams: ClassExamSheetData[],
+  classMetadata?: Pick<ExcelExportMetadata, 'instructorName' | 'className' | 'subject'>,
+  rosterStudents: ClassRosterExportStudent[] = [],
 ): void {
-  const wb = XLSX.utils.book_new();
-
-  const headers = ['#', 'Student ID', 'Name', 'Score', 'Percentage', 'Status'];
-
-  const sheetNames = new Set<string>();
-
-  exams.forEach(({ examTitle, rows, metadata }) => {
-    let sheetName = examTitle.replace(/[\\/?*[\]:]/g, '').substring(0, 28).trim() || 'Exam';
-    let suffix = 2;
-    const base = sheetName;
-    while (sheetNames.has(sheetName)) {
-      sheetName = `${base.substring(0, 25)}_${suffix}`;
-      suffix++;
-    }
-    sheetNames.add(sheetName);
-
-    const reportHeaderRows = buildExamReportLayoutRows(metadata);
-    const data = rows.map((r, i) => [
-      i + 1,
-      r.studentId,
-      r.studentName,
-      r.score,
-      r.percentage,
-      r.status,
-    ]);
-
-    const ws = XLSX.utils.aoa_to_sheet([...reportHeaderRows, headers, ...data]);
-    const hdrIdx = reportHeaderRows.length;
-
-    ws['!merges'] = [
-      XLSX.utils.decode_range('A1:F1'),
-      XLSX.utils.decode_range('A3:C3'),
-      XLSX.utils.decode_range('A4:C4'),
-      XLSX.utils.decode_range('A5:C5'),
-      XLSX.utils.decode_range('A6:C6'),
-    ];
-    ws['!cols'] = [
-      { wch: 6 }, { wch: 16 }, { wch: 30 }, { wch: 8 },
-      { wch: 13 }, { wch: 10 }, { wch: 24 }, { wch: 12 },
-    ];
-
-    stylizeHeaderRow(ws, headers.length, hdrIdx);
-    freezeHeaderRow(ws, hdrIdx + 1);
-
-    for (let r = hdrIdx + 1; r <= hdrIdx + data.length; r++) {
-      const cellRef = XLSX.utils.encode_cell({ r, c: 4 });
-      if (ws[cellRef]) ws[cellRef].z = '0"%"';
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  });
-
-  if (wb.SheetNames.length === 0) {
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet([['No exam data available']]),
-      'No Data',
-    );
-  }
-
   const safeClass = className.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
   const filename = `${safeClass}_all_exams_report.xlsx`;
 
-  // Use a direct synchronous download to guarantee all sheets are preserved.
-  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
-  downloadArrayBufferExcel(buffer, filename);
+  if (exams.length === 0) {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([['No exam data available']]),
+      'Exam Report',
+    );
+    XLSX.writeFile(wb, filename);
+    return;
+  }
+
+  const { allRows, examCount, dataStartRowIndex } = buildClassAllExamsWideRows(
+    exams,
+    { ...classMetadata, className },
+    rosterStudents,
+  );
+  const lastColumnLetter = columnIndexToLetter(2 + examCount);
+  const sanitizedRows = allRows.map(sanitizeRow);
+
+  const exportWithExcelJS = async (): Promise<void> => {
+    const ExcelJSImport = await import('exceljs');
+    const ExcelJS = (ExcelJSImport as { default?: typeof import('exceljs') }).default ?? ExcelJSImport;
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Exam Report');
+
+    sanitizedRows.forEach((row) => worksheet.addRow(row));
+
+    const safeMerge = (range: string) => {
+      try {
+        worksheet.mergeCells(range);
+      } catch {
+        // Ignore overlapping merge errors for idempotent merges.
+      }
+    };
+
+    safeMerge(`A1:${lastColumnLetter}1`);
+    safeMerge('A3:C3');
+    safeMerge('A4:C4');
+    safeMerge('A5:C5');
+
+    worksheet.columns = [
+      { width: 6 },
+      { width: 16 },
+      { width: 30 },
+      ...Array.from({ length: examCount }, () => ({ width: 10 })),
+    ];
+
+    worksheet.getRow(1).height = 36;
+    for (let rowIndex = 2; rowIndex <= 6; rowIndex++) {
+      worksheet.getRow(rowIndex).height = 18;
+    }
+    worksheet.getRow(7).height = 18;
+    worksheet.getRow(8).height = 18;
+
+    const titleCell = worksheet.getCell('A1');
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    titleCell.font = { name: 'Calibri', size: 16, bold: true };
+
+    const quizHeaderRow = worksheet.getRow(7);
+    quizHeaderRow.font = { bold: true };
+    for (let col = 4; col <= 3 + examCount; col++) {
+      quizHeaderRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+    }
+
+    const columnHeaderRow = worksheet.getRow(8);
+    columnHeaderRow.font = { bold: true };
+    for (let col = 4; col <= 3 + examCount; col++) {
+      columnHeaderRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+    }
+
+    worksheet.views = [{ state: 'frozen', ySplit: dataStartRowIndex }];
+
+    for (let rowIndex = dataStartRowIndex + 1; rowIndex <= worksheet.rowCount; rowIndex++) {
+      for (let col = 4; col <= 3 + examCount; col++) {
+        worksheet.getCell(rowIndex, col).alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+    }
+
+    const usedRowCount = worksheet.rowCount;
+    const usedColumnCount = worksheet.columnCount;
+    for (let rowIndex = 1; rowIndex <= usedRowCount; rowIndex++) {
+      for (let columnIndex = 1; columnIndex <= usedColumnCount; columnIndex++) {
+        worksheet.getCell(rowIndex, columnIndex).border = {
+          top: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+          left: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+          bottom: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+          right: { style: 'thin', color: { argb: 'FFB3B3B3' } },
+        };
+      }
+    }
+
+    const logoBase64 = await loadGCLogoBase64();
+    if (logoBase64) {
+      try {
+        const cleanedBase64 = logoBase64.includes(',')
+          ? logoBase64.split(',')[1]
+          : logoBase64;
+        const logoId = workbook.addImage({ base64: cleanedBase64, extension: 'png' });
+        worksheet.addImage(logoId, {
+          tl: { col: 1.1, row: 0.06 },
+          ext: { width: 42, height: 42 },
+          editAs: 'oneCell',
+        });
+      } catch (error) {
+        console.warn('[Excel Export] Logo embed failed:', error);
+      }
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    downloadArrayBufferExcel(buffer as ArrayBuffer | Uint8Array, filename);
+  };
+
+  void exportWithExcelJS().catch((error) => {
+    console.warn('[Excel Export] Falling back to SheetJS export:', error);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(sanitizedRows);
+
+    ws['!merges'] = [
+      XLSX.utils.decode_range(`A1:${lastColumnLetter}1`),
+      XLSX.utils.decode_range('A3:C3'),
+      XLSX.utils.decode_range('A4:C4'),
+      XLSX.utils.decode_range('A5:C5'),
+    ];
+    ws['!cols'] = [
+      { wch: 6 },
+      { wch: 16 },
+      { wch: 30 },
+      ...Array.from({ length: examCount }, () => ({ wch: 10 })),
+    ];
+
+    stylizeHeaderRow(ws, 3 + examCount, 7);
+    freezeHeaderRow(ws, dataStartRowIndex);
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Exam Report');
+    XLSX.writeFile(wb, filename);
+  });
 }
