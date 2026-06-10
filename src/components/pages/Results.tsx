@@ -16,7 +16,6 @@ import {
 import {
   ChevronDown,
   ChevronUp,
-  Download,
   FileSpreadsheet,
   FileText,
   Folder,
@@ -30,8 +29,8 @@ import { getExams, updateExam, Exam } from "@/services/examService";
 import StudentSearchCombobox, {
   type SearchableStudent,
 } from "@/components/ui/StudentSearchCombobox";
-import { exportExamReportToExcel } from "@/services/excelExportService";
-import { ExportMetadata, generateExamReportPdf, generateClassAllExamsPdf, ClassAllExamsPdfData } from "@/services/pdfReportService";
+import { exportExamReportToExcel, exportClassAllExamsToExcel } from "@/services/excelExportService";
+import { ExportMetadata, generateExamReportPdf } from "@/services/pdfReportService";
 import {
   collection,
   getDocs,
@@ -931,8 +930,13 @@ export default function Results() {
   const handleExport = useCallback(
     async (cls: Class, exam: Exam, format: "xlsx" | "pdf") => {
       const rows = await fetchExamRows(cls, exam);
-      if (rows.length === 0) {
-        toast.info("No rows available to export for this exam");
+      const rosterStudents = (cls.students || []).map((student) => ({
+        studentId: student.student_id,
+        studentName: `${student.last_name}, ${student.first_name}`,
+      }));
+
+      if (rows.length === 0 && rosterStudents.length === 0) {
+        toast.info("No students available to export for this exam");
         return;
       }
 
@@ -950,35 +954,30 @@ export default function Results() {
         examTitle: exam.title || undefined,
       };
 
+      const exportRows = rows.map((r) => ({
+        studentId: r.studentId,
+        studentName: r.studentName,
+        score: r.score,
+        percentage: r.percentage,
+        status: r.status,
+        examName: r.examName,
+        className: r.className,
+      }));
+
       if (format === "xlsx") {
         exportExamReportToExcel(
-          rows.map((r) => ({
-            studentId: r.studentId,
-            studentName: r.studentName,
-            score: r.score,
-            percentage: r.percentage,
-            status: r.status,
-            examName: r.examName,
-            className: r.className,
-          })),
+          exportRows,
           exam.title,
           cls.class_name,
           metadata,
+          rosterStudents,
         );
         toast.success("Exam report exported as Excel");
         return;
       }
 
       await generateExamReportPdf(
-        rows.map((r) => ({
-          studentId: r.studentId,
-          studentName: r.studentName,
-          score: r.score,
-          percentage: r.percentage,
-          status: r.status,
-          examName: r.examName,
-          className: r.className,
-        })),
+        exportRows,
         exam.title,
         cls.class_name,
         metadata,
@@ -1011,13 +1010,13 @@ export default function Results() {
       setExportingClassId(view.cls.id);
       toast.info(`Exporting ${classExams.length} exam(s) for ${view.cls.class_name}…`);
       try {
-        const examPdfData: ClassAllExamsPdfData[] = [];
+        const examExcelData = [];
 
         // Fetch sequentially to avoid cache race conditions
         for (const exam of classExams) {
           const rows = await fetchExamRowsOnce(view.cls, exam);
           const normalizedExamDate = normalizeDate(exam.created_at);
-          examPdfData.push({
+          examExcelData.push({
             examTitle: exam.title,
             rows: rows.map((r) => ({
               studentId: r.studentId,
@@ -1042,8 +1041,20 @@ export default function Results() {
           });
         }
 
-        await generateClassAllExamsPdf(view.cls.class_name, examPdfData);
-        toast.success(`${examPdfData.length} exam(s) exported for ${view.cls.class_name}`);
+        exportClassAllExamsToExcel(
+          view.cls.class_name,
+          examExcelData,
+          {
+            instructorName: user?.displayName || undefined,
+            className: view.cls.class_name || undefined,
+            subject: view.cls.course_subject || examExcelData[0]?.metadata?.subject,
+          },
+          (view.cls.students || []).map((student) => ({
+            studentId: student.student_id,
+            studentName: `${student.last_name}, ${student.first_name}`,
+          })),
+        );
+        toast.success(`${examExcelData.length} exam(s) exported as Excel for ${view.cls.class_name}`);
       } catch (error) {
         console.error("Failed to export class exams:", error);
         toast.error(`Failed to export class report for ${view.cls.class_name}`);
@@ -1217,7 +1228,7 @@ export default function Results() {
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (
                         <>
-                          <Download className="w-3 h-3 mr-1" />
+                          <FileSpreadsheet className="w-3 h-3 mr-1" />
                           Export All
                         </>
                       )}

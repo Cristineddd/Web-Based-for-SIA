@@ -372,7 +372,7 @@ function drawMiniSheet(
 
   doc.setFontSize(6);
   doc.setFont("helvetica", "bold");
-  doc.text("Student ZipGrade ID", idContentXMini + 1, currentY + 2);
+  doc.text("Student ID Number", idContentXMini + 1, currentY + 2);
   currentY += 4.5; // Reduced from 5 to 4.5
 
   // Draw input boxes for writing Student ID (9 boxes)
@@ -698,7 +698,7 @@ function drawFullSheet(
   const idTopY = currentY;
   doc.setFontSize(5.5);
   doc.setFont("helvetica", "bold");
-  doc.text("Student ZipGrade ID", idContentX + 1, currentY + 3);
+  doc.text("Student ID Number", idContentX + 1, currentY + 3);
   currentY += 5.5;
 
   // ID input boxes
@@ -968,7 +968,7 @@ function drawFullSheet150(
   const idTopY = currentY;
   doc.setFontSize(5.5);
   doc.setFont("helvetica", "bold");
-  doc.text("Student ZipGrade ID", idContentX + 1, currentY + 3);
+  doc.text("Student ID Number", idContentX + 1, currentY + 3);
   currentY += 5.5;
 
   // ID input boxes
